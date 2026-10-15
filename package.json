@@ -28,7 +28,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check scripts/icons.mjs && node --check scripts/version.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --test test/*.test.js",
+    "check": "node --check scripts/icons.mjs && node --check scripts/version.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --check scripts/devices.mjs && node --check scripts/frame.mjs && node --check scripts/preview-video.mjs && node --test test/*.test.js",
     "sync": "cap sync",
     "icons": "node scripts/icons.mjs",
     "version": "node scripts/version.mjs && git add ios/App/App.xcodeproj/project.pbxproj android/app/build.gradle",
@@ -37,6 +37,7 @@
     "build:ios": "cap sync ios && xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build",
     "build:android": "cap sync android && cd android && ./gradlew assembleDebug",
     "screenshots": "node scripts/screenshots.mjs",
-    "store:images": "node scripts/store-images.mjs"
+    "store:images": "node scripts/store-images.mjs",
+    "preview": "node scripts/preview-video.mjs"
   }
 }
