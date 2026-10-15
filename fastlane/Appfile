@@ -1,0 +1,5 @@
+# The identifiers of both apps; credentials come from the environment
+# (GitHub secrets, see README → Signing).
+app_identifier("app.flowplan.mobile")
+package_name("app.flowplan.mobile")
+team_id(ENV["IOS_TEAM_ID"]) if ENV["IOS_TEAM_ID"].to_s != ""
