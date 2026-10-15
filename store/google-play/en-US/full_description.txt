@@ -1,0 +1,26 @@
+Flowplan is your workspace for notes, projects and your team – now as an app for Android.
+
+DOCUMENTS THAT GROW WITH YOU
+Write notes, briefs and wikis in a fast editor: headings, lists, to-dos, tables, images, code, mentions and links between pages. Several people can edit a page at the same time.
+
+DATABASES FOR EVERYTHING
+Projects, roadmaps, reading lists or contacts: one database, many views – table, board, calendar, timeline, gallery, list and form. Filter, sort, group and calculate with formulas.
+
+WHITEBOARDS
+Collect ideas, sketch flows and connect cards on an endless canvas – with your finger or a stylus.
+
+JOURNAL
+One entry a day, with a review, streaks and "On this day". For a diary, a work log or the daily stand-up.
+
+FOR TEAMS
+Teamspaces, permissions, comments, mentions, notifications, templates and search across everything.
+
+YOUR DATA, YOUR SERVER
+Flowplan is open source (AGPL) and can be self-hosted. The app connects to app.flowplan.org or to your company's Flowplan instance – just enter its address on first start. Your content lives on that server, not in the app. The app itself collects no data and contains no tracking.
+
+SIGN IN YOUR WAY
+E-mail and password, passkeys or your organisation's single sign-on (SSO) – passkeys and SSO run securely through the system's sign-in window.
+
+The same Flowplan everywhere: in the browser, as a desktop app for macOS, Windows and Linux, and now on Android. New features arrive with the server and need no app update.
+
+Questions and guides: docs.flowplan.org

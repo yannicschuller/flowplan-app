@@ -1,0 +1,6 @@
+Die erste Version von Flowplan für iPhone und iPad:
+• Verbindet sich mit app.flowplan.org oder deiner eigenen Flowplan-Instanz
+• Anmeldung mit Passkey und SSO über das Systemfenster
+• Eigene Seite ohne Verbindung, die von selbst wieder verbindet
+• Links zu anderen Seiten öffnen im Browser
+• Dunkelmodus, Schnellaktion „Server wechseln“

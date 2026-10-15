@@ -1,0 +1,7 @@
+Flowplan is an open-source (AGPL) workspace – documents, databases, whiteboards and a journal – that organisations can also run on their own server. This app is the native client: on first start it asks for the address of a Flowplan instance and suggests our hosted service, app.flowplan.org. Please keep that suggestion and tap "Connect".
+
+Demo account on app.flowplan.org: see the sign-in information above. Alternatively, "Try the demo" on the sign-in page opens a temporary demo workspace without an account.
+
+Sign-in: e-mail and password work directly in the app. "Sign in with a passkey" and "Sign in with SSO" open ASWebAuthenticationSession (the system sign-in sheet) and return to the app with a one-time code.
+
+The app contains no tracking, no ads and no in-app purchases. Content is stored on the Flowplan server the user connects to. Long-press the app icon → "Change server" to connect to another instance.

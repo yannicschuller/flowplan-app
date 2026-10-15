@@ -1,0 +1,6 @@
+The first version of Flowplan for Android:
+• Connects to app.flowplan.org or your own Flowplan instance
+• Sign in with a passkey or SSO through the system window
+• A page of its own without a connection that reconnects by itself
+• Links to other sites open in the browser
+• Share from other apps, dark mode, app shortcut "Change server"

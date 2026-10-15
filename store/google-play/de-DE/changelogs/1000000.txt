@@ -1,0 +1,6 @@
+Die erste Version von Flowplan für Android:
+• Verbindet sich mit app.flowplan.org oder deiner eigenen Flowplan-Instanz
+• Anmeldung mit Passkey und SSO über das Systemfenster
+• Eigene Seite ohne Verbindung, die von selbst wieder verbindet
+• Links zu anderen Seiten öffnen im Browser
+• Teilen aus anderen Apps, Dunkelmodus, App-Verknüpfung „Server wechseln“
