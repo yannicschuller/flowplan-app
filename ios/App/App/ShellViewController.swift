@@ -12,50 +12,194 @@ enum Brand {
 }
 
 /// The window's root: keeps the page inside the safe area (the web app does
-/// not draw under the status bar or the home indicator) and paints the
-/// edges in the page's theme colour, with a status bar that stays readable.
-final class ShellViewController: UIViewController {
+/// not draw under the status bar or the home indicator) and paints the status
+/// bar and home indicator areas in the colours the page has at its top and
+/// bottom edge, sampled from the rendered page – so header and footer run
+/// into the system bars like in a native app, with a readable status bar.
+final class ShellViewController: UIViewController, WKScriptMessageHandler {
     let bridgeController = FlowplanBridgeViewController()
-    private var themeObservation: NSKeyValueObservation?
+    private let bottomArea = UIView()
     private var statusBarStyle: UIStatusBarStyle = .default
+    private var themeObservation: NSKeyValueObservation?
+    private var urlObservation: NSKeyValueObservation?
+    private var sampling = false
+    private var sampleAgain = false
+
+    /// Tells the app when the page may look different at its edges
+    /// (navigation, scrolling, dialogs, theme), at most a few times a second,
+    /// and keeps iOS from zooming into form fields.
+    private static let edgeScript = """
+    (() => {
+      if (window.top !== window || window.__flowplanEdges) return;
+      window.__flowplanEdges = true;
+      // No zooming into a form field on focus, like a native app: iOS zooms
+      // into fields with text below 16px (and ignores maximum-scale here).
+      const style = document.createElement("style");
+      style.textContent = "input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:max(16px,1em)!important}";
+      document.head.append(style);
+      let timer = 0;
+      const changed = () => {
+        if (timer) return;
+        timer = setTimeout(() => {
+          timer = 0;
+          try { webkit.messageHandlers.flowplanEdges.postMessage(0); } catch {}
+        }, 150);
+      };
+      for (const type of ["scroll", "resize", "hashchange", "popstate", "transitionend", "animationend", "click", "touchend", "keyup", "load", "pageshow"])
+        addEventListener(type, changed, { capture: true, passive: true });
+      const watch = () => {
+        new MutationObserver(changed).observe(document.documentElement, { attributes: true });
+        if (document.body) new MutationObserver(changed).observe(document.body, { attributes: true, childList: true });
+      };
+      document.body ? watch() : addEventListener("DOMContentLoaded", watch);
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", changed);
+      changed();
+    })();
+    """
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = Brand.background
+        bottomArea.backgroundColor = Brand.background
         addChild(bridgeController)
         let page = bridgeController.view!
         page.translatesAutoresizingMaskIntoConstraints = false
+        bottomArea.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(page)
+        view.addSubview(bottomArea)
         let safe = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             page.topAnchor.constraint(equalTo: safe.topAnchor),
             page.bottomAnchor.constraint(equalTo: safe.bottomAnchor),
             page.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
             page.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            bottomArea.topAnchor.constraint(equalTo: safe.bottomAnchor),
+            bottomArea.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bottomArea.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bottomArea.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
         bridgeController.didMove(toParent: self)
-        themeObservation = bridgeController.webView?.observe(\.themeColor, options: [.initial, .new]) { [weak self] webView, _ in
-            DispatchQueue.main.async { self?.applyTheme(webView.themeColor) }
+
+        guard let webView = bridgeController.webView else { return }
+        let controller = webView.configuration.userContentController
+        controller.add(WeakMessageHandler(self), name: "flowplanEdges")
+        controller.addUserScript(WKUserScript(source: Self.edgeScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        themeObservation = webView.observe(\.themeColor, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.sampleEdges() }
         }
+        urlObservation = webView.observe(\.url, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.sampleEdges() }
+        }
+        bridgeController.shell.onPageLoaded = { [weak self] in self?.sampleEdges() }
     }
 
-    private func applyTheme(_ color: UIColor?) {
-        let background = color ?? Brand.background
-        view.backgroundColor = background
-        let resolved = background.resolvedColor(with: traitCollection)
-        var white: CGFloat = 0
-        var alpha: CGFloat = 0
-        resolved.getWhite(&white, alpha: &alpha)
-        statusBarStyle = white < 0.5 ? .lightContent : .darkContent
-        setNeedsStatusBarAppearanceUpdate()
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        sampleEdges()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        sampleEdges()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        applyTheme(bridgeController.webView?.themeColor)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.sampleEdges() }
+    }
+
+    /// A thin row of pixels at the top and at the bottom of the page.
+    private func sampleEdges() {
+        guard let webView = bridgeController.webView, webView.window != nil, webView.bounds.height > 4 else { return }
+        if sampling {
+            sampleAgain = true
+            return
+        }
+        sampling = true
+        var colors: [UIColor?] = [nil, nil]
+        let group = DispatchGroup()
+        for (index, y) in [1, webView.bounds.height - 3].enumerated() {
+            let configuration = WKSnapshotConfiguration()
+            configuration.rect = CGRect(x: 0, y: y, width: webView.bounds.width, height: 2)
+            configuration.snapshotWidth = 64
+            group.enter()
+            webView.takeSnapshot(with: configuration) { image, _ in
+                colors[index] = image.flatMap(Self.dominantColor)
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            self.sampling = false
+            // Where the page draws nothing, the web view's own background shows.
+            let fallback = webView.backgroundColor ?? Brand.background
+            self.apply(top: colors[0] ?? fallback, bottom: colors[1] ?? fallback)
+            if self.sampleAgain {
+                self.sampleAgain = false
+                self.sampleEdges()
+            }
+        }
+    }
+
+    private func apply(top: UIColor, bottom: UIColor) {
+        UIView.animate(withDuration: 0.15) {
+            self.view.backgroundColor = top
+            self.bottomArea.backgroundColor = bottom
+        }
+        let style: UIStatusBarStyle = Self.isDark(top) ? .lightContent : .darkContent
+        if style != statusBarStyle {
+            statusBarStyle = style
+            setNeedsStatusBarAppearanceUpdate()
+        }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
+
+    private static func isDark(_ color: UIColor) -> Bool {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 0.5
+    }
+
+    /// The colour most of the row has (icons and text on a bar do not count;
+    /// transparent pixels are where the page draws nothing).
+    private static func dominantColor(_ image: UIImage) -> UIColor? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = cgImage.width
+        // The image is scaled to one row: every pixel is a column's average.
+        var pixels = [UInt8](repeating: 0, count: width * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: 1, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: 1))
+            return true
+        }
+        guard drawn, width > 0 else { return nil }
+        var buckets: [Int: (count: Int, red: Int, green: Int, blue: Int)] = [:]
+        for x in 0..<width where pixels[x * 4 + 3] > 200 {
+            let red = Int(pixels[x * 4]), green = Int(pixels[x * 4 + 1]), blue = Int(pixels[x * 4 + 2])
+            let key = (red >> 3) << 10 | (green >> 3) << 5 | (blue >> 3)
+            let bucket = buckets[key] ?? (0, 0, 0, 0)
+            buckets[key] = (bucket.count + 1, bucket.red + red, bucket.green + green, bucket.blue + blue)
+        }
+        guard let best = buckets.values.max(by: { $0.count < $1.count }) else { return nil }
+        let count = CGFloat(best.count) * 255
+        return UIColor(red: CGFloat(best.red) / count, green: CGFloat(best.green) / count, blue: CGFloat(best.blue) / count, alpha: 1)
+    }
+}
+
+/// WKUserContentController keeps its handlers strongly.
+private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var target: WKScriptMessageHandler?
+
+    init(_ target: WKScriptMessageHandler) {
+        self.target = target
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(userContentController, didReceive: message)
+    }
 }
 
 /// Capacitor's controller with the shell plugin, the app's user agent and a
@@ -78,6 +222,8 @@ final class FlowplanBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(shell)
         guard let webView = webView else { return }
         webView.allowsBackForwardNavigationGestures = true
+        // No "previous / next / done" bar above the keyboard: native apps have none.
+        webView.hideInputAccessoryBar()
         webView.isOpaque = false
         webView.backgroundColor = Brand.background
         webView.scrollView.backgroundColor = Brand.background
@@ -128,5 +274,26 @@ final class NavigationDelegateProxy: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         target?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
         didFail?(webView, error)
+    }
+}
+
+extension WKWebView {
+    /// Gives the web view's content view a subclass without an input
+    /// accessory view (the way Ionic's keyboard plugin does it).
+    func hideInputAccessoryBar() {
+        guard let content = scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }),
+              let base = object_getClass(content) else { return }
+        let name = "\(NSStringFromClass(base))_FlowplanNoAccessory"
+        var subclass: AnyClass? = NSClassFromString(name)
+        if subclass == nil, let created = objc_allocateClassPair(base, name, 0) {
+            let selector = #selector(getter: UIResponder.inputAccessoryView)
+            let none: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+            if let method = class_getInstanceMethod(UIResponder.self, selector) {
+                class_addMethod(created, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
+            }
+            objc_registerClassPair(created)
+            subclass = created
+        }
+        if let subclass = subclass { object_setClass(content, subclass) }
     }
 }

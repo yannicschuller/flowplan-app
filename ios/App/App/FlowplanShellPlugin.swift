@@ -40,6 +40,8 @@ public class FlowplanShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticati
     private var redeemWhenLoaded: (code: String, verifier: String)?
     private var signingInUntil: Date?
     private var queuedLinks: [URL] = []
+    /// The page finished loading (the shell then looks at its colours).
+    var onPageLoaded: (() -> Void)?
 
     // MARK: - Address
 
@@ -174,6 +176,7 @@ public class FlowplanShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticati
     }
 
     func pageLoaded(_ webView: WKWebView) {
+        onPageLoaded?()
         guard let redeem = redeemWhenLoaded, let server = server, Self.origin(of: webView.url) == server else { return }
         redeemWhenLoaded = nil
         runRedeem(code: redeem.code, verifier: redeem.verifier, in: webView)

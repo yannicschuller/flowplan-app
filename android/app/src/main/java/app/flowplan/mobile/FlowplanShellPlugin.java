@@ -56,6 +56,7 @@ public class FlowplanShellPlugin extends Plugin {
     private static final long PENDING_LIFETIME_MS = 10 * 60_000;
 
     private String redeemWhenLoaded;
+    private SystemBarColors barColors;
     private long signingInUntil;
 
     // ---- Address ----
@@ -153,6 +154,7 @@ public class FlowplanShellPlugin extends Plugin {
         // The instance shows the app's sign-in (passkeys and SSO in the browser) when it sees this.
         settings.setUserAgentString(settings.getUserAgentString() + " FlowplanMobile/" + BuildConfig.VERSION_NAME);
         getBridge().setWebViewClient(new ShellWebViewClient());
+        barColors = new SystemBarColors(getActivity(), webView);
         // After Capacitor has started loading the start page: a link or shared text that opened
         // the app replaces it.
         webView.post(() -> handleIntent(getActivity().getIntent()));
@@ -219,6 +221,7 @@ public class FlowplanShellPlugin extends Plugin {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
+            if (barColors != null) barColors.pageFinished(view);
             String server = server();
             if (redeemWhenLoaded != null && server != null && server.equals(origin(Uri.parse(url)))) {
                 String script = redeemWhenLoaded;
