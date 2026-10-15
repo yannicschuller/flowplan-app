@@ -1,0 +1,15 @@
+node_modules
+.DS_Store
+ios/build
+ios/App/build
+*.xcarchive
+*.ipa
+*.dSYM.zip
+android/app/release
+android/keystore*.jks
+*.keystore
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+store/.cache
+test-results

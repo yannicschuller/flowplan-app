@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long press on the app icon: "Change server". -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="change-server"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/change_server">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="flowplan://change-server"
+            android:targetPackage="app.flowplan.mobile"
+            android:targetClass="app.flowplan.mobile.MainActivity" />
+    </shortcut>
+</shortcuts>

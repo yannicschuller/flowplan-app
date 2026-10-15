@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="change_server">Changer de serveur</string>
+    <string name="share_label">Enregistrer dans Flowplan</string>
+    <string name="sign_in_impossible">Connexion impossible</string>
+    <string name="sign_in_foreign">Cette connexion n’a pas été lancée dans cette app ou appartient à une autre instance. Relance-la avec « Se connecter avec une clé d’accès » ou « Se connecter avec SSO ».</string>
+    <string name="sign_in_failed">Échec de la connexion</string>
+    <string name="sign_in_again">Merci de te reconnecter.</string>
+    <string name="restriction_server_title">Instance Flowplan</string>
+    <string name="restriction_server_description">Adresse proposée au premier lancement, p. ex. https://flowplan.example.com</string>
+</resources>

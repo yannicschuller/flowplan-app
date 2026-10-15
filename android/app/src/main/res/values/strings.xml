@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Flowplan</string>
+    <string name="title_activity_main">Flowplan</string>
+    <string name="package_name">app.flowplan.mobile</string>
+    <string name="custom_url_scheme">flowplan</string>
+    <string name="change_server">Change server</string>
+    <string name="share_label">Save to Flowplan</string>
+    <string name="sign_in_impossible">Sign-in not possible</string>
+    <string name="sign_in_foreign">This sign-in was not started in this app or belongs to another instance. Please start it again with “Sign in with a passkey” or “Sign in with SSO”.</string>
+    <string name="sign_in_failed">Sign-in failed</string>
+    <string name="sign_in_again">Please sign in again.</string>
+    <string name="restriction_server_title">Flowplan instance</string>
+    <string name="restriction_server_description">Address suggested on first start, e.g. https://flowplan.example.com</string>
+</resources>

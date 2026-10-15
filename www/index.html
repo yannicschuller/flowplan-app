@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src *" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Flowplan</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body hidden>
+    <main>
+      <img src="icon.png" alt="" />
+      <h1 data-t="setupTitle">Welcome to Flowplan</h1>
+      <p data-t="setupText"></p>
+      <form id="form" novalidate>
+        <label for="server" data-t="label"></label>
+        <input id="server" name="server" type="url" inputmode="url" data-t-placeholder="placeholder" autocomplete="url" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" required />
+        <div class="error" id="error" role="alert"></div>
+        <div class="row">
+          <button id="submit" data-t="connect"></button>
+          <button id="cancel" type="button" class="secondary" data-t="cancel" hidden></button>
+        </div>
+      </form>
+      <p class="hint" data-t="setupHint"></p>
+    </main>
+    <script type="module" src="setup.js"></script>
+  </body>
+</html>

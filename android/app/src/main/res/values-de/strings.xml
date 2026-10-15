@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="change_server">Server wechseln</string>
+    <string name="share_label">In Flowplan speichern</string>
+    <string name="sign_in_impossible">Anmeldung nicht möglich</string>
+    <string name="sign_in_foreign">Diese Anmeldung wurde nicht in dieser App gestartet oder gehört zu einer anderen Instanz. Starte sie bitte noch einmal über „Mit Passkey anmelden“ oder „Mit SSO anmelden“.</string>
+    <string name="sign_in_failed">Anmeldung fehlgeschlagen</string>
+    <string name="sign_in_again">Bitte erneut anmelden.</string>
+    <string name="restriction_server_title">Flowplan-Instanz</string>
+    <string name="restriction_server_description">Beim ersten Start vorgeschlagene Adresse, z. B. https://flowplan.example.com</string>
+</resources>
