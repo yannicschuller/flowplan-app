@@ -84,7 +84,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const pending = useRef(new PendingSignIns());
   const redeemWhenLoaded = useRef<string | null>(null);
   // Colours of the bars (see the comment at the top).
-  const [bars, setBars] = useState({ top: palette.background, bottom: palette.background, fadeTop: false, fadeBottom: false });
+  const [bars, setBars] = useState({ top: palette.background, bottom: palette.background, fadeTop: false, fadeBottom: false, cover: false });
   const bottomSettled = useRef(false);
 
   const onServer = () => originOf(pageUrl.current) === server;
@@ -223,7 +223,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
         if (!message.atBottom) bottom = bottomSettled.current ? previous.bottom : message.background || bottom;
         else bottomSettled.current = true;
       }
-      return { top, bottom, fadeTop: message.scrolls && !message.atTop, fadeBottom: message.scrolls && !message.atBottom };
+      // iOS hands the safe areas to pages that draw edge to edge; older
+      // instances get the bars in their colours.
+      const cover = Platform.OS === "ios" && message.cover === true;
+      return { top, bottom, cover, fadeTop: !cover && message.scrolls && !message.atTop, fadeBottom: !cover && message.scrolls && !message.atBottom };
     });
   };
 
@@ -283,8 +286,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     <View style={{ flex: 1, backgroundColor: bars.top }}>
       <StatusBar style={statusStyle} animated />
       {Platform.OS === "android" ? <NavigationBar style={navigationStyle} /> : null}
-      <View style={{ height: insets.top, backgroundColor: bars.top }} />
-      <View style={{ flex: 1, paddingLeft: insets.left, paddingRight: insets.right, backgroundColor: fallback, overflow: "hidden" }}>
+      <View style={{ height: bars.cover ? 0 : insets.top, backgroundColor: bars.top }} />
+      <View style={{ flex: 1, paddingLeft: bars.cover ? 0 : insets.left, paddingRight: bars.cover ? 0 : insets.right, backgroundColor: fallback, overflow: "hidden" }}>
         <WebView<object>
           key={attempt}
           ref={web}
@@ -357,7 +360,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           <LinearGradient pointerEvents="none" colors={[transparent(bars.bottom), bars.bottom]} style={[shellStyles.fade, { bottom: 0 }]} />
         ) : null}
       </View>
-      <View style={{ height: Math.max(insets.bottom, keyboard), backgroundColor: keyboard ? fallback : bars.bottom }} />
+      <View style={{ height: bars.cover ? keyboard : Math.max(insets.bottom, keyboard), backgroundColor: keyboard ? fallback : bars.bottom }} />
     </View>
   );
 });

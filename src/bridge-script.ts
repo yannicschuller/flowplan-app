@@ -8,7 +8,7 @@
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
 export type PageMessage =
-  | { type: "edges"; top: string; bottom: string; scrolls: boolean; atTop: boolean; atBottom: boolean; background: string }
+  | { type: "edges"; top: string; bottom: string; scrolls: boolean; atTop: boolean; atBottom: boolean; background: string; cover?: boolean }
   | { type: "refresh" }
   | { type: "saveFile"; name: string; base64: string; mime: string }
   | { type: "haptic"; kind: string }
@@ -83,6 +83,9 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
       atTop: page.scrollTop <= 1,
       atBottom: page.scrollTop + innerHeight >= page.scrollHeight - 2,
       background: base,
+      // The page keeps clear of the system bars itself (viewport-fit=cover):
+      // the app shows it full screen.
+      cover: /viewport-fit\s*=\s*cover/.test(document.querySelector('meta[name="viewport"]')?.content || ""),
     });
   };
   const changed = () => {
