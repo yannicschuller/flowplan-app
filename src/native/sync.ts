@@ -3,6 +3,7 @@
 // foreground), in the background (background-task.ts) and for Android's
 // widget requests (widget-task.ts).
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { requestWidgetUpdate } from "react-native-android-widget";
 import { hideTimer, showTimer } from "../../modules/flowplan-native/src";
@@ -15,7 +16,9 @@ import type * as IosWidgets from "../widgets/ios";
 
 // expo-widgets only on iOS: Android draws its widgets with
 // react-native-android-widget, the timer as notification.
-const ios: typeof IosWidgets | null = Platform.OS === "ios" ? require("../widgets/ios") : null;
+// A personal test build may come without the widget extension (app.config.ts).
+const withWidgets = (Constants.expoConfig?.extra as { widgets?: boolean } | undefined)?.widgets !== false;
+const ios: typeof IosWidgets | null = Platform.OS === "ios" && withWidgets ? require("../widgets/ios") : null;
 
 export type FetchResult = { summary: Summary } | { signedOut: true } | { failed: true };
 

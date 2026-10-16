@@ -8,7 +8,14 @@ import { buildNumber } from "./src/version";
 const { version } = require("./package.json") as { version: string };
 const build = buildNumber(version, process.env.FLOWPLAN_BUILD);
 const BUNDLE_ID = "app.flowplan.mobile";
-const APP_GROUP = `group.${BUNDLE_ID}`;
+// A test build for your own iPhone with a free Apple ID (Xcode "Personal
+// Team", README → Testing on your iPhone): FLOWPLAN_PERSONAL=1. Apple gives
+// free accounts no push, so the build leaves it out, uses a bundle ID of its
+// own and – unless FLOWPLAN_WIDGETS=1 – no widgets (they need an App Group).
+const PERSONAL = process.env.FLOWPLAN_PERSONAL === "1";
+const WIDGETS = !PERSONAL || process.env.FLOWPLAN_WIDGETS === "1";
+const IOS_BUNDLE_ID = process.env.FLOWPLAN_BUNDLE_ID || (PERSONAL ? `${BUNDLE_ID}.personal` : BUNDLE_ID);
+const APP_GROUP = `group.${IOS_BUNDLE_ID}`;
 const BACKGROUND = { light: "#fcfbf8", dark: "#16151b" };
 const BRAND = "#4146e6";
 // Android push needs a Firebase project (README → Push notifications); the
@@ -16,7 +23,7 @@ const BRAND = "#4146e6";
 const googleServices = process.env.GOOGLE_SERVICES_JSON || "./google-services.json";
 
 const config: ExpoConfig = {
-  name: "Flowplan",
+  name: PERSONAL ? "Flowplan Test" : "Flowplan",
   slug: "flowplan",
   owner: process.env.EXPO_OWNER || undefined,
   version,
@@ -32,7 +39,7 @@ const config: ExpoConfig = {
     fr: "./locales/fr.json",
   },
   ios: {
-    bundleIdentifier: BUNDLE_ID,
+    bundleIdentifier: IOS_BUNDLE_ID,
     buildNumber: String(build),
     supportsTablet: true,
     appleTeamId: process.env.IOS_TEAM_ID || undefined,
@@ -54,9 +61,7 @@ const config: ExpoConfig = {
         { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults", NSPrivacyAccessedAPITypeReasons: ["CA92.1", "1C8F.1"] },
       ],
     },
-    entitlements: {
-      "com.apple.security.application-groups": [APP_GROUP],
-    },
+    ...(WIDGETS ? { entitlements: { "com.apple.security.application-groups": [APP_GROUP] } } : {}),
   },
   android: {
     package: BUNDLE_ID,
@@ -117,7 +122,8 @@ const config: ExpoConfig = {
         color: BRAND,
         defaultChannel: "inbox",
         mode: process.env.APS_ENVIRONMENT === "development" ? "development" : "production",
-        enableBackgroundRemoteNotifications: true,
+        enableRemoteNotifications: !PERSONAL,
+        enableBackgroundRemoteNotifications: !PERSONAL,
       },
     ],
     [
@@ -131,10 +137,10 @@ const config: ExpoConfig = {
     "expo-quick-actions",
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).
-    [
+    WIDGETS && [
       "expo-widgets",
       {
-        bundleIdentifier: `${BUNDLE_ID}.widgets`,
+        bundleIdentifier: `${IOS_BUNDLE_ID}.widgets`,
         groupIdentifier: APP_GROUP,
         enablePushNotifications: false,
         widgets: [
@@ -192,9 +198,12 @@ const config: ExpoConfig = {
     ],
     "./plugins/with-managed-config",
     "./plugins/with-android-signing",
-  ],
+  ].filter((plugin) => plugin !== false) as ExpoConfig["plugins"],
   extra: {
     appGroup: APP_GROUP,
+    // Without the widget extension (personal test build) the app leaves
+    // widgets and Live Activity out.
+    widgets: WIDGETS,
     // Expo's push service needs the project of the app (README → Push).
     ...(process.env.EXPO_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PROJECT_ID } } : {}),
   },
