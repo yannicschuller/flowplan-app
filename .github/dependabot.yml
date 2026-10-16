@@ -1,17 +1,21 @@
 version: 2
 updates:
+  # Expo's packages move together with the SDK (npx expo install --fix);
+  # Dependabot proposes the rest.
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    groups:
-      capacitor:
-        patterns: ["@capacitor/*"]
-  - package-ecosystem: gradle
-    directory: /android
-    schedule:
-      interval: monthly
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@types/react"
+      - dependency-name: "typescript"
   - package-ecosystem: bundler
     directory: /
     schedule:

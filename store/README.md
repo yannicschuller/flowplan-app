@@ -28,8 +28,9 @@ All icon sizes inside the apps are generated with `npm run icons`: the iOS asset
 The app itself collects nothing. It has:
 
 - no analytics, ads or tracking SDKs;
-- no third-party code apart from Capacitor;
-- no data on the device except the server address and the web view's own storage (session cookie, offline data of the web app).
+- no third-party code apart from Expo and React Native;
+- on the device only: the server address, a device token for the widgets, the last summary the widgets show (in the keychain / Keystore), and the web view's own storage (session cookie, offline data of the web app);
+- push notifications through Expo's push service: the instance sends the app's push token, a general text ("something new in the inbox") and the number of unread notifications to Expo, which hands them to Apple or Google.
 
 Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing. Check that the privacy policy at flowplan.org/datenschutz names the app.
 
@@ -43,6 +44,7 @@ Apple and Google, however, count the data that the developer's own service recei
   | Contact Info | Name, Email Address | Account |
   | User Content | Photos or Videos, Other User Content | Pages, uploads, comments |
   | Identifiers | User ID | Account |
+  | Identifiers | Device ID | Push notifications (the push token) |
 
   The hosted service also writes logs of IP addresses for security. Apple's *Diagnostics* category covers crash and performance data, so leave it unselected unless the server stores such data for analysis.
 - Privacy policy URL: `https://flowplan.org/datenschutz`
@@ -56,7 +58,8 @@ Apple and Google, however, count the data that the developer's own service recei
   - **Personal info:** name, email address, user IDs;
   - **Photos and videos:** photos (if uploaded);
   - **Files and docs:** files and docs (pages, uploads).
-- No location, no contacts, no financial info, no app activity for analytics, no device IDs.
+  - **Device or other IDs:** the push token, for push notifications (shared with no one; Expo, Apple and Google only deliver).
+- No location, no contacts, no financial info, no app activity for analytics.
 - **Ads:** no. **Target audience:** 18+ (work and productivity app, not designed for children). **News app:** no. **Government app:** no.
 
 ### Age rating
@@ -74,7 +77,7 @@ Apple and Google, however, count the data that the developer's own service recei
 ### Once: accounts and app records
 
 1. **Apple Developer Program** (99 USD/year) at developer.apple.com, as an organisation (needs a D-U-N-S number) or as an individual. The seller name in the store is the account's name.
-2. In **Certificates, Identifiers & Profiles**, register the App ID `app.flowplan.mobile`, capabilities default: no push yet.
+2. In **Certificates, Identifiers & Profiles**, register the App IDs `app.flowplan.mobile` (capabilities *Push Notifications* and *App Groups*: `group.app.flowplan.mobile`) and `app.flowplan.mobile.widgets` (*App Groups*). With cloud signing (API key with role *Admin*) Xcode does this itself on the first build.
 3. In **App Store Connect → Apps → +**, create the app:
    - platform iOS, name "Flowplan – Notizen & Projekte" (or the English name);
    - primary language German or English;

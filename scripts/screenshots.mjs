@@ -137,11 +137,13 @@ async function shoot(browser, name, device, { dark = false, url, steps } = {}) {
     extraHTTPHeaders: { "Accept-Language": de ? "de-DE,de;q=0.9" : "en-US,en;q=0.9" },
     userAgent: userAgent(device),
   });
-  // The app's own pages, served from www/ (module scripts need http).
+  // The app's setup screen as a page (the native screen cannot be driven by
+  // Playwright): same texts, colours and layout as src/screens/Setup.tsx.
   await context.route("http://app.flowplan.local/**", (route) => {
-    const path = new URL(route.request().url()).pathname.replace(/^\//, "") || "index.html";
-    const type = { html: "text/html", js: "text/javascript", css: "text/css", png: "image/png" }[path.split(".").pop()];
-    route.fulfill({ body: readFileSync(`${root}www/${path}`), contentType: type });
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith(".css")) return route.fulfill({ body: readFileSync(`${root}scripts/setup-preview.css`), contentType: "text/css" });
+    if (path.endsWith(".png")) return route.fulfill({ body: readFileSync(`${root}scripts/setup-preview-icon.png`), contentType: "image/png" });
+    route.fulfill({ body: setupPreview(), contentType: "text/html" });
   });
   if (!url) await signIn(context);
   const page = await context.newPage();
@@ -156,6 +158,16 @@ async function shoot(browser, name, device, { dark = false, url, steps } = {}) {
   writeFileSync(`${dir}/${name}.json`, JSON.stringify({ ...(await edgeColors(page, viewport)), dark }));
   await context.close();
   console.log(`${locale} ${deviceName(device)} ${name}`);
+}
+function setupPreview() {
+  const text = say(
+    ["Willkommen bei Flowplan", "Verbinde dich mit app.flowplan.org oder gib die Adresse deiner eigenen Flowplan-Instanz ein.", "Adresse der Instanz", "Verbinden", "Ändern kannst du sie später in den App-Einstellungen oder, indem du das App-Symbol gedrückt hältst: „Server wechseln“."],
+    ["Welcome to Flowplan", "Connect to app.flowplan.org or enter the address of your own Flowplan instance.", "Instance address", "Connect", "You can change it later in the app settings or by pressing and holding the app icon: “Change server”."],
+  );
+  return `<!doctype html><html lang="${de ? "de" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light dark"><link rel="stylesheet" href="/style.css"></head>
+<body><main><img src="/icon.png" alt=""><h1>${text[0]}</h1><p>${text[1]}</p>
+<form><label for="server">${text[2]}</label><input id="server" value="app.flowplan.org"><div class="row"><button type="button">${text[3]}</button></div></form>
+<p class="hint">${text[4]}</p></main></body></html>`;
 }
 const deviceName = (device) => Object.keys(DEVICES).find((key) => DEVICES[key] === device);
 
@@ -228,7 +240,7 @@ const SHOTS = [
       },
     },
   ],
-  ["07-server", { dark: true, url: "http://app.flowplan.local/index.html?setup=1" }],
+  ["07-server", { dark: true, url: "http://app.flowplan.local/setup" }],
 ];
 
 const browser = await chromium.launch();

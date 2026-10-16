@@ -1,6 +1,7 @@
 The first version of Flowplan for iPhone and iPad:
 • Connects to app.flowplan.org or your own Flowplan instance
-• Sign in with a passkey or SSO through the system window
-• A page of its own without a connection that reconnects by itself
-• Links to other sites open in the browser
-• Dark mode, quick action "Change server"
+• Push notifications with the number of unread ones on the app icon
+• Widgets for the home and lock screen: tasks due, inbox, running timer
+• The running timer as Live Activity on the lock screen and in the Dynamic Island
+• Sign in with a passkey or SSO, app lock with Face ID
+• Quick actions: inbox, my tasks, search, new page

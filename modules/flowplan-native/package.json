@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-native",
+  "version": "1.0.0",
+  "description": "Native pieces of the Flowplan app that no Expo module covers",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}

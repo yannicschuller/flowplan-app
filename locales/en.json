@@ -1,0 +1,14 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Flowplan",
+    "NSCameraUsageDescription": "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
+    "NSMicrophoneUsageDescription": "Flowplan uses the microphone when you record a voice note or a video for a page.",
+    "NSPhotoLibraryAddUsageDescription": "Flowplan saves images to your photos when you ask it to.",
+    "NSFaceIDUsageDescription": "Flowplan uses Face ID to unlock the app when the app lock is on."
+  },
+  "android": {
+    "share_label": "Save to Flowplan",
+    "restriction_server_title": "Flowplan instance",
+    "restriction_server_description": "Address suggested on first start, e.g. https://flowplan.example.com"
+  }
+}

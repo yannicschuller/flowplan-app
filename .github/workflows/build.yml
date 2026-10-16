@@ -1,0 +1,202 @@
+# Builds the app on the own Mac (self-hosted runner with the labels
+# self-hosted and macOS, README → Build machine) – only by hand:
+# Actions → Build → Run workflow, from any branch. Without the store secrets
+# the builds are unsigned (an .ipa for inspection, a simulator app, APK and
+# AAB); with them they are signed and can go to TestFlight and Play's
+# internal testing track. The release workflow uses the same jobs.
+name: Build
+run-name: "Build · ${{ inputs.platform }} · ${{ github.ref_name }}${{ inputs.upload && ' · upload' || '' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "What to build"
+        type: choice
+        options: [both, ios, android]
+        default: both
+      build:
+        description: "Build number within the version (0–99); raise it for every upload of the same version"
+        type: string
+        default: "0"
+      upload:
+        description: "Upload signed builds to TestFlight and Play internal testing (needs the secrets)"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        default: both
+      build:
+        type: string
+        default: "0"
+      upload:
+        type: boolean
+        default: false
+      ref:
+        description: "Tag or commit to build (the release's tag)"
+        type: string
+        default: ""
+      release:
+        description: "Version whose GitHub release gets the builds"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    if: inputs.platform == 'both' || inputs.platform == 'ios'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      FLOWPLAN_BUILD: ${{ inputs.build }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+      SIGNED: ${{ secrets.APP_STORE_CONNECT_API_KEY != '' && vars.IOS_TEAM_ID != '' }}
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Gems (fastlane, CocoaPods)
+        run: |
+          bundle config set --local path vendor/bundle
+          bundle install --jobs 4
+      - name: Xcode project
+        run: |
+          npx expo prebuild --clean --platform ios --no-install
+          cd ios && bundle exec pod install
+      - name: Signed build${{ inputs.upload && ' and TestFlight' || '' }}
+        if: env.SIGNED == 'true'
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          IOS_DISTRIBUTION_CERTIFICATE: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          IOS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_PROVISIONING_PROFILE_NAME }}
+          IOS_WIDGETS_PROVISIONING_PROFILE: ${{ secrets.IOS_WIDGETS_PROVISIONING_PROFILE }}
+          IOS_WIDGETS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_WIDGETS_PROVISIONING_PROFILE_NAME }}
+        run: bundle exec fastlane ios ${{ inputs.upload && 'beta' || 'build' }}
+      - name: Unsigned build
+        if: env.SIGNED != 'true'
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/Flowplan.xcworkspace -scheme Flowplan -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath ios/build/Flowplan.xcarchive \
+            CODE_SIGNING_ALLOWED=NO archive | tail -n 30
+          # An .ipa without a signature: for inspection or re-signing, not for devices.
+          mkdir -p ios/build/Payload
+          cp -R ios/build/Flowplan.xcarchive/Products/Applications/Flowplan.app ios/build/Payload/
+          (cd ios/build && zip -qry Flowplan.ipa Payload)
+          xcodebuild -workspace ios/Flowplan.xcworkspace -scheme Flowplan -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build/sim CODE_SIGNING_ALLOWED=NO build | tail -n 10
+          (cd ios/build/sim/Build/Products/Release-iphonesimulator && zip -qry "$GITHUB_WORKSPACE/ios/build/Flowplan-simulator.zip" Flowplan.app)
+      - name: Name the files
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          suffix=$([ "$SIGNED" = true ] && echo "" || echo "-unsigned")
+          mkdir -p out
+          cp ios/build/Flowplan.ipa "out/Flowplan-$version-ios$suffix.ipa"
+          [ -f ios/build/Flowplan-simulator.zip ] && cp ios/build/Flowplan-simulator.zip "out/Flowplan-$version-ios-simulator.zip" || true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flowplan-ios-${{ inputs.ref || github.sha }}
+          path: out/*
+          retention-days: 14
+      - name: Attach to the release
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v${{ inputs.release }}" out/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  android:
+    if: inputs.platform == 'both' || inputs.platform == 'android'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      FLOWPLAN_BUILD: ${{ inputs.build }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SIGNED: ${{ secrets.ANDROID_KEYSTORE != '' }}
+      UPLOAD: ${{ inputs.upload && secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v4
+      - run: npm ci
+      - name: Firebase configuration (push on Android)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json; else rm -f google-services.json; fi
+      - name: Gradle project
+        run: npx expo prebuild --clean --platform android --no-install
+      - name: Gems (fastlane)
+        if: env.SIGNED == 'true'
+        run: |
+          bundle config set --local path vendor/bundle
+          bundle install --jobs 4
+      - name: Signed bundle and APK${{ inputs.upload && ' and Play internal testing' || '' }}
+        if: env.SIGNED == 'true'
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: bundle exec fastlane android ${{ env.UPLOAD == 'true' && 'internal' || 'build' }}
+      - name: Unsigned bundle and APKs
+        if: env.SIGNED != 'true'
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug assembleRelease bundleRelease
+      - name: Name the files
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          out=android/app/build/outputs
+          mkdir -p out
+          if [ "$SIGNED" = true ]; then
+            cp $out/apk/release/app-release.apk "out/Flowplan-$version-android.apk"
+            cp $out/bundle/release/app-release.aab "out/Flowplan-$version-android.aab"
+          else
+            cp $out/apk/release/app-release-unsigned.apk "out/Flowplan-$version-android-unsigned.apk"
+            cp $out/bundle/release/app-release.aab "out/Flowplan-$version-android-unsigned.aab"
+            cp $out/apk/debug/app-debug.apk "out/Flowplan-$version-android-debug.apk"
+          fi
+          rm -f google-services.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flowplan-android-${{ inputs.ref || github.sha }}
+          path: out/*
+          retention-days: 14
+      - name: Attach to the release
+        if: inputs.release != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v${{ inputs.release }}" out/* --clobber --repo "$GITHUB_REPOSITORY"

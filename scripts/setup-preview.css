@@ -1,0 +1,134 @@
+/* The setup screen for the store screenshots (scripts/screenshots.mjs): the look of src/screens/Setup.tsx. */
+:root {
+  --bg: #fcfbf8;
+  --text: #1d1c22;
+  --muted: #6f6b77;
+  --border: #e4e0d6;
+  --blue: #3b3fd8;
+  --blue-light: #ecebfc;
+  --danger: #d32f2f;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16151b;
+    --text: #ecebf1;
+    --muted: #9a96a4;
+    --border: #2e2c35;
+    --blue: #959bff;
+    --blue-light: #2a2a55;
+    --danger: #ff6b6b;
+  }
+}
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left));
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+body[hidden] {
+  display: grid !important;
+  visibility: hidden;
+}
+main {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+  text-align: center;
+  animation: in 0.3s ease both;
+}
+img {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+}
+h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+p {
+  margin: 0;
+  color: var(--muted);
+}
+.hint {
+  font-size: 13px;
+}
+form {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+label {
+  font-size: 14px;
+  font-weight: 600;
+}
+input {
+  width: 100%;
+  padding: 13px 14px;
+  /* 16px: iOS does not zoom into the field. */
+  font: inherit;
+  font-size: 16px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  -webkit-appearance: none;
+}
+input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-light);
+}
+button {
+  min-height: 48px;
+  padding: 12px 16px;
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: 12px;
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button:disabled {
+  opacity: 0.6;
+}
+.error {
+  color: var(--danger);
+  font-size: 14px;
+  min-height: 1.5em;
+}
+.row {
+  display: grid;
+  gap: 10px;
+}
+@keyframes in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  button:not(.secondary) {
+    color: #16151b;
+  }
+}

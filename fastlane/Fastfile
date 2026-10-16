@@ -1,17 +1,26 @@
 # Builds and uploads for the stores. Every lane works from the repository
-# root after `npm ci && npx cap sync`; credentials come from the environment
-# (README → Signing lists every secret):
+# root after `npm ci && npx expo prebuild` (plus `pod install` for iOS);
+# credentials come from the environment (README → Signing lists every secret):
 #
 #   fastlane ios build        signed App Store build (ios/build/Flowplan.ipa)
 #   fastlane ios beta         … and upload it to TestFlight
 #   fastlane ios metadata     texts and screenshots from store/app-store
-#   fastlane android build    signed bundle (android/app/build/outputs/bundle/release)
+#   fastlane android build    signed bundle and APK (android/app/build/outputs)
 #   fastlane android internal … and upload it to Play's internal testing track
 #   fastlane android metadata texts and images from store/google-play
 #
-# Without credentials the CI workflow builds unsigned instead (no fastlane).
+# Without credentials the build workflow builds unsigned instead (no fastlane).
+# The iOS app has two targets: the app (app.flowplan.mobile) and its widgets
+# and Live Activity (app.flowplan.mobile.widgets), both in the App Group
+# group.app.flowplan.mobile.
+
+require "securerandom"
 
 ROOT = File.expand_path("..", __dir__)
+BUNDLE_ID = "app.flowplan.mobile"
+WIDGETS_ID = "#{BUNDLE_ID}.widgets"
+KEYCHAIN = "flowplan-build"
+KEYCHAIN_PASSWORD = SecureRandom.hex(16)
 
 def env!(name)
   value = ENV[name].to_s
@@ -46,33 +55,55 @@ platform :ios do
 
   desc "Signed App Store build"
   lane :build do
-    setup_ci if ENV["CI"]
     api_key
-    project = File.join(ROOT, "ios/App/App.xcodeproj")
+    project = File.join(ROOT, "ios/Flowplan.xcodeproj")
     xcargs = ["-allowProvisioningUpdates"]
+    export_options = {}
     if ENV["IOS_DISTRIBUTION_CERTIFICATE"].to_s != ""
-      # Certificate and profile from secrets: manual signing.
+      # Certificate and profiles from secrets: manual signing, one profile
+      # per target.
+      # A keychain of its own for this build, not the default one: the build
+      # runs on a Mac that is also used otherwise (README → Build machine).
       certificate = File.join(Dir.tmpdir, "distribution.p12")
       File.binwrite(certificate, decoded("IOS_DISTRIBUTION_CERTIFICATE"))
+      create_keychain(
+        name: KEYCHAIN,
+        password: KEYCHAIN_PASSWORD,
+        default_keychain: false,
+        unlock: true,
+        timeout: 3600,
+        lock_when_sleeps: true,
+        add_to_search_list: true,
+      )
       import_certificate(
         certificate_path: certificate,
         certificate_password: ENV["IOS_DISTRIBUTION_CERTIFICATE_PASSWORD"].to_s,
-        keychain_name: ENV["CI"] ? "fastlane_tmp_keychain" : "login.keychain",
-        keychain_password: ENV["CI"] ? "" : nil,
+        keychain_name: KEYCHAIN,
+        keychain_password: KEYCHAIN_PASSWORD,
       )
-      profile = File.join(Dir.tmpdir, "Flowplan_AppStore.mobileprovision")
-      File.binwrite(profile, decoded("IOS_PROVISIONING_PROFILE"))
-      install_provisioning_profile(path: profile)
-      update_code_signing_settings(
-        path: project,
-        use_automatic_signing: false,
-        team_id: env!("IOS_TEAM_ID"),
-        code_sign_identity: "Apple Distribution",
-        profile_name: ENV.fetch("IOS_PROVISIONING_PROFILE_NAME", "Flowplan App Store"),
-        bundle_identifier: "app.flowplan.mobile",
-      )
+      File.delete(certificate)
+      profiles = {
+        "Flowplan" => [BUNDLE_ID, "IOS_PROVISIONING_PROFILE", ENV.fetch("IOS_PROVISIONING_PROFILE_NAME", "Flowplan App Store")],
+        "ExpoWidgetsTarget" => [WIDGETS_ID, "IOS_WIDGETS_PROVISIONING_PROFILE", ENV.fetch("IOS_WIDGETS_PROVISIONING_PROFILE_NAME", "Flowplan Widgets App Store")],
+      }
+      profiles.each do |target, (bundle_id, secret, name)|
+        profile = File.join(Dir.tmpdir, "#{target}.mobileprovision")
+        File.binwrite(profile, decoded(secret))
+        install_provisioning_profile(path: profile)
+        update_code_signing_settings(
+          path: project,
+          targets: [target],
+          use_automatic_signing: false,
+          team_id: env!("IOS_TEAM_ID"),
+          code_sign_identity: "Apple Distribution",
+          profile_name: name,
+          bundle_identifier: bundle_id,
+        )
+        export_options[bundle_id] = name
+      end
     else
-      # Only the API key: Xcode signs with cloud-managed certificates.
+      # Only the API key: Xcode signs with cloud-managed certificates and
+      # creates the App IDs, the App Group and the profiles itself.
       xcargs += [
         "-authenticationKeyPath #{api_key_file}",
         "-authenticationKeyID #{env!("APP_STORE_CONNECT_API_KEY_ID")}",
@@ -82,15 +113,18 @@ platform :ios do
       ]
     end
     build_app(
-      project: project,
-      scheme: "App",
+      workspace: File.join(ROOT, "ios/Flowplan.xcworkspace"),
+      scheme: "Flowplan",
       configuration: "Release",
       export_method: "app-store",
+      export_options: export_options.empty? ? {} : { provisioningProfiles: export_options },
       output_directory: File.join(ROOT, "ios/build"),
       output_name: "Flowplan.ipa",
       xcargs: xcargs.join(" "),
       export_xcargs: "-allowProvisioningUpdates",
     )
+  ensure
+    delete_keychain(name: KEYCHAIN) if File.exist?(File.expand_path("~/Library/Keychains/#{KEYCHAIN}-db"))
   end
 
   desc "Signed build to TestFlight (internal testers)"
@@ -128,14 +162,18 @@ platform :android do
     ENV["ANDROID_KEYSTORE_FILE"] = keystore
     env!("ANDROID_KEYSTORE_PASSWORD")
     env!("ANDROID_KEY_ALIAS")
-    gradle(project_dir: File.join(ROOT, "android"), task: "bundleRelease")
+    # Bundle for Play and an APK to install directly, both with the upload key.
+    gradle(project_dir: File.join(ROOT, "android"), tasks: ["bundleRelease", "assembleRelease"], flags: "--no-daemon")
+  ensure
+    # The upload key does not stay on the build machine.
+    File.delete(keystore) if keystore && File.exist?(keystore)
   end
 
   desc "Signed bundle to Play's internal testing track"
   lane :internal do
     build
     upload_to_play_store(
-      package_name: "app.flowplan.mobile",
+      package_name: BUNDLE_ID,
       json_key_data: decoded("PLAY_SERVICE_ACCOUNT_JSON"),
       track: "internal",
       release_status: ENV.fetch("PLAY_RELEASE_STATUS", "completed"),
@@ -150,7 +188,7 @@ platform :android do
   desc "Play texts and images (store/google-play)"
   lane :metadata do
     upload_to_play_store(
-      package_name: "app.flowplan.mobile",
+      package_name: BUNDLE_ID,
       json_key_data: decoded("PLAY_SERVICE_ACCOUNT_JSON"),
       metadata_path: File.join(ROOT, "store/google-play"),
       skip_upload_apk: true,

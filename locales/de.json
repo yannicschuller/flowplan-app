@@ -1,0 +1,14 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Flowplan",
+    "NSCameraUsageDescription": "Flowplan nutzt die Kamera, wenn du ein Foto für eine Seite oder ein Whiteboard aufnimmst.",
+    "NSMicrophoneUsageDescription": "Flowplan nutzt das Mikrofon, wenn du eine Sprachnotiz oder ein Video für eine Seite aufnimmst.",
+    "NSPhotoLibraryAddUsageDescription": "Flowplan sichert Bilder in deinen Fotos, wenn du es möchtest.",
+    "NSFaceIDUsageDescription": "Flowplan nutzt Face ID, um die App zu entsperren, wenn die App-Sperre an ist."
+  },
+  "android": {
+    "share_label": "In Flowplan speichern",
+    "restriction_server_title": "Flowplan-Instanz",
+    "restriction_server_description": "Beim ersten Start vorgeschlagene Adresse, z. B. https://flowplan.example.com"
+  }
+}

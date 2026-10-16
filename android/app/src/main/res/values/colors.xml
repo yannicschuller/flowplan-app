@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Colours of the Flowplan web app; values-night has the dark ones. -->
-<resources>
-    <color name="flowplan_background">#FCFBF8</color>
-    <color name="flowplan_accent">#3B3FD8</color>
-    <color name="colorPrimary">#3B3FD8</color>
-    <color name="colorPrimaryDark">#3B3FD8</color>
-    <color name="colorAccent">#3B3FD8</color>
-</resources>

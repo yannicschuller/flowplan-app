@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="flowplan_background">#16151B</color>
-    <color name="flowplan_accent">#959BFF</color>
-    <color name="colorPrimary">#959BFF</color>
-    <color name="colorPrimaryDark">#959BFF</color>
-    <color name="colorAccent">#959BFF</color>
-</resources>
