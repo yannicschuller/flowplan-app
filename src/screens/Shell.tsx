@@ -14,7 +14,17 @@ import * as Application from "expo-application";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { bridgeScript, downloadScript, parsePageMessage, registerScript, signOutScript, unregisterScript, type PageMessage } from "../bridge-script";
+import type { PencilAction } from "../../modules/flowplan-native/src";
+import {
+  bridgeScript,
+  downloadScript,
+  parsePageMessage,
+  pencilScript,
+  registerScript,
+  signOutScript,
+  unregisterScript,
+  type PageMessage,
+} from "../bridge-script";
 import { t } from "../i18n";
 import { decide, type NavigationState } from "../navigation";
 import { originOf } from "../server";
@@ -31,6 +41,9 @@ export type ShellHandle = {
   // Registers this installation for the page's session (device token, push).
   register: (body: Record<string, unknown>) => void;
   unregister: (installationId: string) => void;
+  // Hands an Apple Pencil double-tap or squeeze to the page (whiteboard,
+  // image markup: lib/stylus.ts in Flowplan).
+  pencil: (action: PencilAction) => void;
   // Signs the web view out of the instance; resolves when done (at most 3 s).
   signOut: () => Promise<void>;
 };
@@ -150,6 +163,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       },
       unregister: (installationId) => {
         if (onServer()) run(unregisterScript(installationId));
+      },
+      pencil: (action) => {
+        if (onServer()) run(pencilScript(action));
       },
       signOut: () =>
         new Promise<void>((resolve) => {

@@ -123,6 +123,13 @@ export function registerScript(body: Record<string, unknown>) {
 true;`;
 }
 
+// Apple Pencil double-tap or squeeze (iPad) for the whiteboard and the image
+// markup (lib/stylus.ts in Flowplan).
+export function pencilScript(action: { gesture: string; preferred: string }) {
+  const detail = { gesture: action.gesture === "squeeze" ? "squeeze" : "tap", preferred: String(action.preferred) };
+  return `window.dispatchEvent(new CustomEvent("flowplan:pencil", { detail: ${JSON.stringify(detail)} })); true;`;
+}
+
 // Signs the web view out of the instance (Settings → forget the server).
 export const signOutScript = `fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" })
   .catch(() => {})

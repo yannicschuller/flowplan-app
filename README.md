@@ -24,6 +24,7 @@ The app shows a Flowplan instance in the system web view and adds what only a na
 - can be locked with Face ID, Touch ID, a fingerprint or the device code;
 - hands exports and downloads to the share sheet;
 - takes text and links shared from other apps (Android);
+- works on iPad and Android tablets in every orientation, in Split View, Slide Over and Stage Manager, with keyboard, trackpad and **Apple Pencil**: pen-only drawing with pressure, the eraser, hover, Scribble and Pencil double-tap and squeeze;
 - paints the system bars in the page's colours, opens other sites in the system browser and shows its own page without a connection.
 
 ## How it works
@@ -43,7 +44,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | Live Activity / timer notification | [`src/widgets/ios.tsx`](src/widgets/ios.tsx), [`modules/flowplan-native`](modules/flowplan-native) | `expo-widgets` (ActivityKit); Kotlin |
 | Background refresh | [`src/native/background.ts`](src/native/background.ts) | `expo-background-task` |
 | Quick actions, haptics, share sheet | [`src/native/actions.ts`](src/native/actions.ts) | `expo-quick-actions`, `expo-haptics`, `expo-sharing`, `expo-file-system` |
-| Managed configuration, shared text | [`modules/flowplan-native`](modules/flowplan-native) | a local Expo module in Swift and Kotlin |
+| Managed configuration, shared text, Apple Pencil double-tap and squeeze | [`modules/flowplan-native`](modules/flowplan-native) | a local Expo module in Swift (`UIPencilInteraction`) and Kotlin |
 
 | | |
 | --- | --- |
@@ -53,6 +54,14 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | **Offline** | When the instance cannot be reached, the app shows its own page and reconnects by itself when the connection is back. |
 | **Native feel** | Status bar and home indicator / navigation bar take the colours the page has at its top and bottom edge; on pages that scroll as a whole they keep them, and content fades out at the edges. Dark mode follows the system. Swipe back on iOS, the back button on Android. No zooming into form fields and no "previous/next/done" bar above the keyboard on iOS. |
 | **Languages** | German, English and French (own screens, notifications, widgets, permission prompts). |
+
+### iPad, tablets and Apple Pencil
+
+- **Layout:** one app for iPhone and iPad (and Android phones and tablets), all orientations, resizable windows (Split View, Slide Over, Stage Manager, Android multi-window). On iPad the web view gets the desktop-class page, which Flowplan lays out for touch (`pointer: coarse`); the app's own screens stay a comfortable width. Keyboard shortcuts (⌘K, ⌘N …) and the trackpad pointer work as in Safari. The *Flowplan* widget also comes in the iPad's extra-large size.
+- **Drawing** on whiteboards and in the image markup (Flowplan's `lib/stylus.ts`): the pen's pressure sets the line width, fast strokes keep every measured point, a hovering Pencil (iPad Pro, iPad Air M2 and newer) shows where the stroke starts. Once the Pencil has drawn, fingers move and zoom the board instead of drawing, so a resting hand leaves no marks (*Draw with the pen only* in the pen menu). The eraser end of styluses that have one erases.
+- **Double-tap and squeeze** (Apple Pencil 2nd generation, Pro): the app listens with `UIPencilInteraction` and passes the gesture with the action chosen in the iPad's settings (Settings → Apple Pencil) to the page: switch to the eraser and back, the previous tool, or the pen with its colours.
+- **Scribble:** handwriting with the Pencil works in every text field of the app and the page.
+- **Android:** styluses report pressure, hover and the eraser end the same way; handwriting in text fields comes with Android 14.
 
 ### Signing in with passkeys and SSO
 

@@ -15,12 +15,21 @@ export type TimerOptions = {
   channelDescription: string;
 };
 
+// Apple Pencil double-tap or squeeze, with the action set in the iPad's
+// settings (lib/stylus.ts in Flowplan).
+export type PencilAction = {
+  gesture: "tap" | "squeeze";
+  preferred: "switchEraser" | "switchPrevious" | "showColorPalette" | "showInkAttributes" | "showContextualPalette" | "ignore";
+};
+
 type NativeModule = {
   getManagedServer(): string | null;
   consumeSharedText(): SharedText | null;
   showTimer(options: TimerOptions): void;
   hideTimer(): void;
+  startPencil(): void;
   addListener(event: "onShare", listener: (share: SharedText) => void): EventSubscription;
+  addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
 };
 
 const native = requireOptionalNativeModule<NativeModule>("FlowplanNative");
@@ -48,4 +57,12 @@ export function showTimer(options: TimerOptions) {
 }
 export function hideTimer() {
   if (Platform.OS === "android") native?.hideTimer();
+}
+
+// iPad: Apple Pencil double-tap and squeeze.
+export function addPencilListener(listener: (action: PencilAction) => void) {
+  if (Platform.OS !== "ios" || !native) return { remove() {} };
+  const subscription = native.addListener("onPencil", listener);
+  native.startPencil();
+  return subscription;
 }

@@ -8,7 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { getLocales } from "expo-localization";
 import * as Application from "expo-application";
-import { addShareListener, consumeSharedText, getManagedServer, type SharedText } from "../modules/flowplan-native/src";
+import { addPencilListener, addShareListener, consumeSharedText, getManagedServer, type SharedText } from "../modules/flowplan-native/src";
 import type { PageMessage } from "./bridge-script";
 import { pickLocale, setLocale } from "./i18n";
 import { pathOfAppLink } from "./navigation";
@@ -99,7 +99,10 @@ function Root() {
     const initialShare = consumeSharedText();
     if (initialShare) share(initialShare);
     const shares = addShareListener(share);
+    // iPad: Apple Pencil double-tap and squeeze go to the page.
+    const pencil = addPencilListener((action) => shell.current?.pencil(action));
     return () => {
+      pencil.remove();
       links.remove();
       opened.remove();
       received.remove();

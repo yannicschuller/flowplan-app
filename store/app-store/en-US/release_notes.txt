@@ -5,3 +5,4 @@ The first version of Flowplan for iPhone and iPad:
 • The running timer as Live Activity on the lock screen and in the Dynamic Island
 • Sign in with a passkey or SSO, app lock with Face ID
 • Quick actions: inbox, my tasks, search, new page
+• Apple Pencil on whiteboards: pressure, eraser, double-tap and squeeze; fingers move the board

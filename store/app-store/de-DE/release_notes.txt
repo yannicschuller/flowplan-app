@@ -5,3 +5,4 @@ Die erste Version von Flowplan für iPhone und iPad:
 • Die laufende Zeiterfassung als Live-Aktivität auf dem Sperrbildschirm und in der Dynamic Island
 • Anmeldung mit Passkey und SSO, App-Sperre mit Face ID
 • Schnellaktionen: Posteingang, meine Aufgaben, Suche, neue Seite
+• Apple Pencil auf Whiteboards: Druckstärke, Radierer, Doppeltippen und Drücken; Finger verschieben das Board

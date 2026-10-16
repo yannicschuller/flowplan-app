@@ -39,7 +39,7 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment) 
         ))}
       </VStack>
     );
-  const rows = family === "systemLarge" ? 7 : family === "systemMedium" ? 3 : 2;
+  const rows = family === "systemExtraLarge" ? 8 : family === "systemLarge" ? 7 : family === "systemMedium" ? 3 : 2;
   const items = props.items.slice(0, rows);
   return (
     <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>

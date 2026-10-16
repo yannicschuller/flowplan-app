@@ -143,7 +143,8 @@ const config: ExpoConfig = {
             displayName: "Flowplan",
             description: "Tasks due, the inbox and the running timer.",
             ios: {
-              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryRectangular", "accessoryInline"],
+              // systemExtraLarge: the iPad's widest widget.
+              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "systemExtraLarge", "accessoryRectangular", "accessoryInline"],
             },
             android: null,
           },

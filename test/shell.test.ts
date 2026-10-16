@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { appLink, decide, pathOfAppLink, safePath, type NavigationState } from "../src/navigation";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../src/sign-in";
 import { buildNumber } from "../src/version";
-import { bridgeScript, downloadScript, parsePageMessage, registerScript, unregisterScript } from "../src/bridge-script";
+import { bridgeScript, downloadScript, parsePageMessage, pencilScript, registerScript, signOutScript, unregisterScript } from "../src/bridge-script";
 
 const server = "https://flowplan.example.com";
 const nav = (url: string, extra: Partial<Parameters<typeof decide>[1]> = {}, state: NavigationState = { signingInUntil: 0 }) =>
@@ -101,6 +101,21 @@ test("the page scripts are valid and stay on the instance", () => {
   }
   for (const script of [registerScript({ installationId: "x", pushToken: null }), unregisterScript("x"), downloadScript(`${server}/api/files/1?x="y"`)])
     assert.doesNotThrow(() => new Function(script));
+  assert.doesNotThrow(() => new Function(signOutScript));
+  // Apple Pencil: the page gets a "flowplan:pencil" event with the action.
+  const events: { type: string; detail: unknown }[] = [];
+  new Function("window", "CustomEvent", pencilScript({ gesture: "squeeze", preferred: "switchEraser" }))(
+    { dispatchEvent: (e: { type: string; detail: unknown }) => events.push({ type: e.type, detail: e.detail }) },
+    class {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init: { detail: unknown }) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+  );
+  assert.deepEqual(events, [{ type: "flowplan:pencil", detail: { gesture: "squeeze", preferred: "switchEraser" } }]);
   assert.deepEqual(parsePageMessage('{"type":"refresh"}'), { type: "refresh" });
   assert.equal(parsePageMessage("nonsense"), null);
   assert.equal(parsePageMessage("{}"), null);
