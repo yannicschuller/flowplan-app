@@ -20,6 +20,9 @@ export function setUpNotifications() {
       shouldSetBadge: true,
     }),
   });
+  // At every start, so that the channel's name and description follow the
+  // app's language (Android keeps them as last created; the timer channel in
+  // the native module does the same).
   if (Platform.OS === "android")
     void Notifications.setNotificationChannelAsync("inbox", {
       name: t("channelInbox"),
@@ -53,9 +56,18 @@ export async function askForPush(): Promise<PushState> {
 
 // The Expo push token, when push is allowed and the build knows its Expo
 // project (EXPO_PROJECT_ID, README → Push notifications); otherwise null.
+let warnedAboutProject = false;
 export async function expoPushToken(): Promise<string | null> {
   const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
-  if (!projectId || (await pushPermission()) !== "granted") return null;
+  if (!projectId) {
+    // A local build without EXPO_PROJECT_ID: everything works except push.
+    if (__DEV__ && !warnedAboutProject) {
+      warnedAboutProject = true;
+      console.warn("Flowplan: no Expo project in this build (set EXPO_PROJECT_ID, README → Push notifications) – push notifications are unavailable.");
+    }
+    return null;
+  }
+  if ((await pushPermission()) !== "granted") return null;
   try {
     return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   } catch {

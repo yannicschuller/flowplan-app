@@ -21,6 +21,7 @@ export function Settings({
   onChangeServer,
   onForget,
   onPushChanged,
+  onLockChanged,
 }: {
   visible: boolean;
   server: string;
@@ -30,6 +31,7 @@ export function Settings({
   onChangeServer: () => void;
   onForget: () => void;
   onPushChanged: () => void;
+  onLockChanged: () => void;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -56,6 +58,7 @@ export function Settings({
     if (!result.success) return;
     store.setAppLock(on);
     setLock(on);
+    onLockChanged();
   }
 
   async function allowPush() {

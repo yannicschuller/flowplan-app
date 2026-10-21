@@ -2,19 +2,22 @@
 // what makes it native around it: push notifications, widgets and the timer
 // (sync.ts), quick actions, shared text, the app lock and its own settings.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Linking, Platform } from "react-native";
+import { AppState, type AppStateStatus, Linking, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { getLocales } from "expo-localization";
 import * as Application from "expo-application";
+import * as Device from "expo-device";
+import * as ScreenCapture from "expo-screen-capture";
 import { addPencilListener, addShareListener, consumeSharedText, getManagedServer, type SharedText } from "../modules/flowplan-native/src";
 import type { PageMessage } from "./bridge-script";
+import { deviceName } from "./device";
 import { pickLocale, setLocale } from "./i18n";
 import { pathOfAppLink } from "./navigation";
 import { store } from "./store";
 import { BACKGROUND } from "./ui";
-import { Lock } from "./screens/Lock";
+import { Cover, Lock } from "./screens/Lock";
 import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
 import { Shell, type ShellHandle } from "./screens/Shell";
@@ -42,6 +45,8 @@ function Root() {
   const [setup, setSetup] = useState(!store.server());
   const [settings, setSettings] = useState(false);
   const [locked, setLocked] = useState(store.appLock());
+  const [lockOn, setLockOn] = useState(store.appLock());
+  const [appState, setAppState] = useState<AppStateStatus>((AppState.currentState as AppStateStatus | null) || "active");
   const [signedIn, setSignedIn] = useState(!!store.deviceToken());
   const [pushAvailable, setPushAvailable] = useState(true);
   const shell = useRef<ShellHandle>(null);
@@ -118,6 +123,7 @@ function Root() {
   // after a minute away.
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
+      setAppState(state);
       if (state === "background") backgroundSince.current = Date.now();
       if (state === "active") {
         if (store.appLock() && backgroundSince.current && Date.now() - backgroundSince.current > LOCK_AFTER_MS) setLocked(true);
@@ -127,6 +133,18 @@ function Root() {
     });
     return () => subscription.remove();
   }, []);
+
+  // With the app lock on, nothing of the page shows while the app is not in
+  // front (app switcher, Face ID prompt, a system sheet): an opaque cover, and
+  // no screenshots or recordings while locked. On Android that is FLAG_SECURE,
+  // which also keeps the page out of the app switcher's snapshot, so it stays
+  // on as long as the lock is on.
+  const covered = lockOn && appState !== "active";
+  const secure = lockOn && (Platform.OS === "android" || locked || covered);
+  useEffect(() => {
+    if (secure) void ScreenCapture.preventScreenCaptureAsync("lock").catch(() => {});
+    else void ScreenCapture.allowScreenCaptureAsync("lock").catch(() => {});
+  }, [secure]);
 
   // Signed out in the page (or the session ended): the next registration
   // finds out, widgets and badge are cleared.
@@ -147,7 +165,7 @@ function Root() {
     shell.current?.register({
       installationId: store.installationId(),
       platform: Platform.OS === "ios" ? "ios" : "android",
-      name: Platform.OS === "ios" ? (Platform.isPad ? "iPad" : "iPhone") : "Android",
+      name: deviceName([Device.deviceName, Device.modelName], Platform.OS === "ios" ? (Platform.isPad ? "iPad" : "iPhone") : "Android"),
       appVersion: `${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`,
       pushToken,
     });
@@ -268,9 +286,11 @@ function Root() {
             registered.current = null;
             void register();
           }}
+          onLockChanged={() => setLockOn(store.appLock())}
         />
       ) : null}
       {locked ? <Lock onUnlocked={() => setLocked(false)} /> : null}
+      {covered ? <Cover /> : null}
     </>
   );
 }

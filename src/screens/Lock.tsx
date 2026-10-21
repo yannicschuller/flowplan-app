@@ -6,6 +6,17 @@ import * as LocalAuthentication from "expo-local-authentication";
 import { t } from "../i18n";
 import { Button, Logo, usePalette } from "../ui";
 
+// While the app is not in front (app switcher, a system prompt): only the
+// logo, nothing of the page – with the app lock on (App.tsx).
+export function Cover() {
+  const p = usePalette();
+  return (
+    <View style={[StyleSheet.absoluteFill, lockStyles.cover, lockStyles.topmost, { backgroundColor: p.background }]} pointerEvents="none">
+      <Logo size={72} />
+    </View>
+  );
+}
+
 export function Lock({ onUnlocked }: { onUnlocked: () => void }) {
   const p = usePalette();
   const unlock = useCallback(async () => {
@@ -26,5 +37,6 @@ export function Lock({ onUnlocked }: { onUnlocked: () => void }) {
 
 const lockStyles = StyleSheet.create({
   cover: { alignItems: "center", justifyContent: "center", gap: 18, zIndex: 10 },
+  topmost: { zIndex: 20, elevation: 20 },
   text: { fontSize: 18, fontWeight: "600" },
 });

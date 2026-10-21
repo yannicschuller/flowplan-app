@@ -76,7 +76,11 @@ class FlowplanNativeModule : Module() {
 
   private fun showTimer(options: TimerOptions) {
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.getNotificationChannel(options.channelId) == null) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      // Every time, not only the first: Android keeps a channel's name and
+      // description as last created, so this follows the app's language
+      // (sync.ts passes the current texts). Importance and the user's own
+      // settings stay as they are.
       manager.createNotificationChannel(
         NotificationChannel(options.channelId, options.channelName, NotificationManager.IMPORTANCE_LOW).apply {
           description = options.channelDescription
