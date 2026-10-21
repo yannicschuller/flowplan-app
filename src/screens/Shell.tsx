@@ -26,7 +26,7 @@ import {
   type PageMessage,
 } from "../bridge-script";
 import { t } from "../i18n";
-import { decide, type NavigationState } from "../navigation";
+import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
 import { originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
 import { BACKGROUND, usePalette } from "../ui";
@@ -80,7 +80,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const pageUrl = useRef("");
   const signedOut = useRef<(() => void) | null>(null);
   const canGoBack = useRef(false);
-  const navigation = useRef<NavigationState>({ signingInUntil: 0 });
+  const navigation = useRef(navigationState());
+  // The foreign page the web view was sent back from (Android, see below).
+  const bounced = useRef("");
   const pending = useRef(new PendingSignIns());
   const redeemWhenLoaded = useRef<string | null>(null);
   // Colours of the bars (see the comment at the top).
@@ -264,12 +266,27 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     }
   };
 
+  // Android's web view does not ask onShouldStartLoadWithRequest about form
+  // POSTs (an identity provider's form_post, a form on a foreign page), so a
+  // foreign page can arrive here without route() having seen it. Then it is
+  // stopped, the window goes back to the instance and the system opens it.
+  const bounceForeign = (url: string) => {
+    if (bounced.current === url || mayStay(url, server, navigation.current)) return false;
+    bounced.current = url;
+    web.current?.stopLoading();
+    if (canGoBack.current) web.current?.goBack();
+    else setSource({ uri: server });
+    void Linking.openURL(url).catch(() => {});
+    return true;
+  };
+
   const onNavigationStateChange = (state: WebViewNavigation) => {
     canGoBack.current = state.canGoBack;
     if (state.url !== pageUrl.current) {
       pageUrl.current = state.url;
       bottomSettled.current = false;
     }
+    bounceForeign(state.url);
   };
 
   const fallback = palette.background;
@@ -306,9 +323,15 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           onOpenWindow={(event) => void route(event.nativeEvent.targetUrl, true, true)}
           setSupportMultipleWindows
           onNavigationStateChange={onNavigationStateChange}
+          onLoadStart={(event) => {
+            const url = event.nativeEvent.url;
+            loadStarted(navigation.current, url, server);
+            bounceForeign(url);
+          }}
           onLoadEnd={(event) => {
             const url = event.nativeEvent.url;
             pageUrl.current = url;
+            pageRendered(navigation.current);
             if (originOf(url) !== server) return;
             if (redeemWhenLoaded.current) {
               run(redeemWhenLoaded.current);
@@ -351,6 +374,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           pullToRefreshEnabled={false}
           textZoom={100}
           webviewDebuggingEnabled={__DEV__}
+          // Everything passes the native filter: route() and bounceForeign()
+          // decide. (A list of origins here would make the web view hand the
+          // identity provider's pages to the system browser mid sign-in.)
           originWhitelist={["*"]}
         />
         {bars.fadeTop ? (

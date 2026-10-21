@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { appLink, decide, pathOfAppLink, safePath, type NavigationState } from "../src/navigation";
+import { appLink, decide, loadStarted, mayStay, navigationState, pageRendered, pathOfAppLink, safePath, SIGN_IN_WINDOW_MS, type NavigationState } from "../src/navigation";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../src/sign-in";
 import { buildNumber } from "../src/version";
 import { bridgeScript, downloadScript, parsePageMessage, pencilScript, registerScript, signOutScript, unregisterScript } from "../src/bridge-script";
 
 const server = "https://flowplan.example.com";
-const nav = (url: string, extra: Partial<Parameters<typeof decide>[1]> = {}, state: NavigationState = { signingInUntil: 0 }) =>
+const nav = (url: string, extra: Partial<Parameters<typeof decide>[1]> = {}, state: NavigationState = navigationState()) =>
   decide(url, { server, mainFrame: true, state, now: 1000, ...extra });
 
 test("pages of the instance stay in the app, other sites go to the system", () => {
@@ -34,14 +34,59 @@ test("passkey and SSO sign-in leave the web view; sign-in in the window may pass
   assert.deepEqual(nav(`${server}/api/auth/desktop?via=sso`), { kind: "signIn", via: "sso" });
   // In a frame it is just a page.
   assert.deepEqual(nav(`${server}/api/auth/desktop`, { mainFrame: false }), { kind: "allow" });
-  const state = { signingInUntil: 0 };
+  const state = navigationState();
   nav(`${server}/api/auth/login?returnTo=%2F`, {}, state);
-  assert.ok(state.signingInUntil > 1000);
+  assert.equal(state.signingInUntil, 1000 + SIGN_IN_WINDOW_MS);
+  // The instance redirects to the provider, which may redirect on (another
+  // of its hosts) before a page renders.
   assert.deepEqual(nav("https://login.microsoftonline.com/x", {}, state), { kind: "allow" });
-  // Back on the instance the window closes again.
+  assert.deepEqual(nav("https://login.live.com/y", {}, state), { kind: "allow" });
+  assert.deepEqual([...state.identityHosts], ["login.microsoftonline.com", "login.live.com"]);
+  pageRendered(state);
+  // Links on the provider's page to other sites go to the system; its own
+  // pages stay, and what they redirect to as well.
+  assert.deepEqual(nav("https://evil.example/", {}, state), { kind: "external", url: "https://evil.example/" });
+  assert.deepEqual(nav("https://login.live.com/mfa", {}, state), { kind: "allow" });
+  assert.deepEqual(nav("https://device.login.example/", {}, state), { kind: "allow" });
+  pageRendered(state);
+  // Android: a form POST is not asked about, but its load is; its redirects count.
+  assert.equal(nav("https://sso.example/", {}, state).kind, "external");
+  loadStarted(state, "https://login.live.com/post", server, 1000);
+  assert.deepEqual(nav("https://sso.example/", {}, state), { kind: "allow" });
+  pageRendered(state);
+  // A page that arrived without being asked about (Android POST) may stay
+  // only when it is the instance or a known identity host.
+  assert.equal(mayStay(`${server}/x`, server, state, 1000), true);
+  assert.equal(mayStay("https://login.live.com/post", server, state, 1000), true);
+  assert.equal(mayStay("https://evil.example/", server, state, 1000), false);
+  assert.equal(mayStay("about:blank", server, state, 1000), true);
+  assert.equal(mayStay("https://login.live.com/post", server, state, 1000 + SIGN_IN_WINDOW_MS), false);
+  // Three minutes later the window has closed.
+  assert.equal(nav("https://login.live.com/x", { now: 1000 + SIGN_IN_WINDOW_MS }, state).kind, "external");
+  // Back on the instance the window closes and the hosts are forgotten.
+  nav(`${server}/api/auth/callback?code=1`, {}, state);
+  assert.ok(state.signingInUntil > 1000);
   nav(`${server}/`, {}, state);
   assert.equal(state.signingInUntil, 0);
+  assert.equal(state.identityHosts.size, 0);
   assert.equal(nav("https://login.microsoftonline.com/x", {}, state).kind, "external");
+  loadStarted(state, `${server}/x`, server, 1000);
+  assert.equal(state.redirecting, false);
+  // Other endpoints under /api/auth/ (logout, verify, …) open no window.
+  for (const path of ["/api/auth/logout", "/api/auth/verify?token=x", "/api/auth/password", "/api/auth/login-help"]) {
+    nav(`${server}${path}`, {}, state);
+    assert.equal(state.signingInUntil, 0, path);
+    assert.equal(nav("https://login.microsoftonline.com/x", {}, state).kind, "external", path);
+  }
+  // Without a redirect from the instance no foreign site is allowed, even in the window.
+  const fresh = navigationState();
+  nav(`${server}/api/auth/login`, {}, fresh);
+  pageRendered(fresh);
+  assert.equal(nav("https://evil.example/", {}, fresh).kind, "external");
+  // Frames and new windows are not part of the sign-in.
+  nav(`${server}/api/auth/login`, {}, fresh);
+  assert.equal(nav("https://evil.example/", { newWindow: true }, fresh).kind, "external");
+  assert.equal(fresh.identityHosts.size, 0);
 });
 
 test("app links only ever open paths of the instance", () => {
