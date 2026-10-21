@@ -47,6 +47,14 @@ const config: ExpoConfig = {
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
       CFBundleLocalizations: ["de", "en", "fr"],
+      // The web app records audio (voice notes: getUserMedia({ audio })) and
+      // takes files with <input type=file accept="image/*"> (pages,
+      // whiteboard), for which the web view offers "Take Photo or Video" –
+      // that is the camera and microphone use these texts describe (also in
+      // locales/*.json). On Android the system camera app takes the picture
+      // for that chooser, so the app needs no CAMERA permission there; add it
+      // (android.permissions below) only when the web app itself captures
+      // video or photos (getUserMedia({ video }), <input capture>).
       NSCameraUsageDescription: "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
       NSMicrophoneUsageDescription: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       NSPhotoLibraryAddUsageDescription: "Flowplan saves images to your photos when you ask it to.",

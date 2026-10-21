@@ -90,7 +90,7 @@ export function Setup({
             </Text>
           ) : null}
           <Text style={[styles.small, styles.centered, { color: p.muted, marginTop: 18 }]}>{t("setupHint")}</Text>
-                    <Button title={busy ? t("connecting") : t("connect")} busy={busy} onPress={connect} style={{ marginTop: 16 }} />
+          <Button title={busy ? t("connecting") : t("connect")} busy={busy} onPress={connect} style={{ marginTop: 16 }} />
           {onCancel && current ? <Button title={t("cancel")} kind="secondary" onPress={onCancel} style={{ marginTop: 10 }} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>

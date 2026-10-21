@@ -71,11 +71,13 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     for (const [color, count] of counts) if (count > most) { best = color; most = count; }
     return best;
   };
-  let timer = 0;
+  // Reported once per animation frame at most, and only when something
+  // changed: elementFromPoint ×14 is the most expensive thing the app does.
+  let frame = 0, last = "";
   const report = () => {
     const page = document.scrollingElement || document.documentElement;
     const base = opaque(getComputedStyle(document.body || page).backgroundColor) || opaque(getComputedStyle(page).backgroundColor);
-    post({
+    const message = JSON.stringify({
       type: "edges",
       top: row(1) || base,
       bottom: row(innerHeight - 2) || base,
@@ -87,10 +89,13 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
       // the app shows it full screen.
       cover: /viewport-fit\s*=\s*cover/.test(document.querySelector('meta[name="viewport"]')?.content || ""),
     });
+    if (message === last) return;
+    last = message;
+    try { window.ReactNativeWebView.postMessage(message); } catch (e) {}
   };
   const changed = () => {
-    if (timer) return;
-    timer = setTimeout(() => { timer = 0; report(); }, 120);
+    if (frame) return;
+    frame = requestAnimationFrame(() => { frame = 0; report(); });
   };
   for (const type of ["scroll", "resize", "hashchange", "popstate", "transitionend", "animationend", "click", "touchend", "keyup", "load", "pageshow"])
     addEventListener(type, changed, { capture: true, passive: true });
