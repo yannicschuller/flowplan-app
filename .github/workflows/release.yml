@@ -2,10 +2,10 @@
 # Raises the version in package.json (app.config.ts takes it from there),
 # tags v1.2.3, builds iOS and Android on the own Mac (build.yml) and attaches
 # the builds to a GitHub release. With the store secrets (README → Signing)
-# the builds are signed and – if "upload" is on – go to TestFlight and Play's
-# internal testing track. After a failed build, "rebuild" with the version
-# (e.g. 1.0.1) builds it again with the next build number, without raising
-# the version.
+# the builds are signed and – if "upload" is on and "confirm" names the version
+# that is released – go to TestFlight and Play's internal testing track. After
+# a failed build, "rebuild" with the version (e.g. 1.0.1) builds it again with
+# the next build number, without raising the version.
 name: Release
 run-name: "Release · ${{ inputs.rebuild != '' && format('rebuild {0}', inputs.rebuild) || inputs.bump }}"
 
@@ -26,9 +26,13 @@ on:
         type: string
         default: "0"
       upload:
-        description: "Upload signed builds to TestFlight and Play internal testing (needs the secrets)"
+        description: "Upload signed builds to TestFlight and Play internal testing (needs the secrets, and the version in confirm)"
         type: boolean
-        default: true
+        default: false
+      confirm:
+        description: "To upload, type the version that is released, e.g. 1.0.1 (for a new release: the version after the bump). Guards against uploading by accident."
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -53,10 +57,30 @@ jobs:
         env:
           REBUILD: ${{ inputs.rebuild }}
           BUMP: ${{ inputs.bump }}
+          UPLOAD: ${{ inputs.upload }}
+          CONFIRM: ${{ inputs.confirm }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          confirm="$(printf '%s' "$CONFIRM" | tr -d '[:space:]' | sed -E 's/^[vV]//')"
+          if [ "$UPLOAD" = "true" ]; then
+            # Nothing goes to the stores without the version typed in: before
+            # anything is tagged or pushed, so a typo costs nothing.
+            if [ -n "$REBUILD" ]; then
+              expected="$(printf '%s' "$REBUILD" | tr -d '[:space:]' | sed -E 's/^[vV]//')"
+            else
+              expected="$(node -e '
+                const [a, b, c] = require("./package.json").version.split(".").map(Number);
+                const bump = process.argv[1];
+                console.log(bump === "major" ? `${a + 1}.0.0` : bump === "minor" ? `${a}.${b + 1}.0` : `${a}.${b}.${c + 1}`);
+              ' "$BUMP")"
+            fi
+            if [ "$confirm" != "$expected" ]; then
+              echo "::error::upload is on, but confirm is '$CONFIRM' – type the version that is released ($expected) to upload, or turn upload off."
+              exit 1
+            fi
+          fi
           if [ -n "$REBUILD" ]; then
             version="$(printf '%s' "$REBUILD" | tr -d '[:space:]' | sed -E 's/^[vV]//')"
             if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then

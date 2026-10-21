@@ -12,7 +12,7 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | App name, subtitle, description, keywords, promotional text, release notes | `app-store/<locale>/*.txt` |
 | Support, marketing and privacy URLs | `app-store/<locale>/{support,marketing,privacy}_url.txt` |
 | Categories, copyright, age rating | `app-store/{primary,secondary}_category.txt`, `copyright.txt`, `app_rating_config.json` |
-| Notes and contact for App Review | `app-store/review_information/` |
+| Notes and name for App Review | `app-store/review_information/` (demo account and contact: environment, see below) |
 | iPhone 6.9" (1320×2868), iPhone 6.5" (1284×2778), iPad 13" (2064×2752) | `app-store/screenshots/<locale>/` (7 each) |
 | App preview video, 886×1920, 27 s, H.264 | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` |
 | Play title, short and full description, release notes | `google-play/<locale>/*.txt`, `changelogs/<versionCode>.txt` |
@@ -22,6 +22,19 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | Preview GIFs (README, website) | `preview/flowplan-{de,en}.gif` |
 
 All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too; see the main README.
+
+## App Review: demo account and contact
+
+`review_information/` holds only what may be public: the notes (`notes.txt`) and the name. The demo account and the contact for App Review are **not files in the repository** – `fastlane ios metadata` takes them from the environment and sends them along with the metadata:
+
+| Variable | App Store Connect field |
+| --- | --- |
+| `DEMO_USER` | Sign-in information → user name |
+| `DEMO_PASSWORD` | Sign-in information → password |
+| `REVIEW_EMAIL` | Contact information → e-mail |
+| `REVIEW_PHONE` | Contact information → phone (with country code, e.g. `+49 30 1234567`) |
+
+Set them for the shell that runs fastlane (`DEMO_USER=… DEMO_PASSWORD=… bundle exec fastlane ios metadata`) or as secrets of the build machine; fastlane warns when the demo account is missing. Without `DEMO_USER`/`DEMO_PASSWORD` the account fields in App Store Connect are not written, but `deliver` then marks the version as needing no sign-in – so set the variables, or check the sign-in information in App Store Connect after the upload. `notes.txt` refers to "the sign-in information of this App Review record", which is exactly these fields.
 
 ## Privacy answers
 
@@ -102,14 +115,14 @@ Apple and Google, however, count the data that the developer's own service recei
 - [ ] **Sign-in hand-off texts.** The server's hand-off pages still say "Flowplan Desktop" (`/api/auth/desktop`). On iOS they are visible for a moment, on Android until you tap **open**. Make them neutral ("Flowplan-App") or detect the mobile app.
 - [ ] **Deploy** the Flowplan version with mobile detection (`FlowplanMobile/` in `components/login.tsx`) to app.flowplan.org. Without it, the passkey button there tries WebAuthn inside the app and fails.
 - [ ] **Demo account for Apple** on app.flowplan.org with sample content.
-  - Enter it in App Store Connect → App Review Information, and in `review_information/demo_user.txt` / `demo_password.txt` if you upload with fastlane.
-  - Do not commit real passwords: fill those two files locally only, or type the account into App Store Connect.
-- [ ] Contact for App Review: e-mail and phone in `review_information/`, or in App Store Connect.
+  - Enter it in App Store Connect → App Review Information, or set `DEMO_USER` and `DEMO_PASSWORD` for `fastlane ios metadata` (above).
+  - Never commit the account: it lives in the environment or in App Store Connect only.
+- [ ] Contact for App Review: `REVIEW_EMAIL` and `REVIEW_PHONE` for fastlane (above), or in App Store Connect.
 - [ ] Privacy policy at flowplan.org/datenschutz mentions the apps (no tracking, data on the chosen server).
 
 ### Each release
 
-1. Run **Actions → Release** (patch/minor/major, upload on). iOS lands in TestFlight and Android in internal testing.
+1. Run **Actions → Release** (patch/minor/major, *upload* on and the version it becomes typed into *confirm*, e.g. `1.0.1`). iOS lands in TestFlight and Android in internal testing; without the confirmation nothing is uploaded.
 2. Test on real devices:
    - first start;
    - e-mail sign-in, passkey and SSO sign-in;
@@ -132,7 +145,7 @@ Apple and Google, however, count the data that the developer's own service recei
 
 ### What the review notes say
 
-`review_information/notes.txt` tells Apple what Flowplan is (open source, self-hostable) and why the first start asks for a server: to keep app.flowplan.org. It also points to the demo account and the **Try the demo** button and explains passkey/SSO sign-in through the system sheet. Apple sometimes rejects apps that "only wrap a website" (guideline 4.2). The native parts are worth naming if asked:
+`review_information/notes.txt` tells Apple what Flowplan is (open source, self-hostable) and why the first start asks for a server: to keep app.flowplan.org. It also points to the demo account (in the sign-in information fields, see above) and the **Try the demo** button and explains passkey/SSO sign-in through the system sheet. Apple sometimes rejects apps that "only wrap a website" (guideline 4.2). The native parts are worth naming if asked:
 
 - browser hand-off sign-in;
 - offline handling;

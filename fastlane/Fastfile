@@ -138,12 +138,27 @@ platform :ios do
     )
   end
 
+  # What App Review gets besides store/app-store/review_information/*.txt: the
+  # demo account and the contact, from the environment and never from files in
+  # the repository (store/README.md → App Review).
+  def review_information
+    values = {
+      demo_user: ENV["DEMO_USER"],
+      demo_password: ENV["DEMO_PASSWORD"],
+      email_address: ENV["REVIEW_EMAIL"],
+      phone_number: ENV["REVIEW_PHONE"],
+    }.reject { |_, value| value.to_s.strip.empty? }
+    UI.important("No DEMO_USER / DEMO_PASSWORD set: App Review gets no demo account from this upload.") unless values[:demo_user] && values[:demo_password]
+    values
+  end
+
   desc "App Store texts and screenshots (store/app-store); the review is submitted by hand"
   lane :metadata do
     deliver(
       api_key: api_key,
       metadata_path: File.join(ROOT, "store/app-store"),
       screenshots_path: File.join(ROOT, "store/app-store/screenshots"),
+      app_review_information: review_information,
       skip_binary_upload: true,
       skip_app_version_update: false,
       overwrite_screenshots: true,

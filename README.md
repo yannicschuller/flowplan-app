@@ -33,7 +33,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 
 | Part | Where | Native side |
 | --- | --- | --- |
-| Setup, offline page, app settings, app lock | [`src/screens/`](src/screens) | React Native, `expo-local-authentication` |
+| Setup, offline page, app settings, app lock (with the lock on, the page is covered while the app is not in front and screenshots are blocked while locked) | [`src/screens/`](src/screens) | React Native, `expo-local-authentication`, `expo-screen-capture` |
 | Window on the instance | [`src/screens/Shell.tsx`](src/screens/Shell.tsx) | `react-native-webview` (WKWebView, Android System WebView) |
 | Which address is accepted | [`src/server.ts`](src/server.ts) | – (tested in [`test/`](test)) |
 | Links: app, system browser, sign-in | [`src/navigation.ts`](src/navigation.ts) | `expo-linking` |
@@ -142,7 +142,7 @@ Every build runs **only by hand** on your own Mac, registered as a self-hosted r
 Set up the Mac once:
 
 1. **Xcode** from the App Store (open it once, accept the license, install the iOS platform), then `xcode-select --install`.
-2. **Homebrew** and the tools: `brew install node@22 ruby watchman` (Ruby for fastlane and CocoaPods; the workflow installs the gems into `vendor/bundle`). Java and the Android SDK come from the workflow (`setup-java`, `setup-android`).
+2. **Homebrew** and the tools: `brew install node@22 ruby watchman` (Ruby for fastlane and CocoaPods; the workflow installs the gems into `vendor/bundle`, pinned by `Gemfile.lock` – after `bundle update` commit the new lock). Java and the Android SDK come from the workflow (`setup-java`, `setup-android`).
 3. **Runner:** GitHub → this repository → Settings → Actions → Runners → **New self-hosted runner** → macOS, follow the commands, keep the default labels (`self-hosted`, `macOS`, `ARM64`), and install it as a service (`./svc.sh install && ./svc.sh start`) so it runs after a restart. The runner's user needs Homebrew's paths in its environment (`.env` file in the runner folder, e.g. `PATH=/opt/homebrew/opt/ruby/bin:/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`).
 
 Builds do not touch the Mac's own keychain: certificates from secrets go to a temporary keychain that is deleted afterwards, the Android upload key is deleted after the build.
@@ -194,7 +194,7 @@ Play App Signing keeps the actual signing key at Google. Keep the upload keystor
 
 1. raises the version (patch, minor or major), commits it on `main` and tags `v1.2.3`;
 2. builds iOS and Android (the jobs of `build.yml`);
-3. with secrets and **upload** checked:
+3. with secrets, **upload** checked and the version that is released typed into **confirm** (e.g. `1.0.1`; the run stops before tagging when it does not match, so nothing goes to the stores by accident):
    - iOS goes to **TestFlight** (`fastlane ios beta`);
    - Android goes to Play's **internal testing** track (`fastlane android internal`);
 4. attaches the builds to a GitHub release and publishes it.
