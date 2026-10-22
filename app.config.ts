@@ -159,6 +159,9 @@ const config: ExpoConfig = {
             ios: {
               // systemExtraLarge: the iPad's widest widget.
               supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "systemExtraLarge", "accessoryRectangular", "accessoryInline"],
+              // Built into the extension: the widget has its layout and the
+              // gallery its sample before the app has ever run.
+              initialLayout: "./src/widgets/ios.tsx",
             },
             android: null,
           },
@@ -166,7 +169,7 @@ const config: ExpoConfig = {
             name: "FlowplanInbox",
             displayName: "Flowplan Inbox",
             description: "Unread notifications.",
-            ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"] },
+            ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
         ],

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dueLabel, inboxWidget, isSummary, localDay, tasksWidget, timerProps, type Summary } from "../src/summary";
+import { dueLabel, inboxWidget, isSummary, localDay, sampleSummary, tasksWidget, timerProps, widgetProps, type Summary } from "../src/summary";
 
 const summary: Summary = {
   name: "Ada",
@@ -54,7 +54,7 @@ test("widgets get finished texts and links into the app", () => {
   assert.equal(tasks.timer?.title, "Write offer");
   const signedOut = tasksWidget(null, "de");
   assert.equal(signedOut.signedIn, false);
-  assert.equal(signedOut.headline, "In Flowplan anmelden");
+  assert.equal(signedOut.headline, "Flowplan öffnen und anmelden");
   assert.equal(inboxWidget(summary, "de").label, "3 ungelesen");
   assert.equal(inboxWidget({ ...summary, unread: 0 }, "fr").label, "Tout est lu");
   assert.equal(inboxWidget(null, "en").url, "flowplan://open?path=%2F");
@@ -73,4 +73,42 @@ test("the running timer becomes the Live Activity", () => {
   assert.equal(timerProps(null, "de"), null);
   // A record without a title shows the database's name.
   assert.equal(timerProps({ ...summary, timer: { ...summary.timer!, title: "" } }, "en")!.title, "Work");
+});
+
+// iOS keeps widget props in UserDefaults (property lists): a null anywhere –
+// it arrives as NSNull – makes the write fail and the widget stays empty.
+const nulls = (value: unknown, path = "props"): string[] =>
+  value === null || value === undefined
+    ? [path]
+    : Array.isArray(value)
+      ? value.flatMap((item, i) => nulls(item, `${path}[${i}]`))
+      : typeof value === "object"
+        ? Object.entries(value).flatMap(([key, item]) => nulls(item, `${path}.${key}`))
+        : [];
+
+test("widget props carry no null in any state", () => {
+  for (const lang of ["de", "en", "fr"] as const)
+    for (const state of [summary, { ...summary, timer: null }, null, sampleSummary(lang)]) {
+      assert.deepEqual(nulls(tasksWidget(state, lang)), []);
+      assert.deepEqual(nulls(inboxWidget(state, lang)), []);
+    }
+  assert.equal(tasksWidget({ ...summary, timer: null }, "en").timer, undefined);
+  assert.ok(isSummary({ ...summary, timer: undefined }));
+});
+
+test("widgetProps leaves out every null, also deep down", () => {
+  const clean = widgetProps({ a: 1, b: null, c: { d: null, e: [1, null, { f: undefined, g: "x" }] }, h: Number.NaN });
+  assert.deepEqual(clean, { a: 1, c: { e: [1, { g: "x" }] }, h: 0 });
+  assert.deepEqual(nulls(clean), []);
+});
+
+test("the gallery sample reads like a real day in every language", () => {
+  const now = new Date(2026, 9, 22, 9);
+  const sample = sampleSummary("de", now);
+  assert.ok(isSummary(sample));
+  const tasks = tasksWidget(sample, "de");
+  assert.equal(tasks.headline, "2 fällig");
+  assert.deepEqual(tasks.items.map((i) => i.due), ["Gestern", "Heute", "Morgen", ""]);
+  assert.equal(inboxWidget(sample, "fr").label, "3 non lues");
+  assert.notEqual(sampleSummary("en", now).tasks.items[0].text, sample.tasks.items[0].text);
 });

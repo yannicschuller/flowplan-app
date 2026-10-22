@@ -10,7 +10,7 @@ import { hideTimer, showTimer } from "../../modules/flowplan-native/src";
 import { locale, t } from "../i18n";
 import { timeoutSignal } from "../server";
 import { store } from "../store";
-import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, type Summary } from "../summary";
+import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, widgetProps, type Summary } from "../summary";
 import { renderInbox, renderTasks } from "../widgets/android";
 import type * as IosWidgets from "../widgets/ios";
 
@@ -73,10 +73,21 @@ export async function updateWidgets(summary: Summary | null = store.summary()) {
   const tasks = tasksWidget(summary, lang),
     inbox = inboxWidget(summary, lang);
   if (ios) {
+    // Each widget on its own: one that fails does not keep the other empty.
+    // widgetProps: no null reaches the App Group (summary.ts).
     try {
-      ios.tasksWidget.updateSnapshot(tasks);
-      ios.inboxWidget.updateSnapshot(inbox);
+      ios.localizeSamples(lang);
     } catch {}
+    try {
+      ios.tasksWidget.updateSnapshot(widgetProps(tasks));
+    } catch (error) {
+      if (__DEV__) console.warn("Flowplan: tasks widget not updated", error);
+    }
+    try {
+      ios.inboxWidget.updateSnapshot(widgetProps(inbox));
+    } catch (error) {
+      if (__DEV__) console.warn("Flowplan: inbox widget not updated", error);
+    }
     return;
   }
   await Promise.allSettled([

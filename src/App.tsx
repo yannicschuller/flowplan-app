@@ -201,7 +201,10 @@ function Root() {
           return;
         }
         case "refresh":
-          void refresh();
+          // No device token yet (signed in without a full page load): the
+          // registration brings one, and with it the first summary.
+          if (!store.deviceToken()) void register();
+          else void refresh();
           return;
         case "saveFile":
           void saveFile(message.name, message.base64, message.mime);

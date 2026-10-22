@@ -27,7 +27,7 @@ export function isSummary(value: unknown): value is Summary {
     !!s.tasks &&
     Array.isArray(s.tasks.items) &&
     typeof s.tasks.due === "number" &&
-    (s.timer === null || typeof s.timer?.start === "number")
+    (s.timer == null || typeof s.timer?.start === "number")
   );
 }
 
@@ -59,7 +59,8 @@ export type TasksWidgetProps = {
   unread: number;
   unreadLabel: string;
   inboxUrl: string;
-  timer: { title: string; start: number; url: string } | null;
+  // Left out without a running timer: widget props carry no null (below).
+  timer?: { title: string; start: number; url: string };
 };
 export type InboxWidgetProps = { signedIn: boolean; title: string; count: number; label: string; url: string };
 
@@ -79,7 +80,6 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
       unread: 0,
       unreadLabel: "",
       inboxUrl,
-      timer: null,
     };
   const { tasks } = summary;
   return {
@@ -100,7 +100,7 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
     unread: summary.unread,
     unreadLabel: summary.unread ? t("widgetUnread", { count: summary.unread }, locale) : t("widgetInboxEmpty", {}, locale),
     inboxUrl,
-    timer: summary.timer ? { title: summary.timer.title || summary.timer.database, start: summary.timer.start, url: appLink(summary.timer.url) } : null,
+    ...(summary.timer ? { timer: { title: summary.timer.title || summary.timer.database, start: summary.timer.start, url: appLink(summary.timer.url) } } : {}),
   };
 }
 
@@ -130,4 +130,52 @@ export function timerProps(summary: Summary | null, locale: Locale): TimerProps 
     label: t("widgetTimer", {}, locale),
     url: appLink(timer.url),
   };
+}
+
+// What the widget gallery and the placeholder show before there is anything
+// to show: made-up tasks in the person's language.
+export function sampleSummary(locale: Locale, now = new Date()): Summary {
+  const today = localDay(now);
+  const day = (offset: number) => localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset));
+  const texts = {
+    de: ["Angebot an Müller senden", "Retro vorbereiten", "Reisekosten abrechnen", "Website-Texte prüfen", "Vertrieb", "Team", "Finanzen", "Marketing"],
+    en: ["Send offer to Miller", "Prepare the retro", "Submit travel expenses", "Review website copy", "Sales", "Team", "Finance", "Marketing"],
+    fr: ["Envoyer l’offre à Martin", "Préparer la rétro", "Note de frais du voyage", "Relire les textes du site", "Ventes", "Équipe", "Finances", "Marketing"],
+  }[locale];
+  return {
+    name: "",
+    unread: 3,
+    tasks: {
+      due: 2,
+      overdue: 1,
+      open: 4,
+      items: [
+        { text: texts[0], page: texts[4], due: day(-1), url: "/#tasks" },
+        { text: texts[1], page: texts[5], due: today, url: "/#tasks" },
+        { text: texts[2], page: texts[6], due: day(1), url: "/#tasks" },
+        { text: texts[3], page: texts[7], due: null, url: "/#tasks" },
+      ],
+    },
+    timer: null,
+    today,
+    at: now.getTime(),
+  };
+}
+
+// Widget props as iOS stores them (expo-widgets keeps the timeline in the
+// App Group's UserDefaults, which takes property lists only): a null in the
+// props – JavaScript's null arrives as NSNull – makes the write fail, so the
+// widget never gets a timeline and stays empty. Nulls and undefined values
+// are left out, everywhere in the object.
+export function widgetProps<T extends object>(props: T): T {
+  const clean = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined).map(clean);
+    if (value && typeof value === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value)) if (item !== null && item !== undefined) out[key] = clean(item);
+      return out;
+    }
+    return typeof value === "number" && !Number.isFinite(value) ? 0 : value;
+  };
+  return clean(props) as T;
 }

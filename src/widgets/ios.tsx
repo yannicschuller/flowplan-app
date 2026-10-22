@@ -17,7 +17,8 @@ import {
   widgetURL,
 } from "@expo/ui/swift-ui/modifiers";
 import { createLiveActivity, createWidget, type LiveActivityEnvironment, type WidgetEnvironment } from "expo-widgets";
-import type { InboxWidgetProps, TasksWidgetProps, TimerProps } from "../summary";
+import type { Locale } from "../i18n";
+import { inboxWidget as inboxProps, sampleSummary, tasksWidget as tasksProps, widgetProps, type InboxWidgetProps, type TasksWidgetProps, type TimerProps } from "../summary";
 
 // Tasks due, the inbox and the running timer.
 function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment) {
@@ -26,6 +27,15 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment) 
   const brand = "#4146e6";
   const late = "#d14343";
   const background = environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8";
+  // Nothing stored yet (the app has not run since it was installed): the
+  // name instead of an empty widget or an error.
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
+        <Image systemName="checklist" modifiers={[foregroundStyle(brand), font({ size: 15, weight: "semibold" })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
   if (family === "accessoryInline")
     return <Text modifiers={[widgetURL(props.url)]}>{props.signedIn ? `${props.headline} · ${props.unreadLabel}` : props.headline}</Text>;
   if (family === "accessoryRectangular")
@@ -84,6 +94,13 @@ function FlowplanInbox(props: InboxWidgetProps, environment: WidgetEnvironment) 
   "widget";
   const family = environment.widgetFamily || "systemSmall";
   const brand = "#4146e6";
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8", "widget")]}>
+        <Image systemName="tray.fill" modifiers={[foregroundStyle(brand), font({ size: 15 })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
   if (family === "accessoryInline") return <Text modifiers={[widgetURL(props.url)]}>{props.label}</Text>;
   if (family === "accessoryCircular")
     return (
@@ -155,6 +172,21 @@ function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) 
   };
 }
 
-export const tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks);
-export const inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox);
+// The widget gallery and the placeholder show made-up tasks (initial props;
+// the real timeline replaces them once the app has written one). Created
+// again in the person's language once the app knows it (samples below).
+const samples = (lang: Locale) => {
+  const summary = sampleSummary(lang);
+  return { tasks: widgetProps(tasksProps(summary, lang)), inbox: widgetProps(inboxProps(summary, lang)) };
+};
+export let tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, samples("en").tasks);
+export let inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, samples("en").inbox);
+let samplesLocale: Locale = "en";
+export function localizeSamples(lang: Locale) {
+  if (lang === samplesLocale) return;
+  samplesLocale = lang;
+  const { tasks, inbox } = samples(lang);
+  tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, tasks);
+  inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, inbox);
+}
 export const timerActivity = createLiveActivity<TimerProps>("FlowplanTimer", FlowplanTimer);
