@@ -1,0 +1,112 @@
+# Everything for the App Store that the App Store Connect API key can do, at
+# the push of a button: Actions → iOS setup → Run workflow, on the own Mac
+# (self-hosted runner, README → Build machine), only by the repository owner.
+# Safe to run again – what exists is kept (fastlane ios setup):
+#
+#   1. App IDs app.flowplan.mobile (App Groups, Push Notifications) and
+#      app.flowplan.mobile.widgets (App Groups);
+#   2. Apple Distribution certificate and App Store profiles of both with
+#      fastlane match, stored encrypted in the private repository
+#      yannicschuller/flowplan-certificates (builds then only read them);
+#   3. checks that the app exists in App Store Connect;
+#   4. texts, categories, age rating, review information and screenshots
+#      (iPhone 6.9" and 6.5", iPad 13") from store/app-store – without
+#      submitting, unless "submit" is on.
+#
+# What the API cannot do (create the app record, register the App Group) ends
+# the run red with the exact values to enter in the browser – in the log and
+# on the run's summary page; the next run continues from there.
+# store/README.md → One-click setup lists the secrets.
+name: iOS setup
+run-name: "iOS setup${{ inputs.submit && ' · submit for review' || '' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      identifiers:
+        description: "Register the App IDs and their capabilities"
+        type: boolean
+        default: true
+      signing:
+        description: "Certificate and profiles with match (needs MATCH_PASSWORD, MATCH_GIT_BASIC_AUTHORIZATION)"
+        type: boolean
+        default: true
+      force_profiles:
+        description: "Renew the profiles even if they look fine (after changing capabilities)"
+        type: boolean
+        default: false
+      listing:
+        description: "Upload texts, age rating and review information"
+        type: boolean
+        default: true
+      screenshots:
+        description: "… with the screenshots (iPhone and iPad), replacing those in App Store Connect"
+        type: boolean
+        default: true
+      submit:
+        description: "Submit the version for review (needs a processed build of this version in TestFlight)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    # The own Mac runs only what the owner started.
+    if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 45
+    env:
+      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      MATCH_GIT_URL: ${{ vars.MATCH_GIT_URL || 'https://github.com/yannicschuller/flowplan-certificates.git' }}
+      DEMO_USER: ${{ secrets.DEMO_USER }}
+      DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+      REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+      REVIEW_PHONE: ${{ secrets.REVIEW_PHONE }}
+      FASTLANE_SKIP_UPDATE_CHECK: "1"
+      FASTLANE_HIDE_CHANGELOG: "1"
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+    steps:
+      - name: Secrets and variables
+        run: |
+          missing=""
+          for name in IOS_TEAM_ID APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_ISSUER_ID APP_STORE_CONNECT_API_KEY; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing:$missing – Settings → Secrets and variables → Actions (store/README.md → One-click setup)"
+            exit 1
+          fi
+          if [ "${{ inputs.signing }}" = true ] && { [ -z "$MATCH_PASSWORD" ] || [ -z "$MATCH_GIT_BASIC_AUTHORIZATION" ]; }; then
+            echo "::warning::No MATCH_PASSWORD / MATCH_GIT_BASIC_AUTHORIZATION: signing is skipped."
+          fi
+          if [ -z "$DEMO_USER" ] || [ -z "$DEMO_PASSWORD" ]; then
+            echo "::warning::No DEMO_USER / DEMO_PASSWORD: App Review gets no demo account from this run."
+          fi
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Gems (fastlane)
+        run: |
+          bundle config set --local path vendor/bundle
+          bundle install --jobs 4
+      - name: fastlane ios setup
+        run: >-
+          bundle exec fastlane ios setup
+          identifiers:${{ inputs.identifiers }}
+          signing:${{ inputs.signing }}
+          force_profiles:${{ inputs.force_profiles }}
+          listing:${{ inputs.listing }}
+          screenshots:${{ inputs.screenshots }}
+          submit:${{ inputs.submit }}

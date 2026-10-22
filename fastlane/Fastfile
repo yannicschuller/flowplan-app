@@ -2,9 +2,12 @@
 # root after `npm ci && npx expo prebuild` (plus `pod install` for iOS);
 # credentials come from the environment (README → Signing lists every secret):
 #
+#   fastlane ios setup        App IDs, certificate and profiles (match), and
+#                             the store listing – once and whenever needed,
+#                             from Actions → iOS setup (ios-setup.yml)
 #   fastlane ios build        signed App Store build (ios/build/Flowplan.ipa)
 #   fastlane ios beta         … and upload it to TestFlight
-#   fastlane ios metadata     texts and screenshots from store/app-store
+#   fastlane ios metadata     texts, screenshots and age rating from store/app-store
 #   fastlane android build    signed bundle and APK (android/app/build/outputs)
 #   fastlane android internal … and upload it to Play's internal testing track
 #   fastlane android metadata texts and images from store/google-play
@@ -14,11 +17,29 @@
 # and Live Activity (app.flowplan.mobile.widgets), both in the App Group
 # group.app.flowplan.mobile.
 
+require "json"
 require "securerandom"
 
 ROOT = File.expand_path("..", __dir__)
 BUNDLE_ID = "app.flowplan.mobile"
 WIDGETS_ID = "#{BUNDLE_ID}.widgets"
+APP_GROUP = "group.#{BUNDLE_ID}"
+# Every target of the Xcode project that app.config.ts generates, with what
+# its App ID needs in the developer portal: the app (push, App Group) and the
+# widgets and Live Activity extension (App Group; expo-widgets with
+# enablePushNotifications: false). No Associated Domains, iCloud or Sign in
+# with Apple. A new target or capability in app.config.ts belongs here too.
+IOS_TARGETS = [
+  { target: "Flowplan", bundle_id: BUNDLE_ID, name: "Flowplan", capabilities: %w[APP_GROUPS PUSH_NOTIFICATIONS] },
+  { target: "ExpoWidgetsTarget", bundle_id: WIDGETS_ID, name: "Flowplan Widgets", capabilities: %w[APP_GROUPS] },
+].freeze
+# Certificate and profiles of fastlane match: a private repository, encrypted
+# with MATCH_PASSWORD (store/README.md → One-click setup).
+MATCH_GIT_URL = ENV.fetch("MATCH_GIT_URL", "https://github.com/yannicschuller/flowplan-certificates.git")
+# What App Store Connect asks for when the app record is created by hand
+# (the API cannot create it).
+SKU = "flowplan-ios"
+PRIMARY_LOCALE = "en-US"
 KEYCHAIN = "flowplan-build"
 KEYCHAIN_PASSWORD = SecureRandom.hex(16)
 
@@ -53,28 +74,98 @@ platform :ios do
     path
   end
 
+  # match is used when its secrets are there (MATCH_PASSWORD and
+  # MATCH_GIT_BASIC_AUTHORIZATION, written by the iOS setup).
+  def match?
+    ENV["MATCH_PASSWORD"].to_s != "" && ENV["MATCH_GIT_BASIC_AUTHORIZATION"].to_s != ""
+  end
+
+  # A keychain of its own for the certificate, not the default one: the build
+  # runs on a Mac that is also used otherwise (README → Build machine).
+  def build_keychain
+    create_keychain(
+      name: KEYCHAIN,
+      password: KEYCHAIN_PASSWORD,
+      default_keychain: false,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: true,
+      add_to_search_list: true,
+    )
+  end
+
+  def delete_build_keychain
+    delete_keychain(name: KEYCHAIN) if File.exist?(File.expand_path("~/Library/Keychains/#{KEYCHAIN}-db"))
+  end
+
+  # Apple Distribution certificate and App Store profiles of both targets from
+  # the certificates repository. Only the setup may create or renew them
+  # (readonly: false); builds only read.
+  def match_signing(readonly:, force: false)
+    match(
+      type: "appstore",
+      platform: "ios",
+      app_identifier: IOS_TARGETS.map { |t| t[:bundle_id] },
+      api_key: api_key,
+      team_id: env!("IOS_TEAM_ID"),
+      storage_mode: "git",
+      git_url: MATCH_GIT_URL,
+      git_basic_authorization: env!("MATCH_GIT_BASIC_AUTHORIZATION"),
+      readonly: readonly,
+      force: force,
+      generate_apple_certs: true,
+      keychain_name: KEYCHAIN,
+      keychain_password: KEYCHAIN_PASSWORD,
+      shallow_clone: true,
+      verbose: false,
+    )
+  end
+
+  def match_profile_name(bundle_id)
+    ENV["sigh_#{bundle_id}_appstore_profile-name"].to_s
+  end
+
+  def match_profile_path(bundle_id)
+    ENV["sigh_#{bundle_id}_appstore_profile-path"].to_s
+  end
+
+  # Manual signing of one target with a given profile.
+  def sign_target(project, target, bundle_id, profile_name)
+    update_code_signing_settings(
+      path: project,
+      targets: [target],
+      use_automatic_signing: false,
+      team_id: env!("IOS_TEAM_ID"),
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+      bundle_identifier: bundle_id,
+    )
+  end
+
   desc "Signed App Store build"
   lane :build do
     api_key
     project = File.join(ROOT, "ios/Flowplan.xcodeproj")
     xcargs = ["-allowProvisioningUpdates"]
     export_options = {}
-    if ENV["IOS_DISTRIBUTION_CERTIFICATE"].to_s != ""
+    if match?
+      # Certificate and profiles from the certificates repository (match,
+      # read-only): manual signing, one profile per target.
+      UI.message("Signing with match (#{MATCH_GIT_URL})")
+      build_keychain
+      match_signing(readonly: true)
+      IOS_TARGETS.each do |t|
+        name = match_profile_name(t[:bundle_id])
+        UI.user_error!("match installed no profile for #{t[:bundle_id]} – run Actions → iOS setup") if name.empty?
+        sign_target(project, t[:target], t[:bundle_id], name)
+        export_options[t[:bundle_id]] = name
+      end
+    elsif ENV["IOS_DISTRIBUTION_CERTIFICATE"].to_s != ""
       # Certificate and profiles from secrets: manual signing, one profile
       # per target.
-      # A keychain of its own for this build, not the default one: the build
-      # runs on a Mac that is also used otherwise (README → Build machine).
       certificate = File.join(Dir.tmpdir, "distribution.p12")
       File.binwrite(certificate, decoded("IOS_DISTRIBUTION_CERTIFICATE"))
-      create_keychain(
-        name: KEYCHAIN,
-        password: KEYCHAIN_PASSWORD,
-        default_keychain: false,
-        unlock: true,
-        timeout: 3600,
-        lock_when_sleeps: true,
-        add_to_search_list: true,
-      )
+      build_keychain
       import_certificate(
         certificate_path: certificate,
         certificate_password: ENV["IOS_DISTRIBUTION_CERTIFICATE_PASSWORD"].to_s,
@@ -90,15 +181,7 @@ platform :ios do
         profile = File.join(Dir.tmpdir, "#{target}.mobileprovision")
         File.binwrite(profile, decoded(secret))
         install_provisioning_profile(path: profile)
-        update_code_signing_settings(
-          path: project,
-          targets: [target],
-          use_automatic_signing: false,
-          team_id: env!("IOS_TEAM_ID"),
-          code_sign_identity: "Apple Distribution",
-          profile_name: name,
-          bundle_identifier: bundle_id,
-        )
+        sign_target(project, target, bundle_id, name)
         export_options[bundle_id] = name
       end
     else
@@ -124,7 +207,7 @@ platform :ios do
       export_xcargs: "-allowProvisioningUpdates",
     )
   ensure
-    delete_keychain(name: KEYCHAIN) if File.exist?(File.expand_path("~/Library/Keychains/#{KEYCHAIN}-db"))
+    delete_build_keychain
   end
 
   desc "Signed build to TestFlight (internal testers)"
@@ -152,20 +235,201 @@ platform :ios do
     values
   end
 
-  desc "App Store texts and screenshots (store/app-store); the review is submitted by hand"
-  lane :metadata do
+  def package_version
+    JSON.parse(File.read(File.join(ROOT, "package.json"))).fetch("version")
+  end
+
+  # Texts, categories, age rating, review information and (unless turned
+  # off) screenshots for iPhone and iPad from store/app-store, for the
+  # version in package.json. Submits for review only when asked.
+  def upload_listing(screenshots: true, submit: false)
     deliver(
       api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      platform: "ios",
+      app_version: package_version,
       metadata_path: File.join(ROOT, "store/app-store"),
       screenshots_path: File.join(ROOT, "store/app-store/screenshots"),
+      app_rating_config_path: File.join(ROOT, "store/app-store/app_rating_config.json"),
       app_review_information: review_information,
       skip_binary_upload: true,
       skip_app_version_update: false,
+      skip_screenshots: !screenshots,
       overwrite_screenshots: true,
-      submit_for_review: false,
+      submit_for_review: submit,
+      automatic_release: false,
+      submission_information: {
+        export_compliance_uses_encryption: false,
+        content_rights_contains_third_party_content: false,
+      },
       precheck_include_in_app_purchases: false,
       force: true,
     )
+  end
+
+  desc "App Store texts, screenshots and age rating (store/app-store); the review is submitted by hand"
+  lane :metadata do
+    upload_listing
+  end
+
+  # ---- iOS setup (Actions → iOS setup, store/README.md → One-click setup) ----
+  #
+  # Safe to run again: everything that exists is kept. What the API cannot do
+  # (create the app record, register the App Group) is collected as a
+  # "manual step" with the exact values; the rest of the run goes on, and the
+  # lane fails at the end with that list, so the next run picks up from there.
+
+  def manual_steps
+    @manual_steps ||= []
+  end
+
+  def manual_step(title, lines)
+    manual_steps << [title, lines]
+    UI.important("Manual step: #{title}")
+    lines.each { |line| UI.important("  #{line}") }
+  end
+
+  # Markdown for the run's summary page on GitHub.
+  def step_summary(markdown)
+    path = ENV["GITHUB_STEP_SUMMARY"].to_s
+    File.open(path, "a") { |file| file.puts(markdown, "") } unless path.empty?
+  end
+
+  # App IDs of every target with their capabilities, through the App Store
+  # Connect API (the key authorises Spaceship::ConnectAPI).
+  def register_identifiers
+    api_key
+    rows = []
+    IOS_TARGETS.each do |t|
+      bundle = Spaceship::ConnectAPI::BundleId.find(t[:bundle_id])
+      if bundle
+        state = "exists"
+      else
+        UI.message("Registering the App ID #{t[:bundle_id]} (#{t[:name]})")
+        bundle = Spaceship::ConnectAPI::BundleId.create(name: t[:name], platform: "IOS", identifier: t[:bundle_id])
+        state = "registered"
+      end
+      present = bundle.get_capabilities
+      added = t[:capabilities].reject { |type| present.any? { |capability| capability.is_type?(type) } }
+      added.each do |type|
+        UI.message("#{t[:bundle_id]}: turning on #{type}")
+        bundle.create_capability(type)
+      end
+      rows << "| `#{t[:bundle_id]}` | #{state} | #{t[:capabilities].join(", ")}#{added.empty? ? "" : " (added: #{added.join(", ")})"} |"
+    end
+    step_summary(["### App IDs", "", "| App ID | State | Capabilities |", "| --- | --- | --- |", *rows].join("\n"))
+  end
+
+  # What a profile allows, compared with what the targets' entitlements
+  # (app.config.ts) ask for: the App Group in both, push in the app.
+  def profile_gaps
+    IOS_TARGETS.flat_map do |t|
+      path = match_profile_path(t[:bundle_id])
+      next ["#{t[:bundle_id]}: no profile"] if path.empty? || !File.exist?(path)
+      entitlements = FastlaneCore::ProvisioningProfile.parse(path).fetch("Entitlements", {})
+      gaps = []
+      gaps << "#{t[:bundle_id]}: App Group #{APP_GROUP} missing" unless Array(entitlements["com.apple.security.application-groups"]).include?(APP_GROUP)
+      gaps << "#{t[:bundle_id]}: push (aps-environment) missing" if t[:capabilities].include?("PUSH_NOTIFICATIONS") && !entitlements.key?("aps-environment")
+      gaps
+    end
+  end
+
+  def app_group_step
+    manual_step("Register the App Group and assign it to both App IDs (the API cannot do this)", [
+      "developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → + → App Groups → Continue",
+      "  Description: Flowplan · Identifier: #{APP_GROUP} → Continue → Register",
+      "Identifiers → #{BUNDLE_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
+      "Identifiers → #{WIDGETS_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
+      "Then run Actions → iOS setup again: it renews the profiles by itself.",
+    ])
+  end
+
+  # Certificate and profiles with match, allowed to create them. A profile
+  # made before the App Group was assigned lacks it: then the profiles are
+  # renewed once; if the group is still missing, it is a manual step.
+  def setup_signing(force:)
+    build_keychain
+    match_signing(readonly: false, force: force)
+    gaps = profile_gaps
+    if !gaps.empty? && !force
+      UI.important("The profiles lack: #{gaps.join("; ")} – renewing them")
+      match_signing(readonly: false, force: true)
+      gaps = profile_gaps
+    end
+    app_group_step if gaps.any? { |gap| gap.include?(APP_GROUP) }
+    other = gaps.reject { |gap| gap.include?(APP_GROUP) }
+    unless other.empty?
+      manual_step("The profiles lack entitlements", [
+        *other,
+        "Check the App IDs' capabilities at developer.apple.com → Identifiers, then run iOS setup with force_profiles on.",
+      ])
+    end
+    rows = IOS_TARGETS.map { |t| "| `#{t[:bundle_id]}` | #{match_profile_name(t[:bundle_id])} |" }
+    step_summary(["### Signing (match, #{MATCH_GIT_URL})", "", "| App ID | Profile |", "| --- | --- |", *rows, "", gaps.empty? ? "Profiles include #{APP_GROUP} and push." : "Missing: #{gaps.join("; ")}"].join("\n"))
+  ensure
+    delete_build_keychain
+  end
+
+  # The app record in App Store Connect: the API cannot create it.
+  def app_record?
+    api_key
+    return true if Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    name = File.read(File.join(ROOT, "store/app-store/#{PRIMARY_LOCALE}/name.txt")).strip
+    other = File.read(File.join(ROOT, "store/app-store/de-DE/name.txt")).strip
+    manual_step("Create the app in App Store Connect (the API cannot), then run iOS setup again", [
+      "appstoreconnect.apple.com → Apps → + → New App",
+      "  Platforms: iOS",
+      "  Name: #{name}   (if the name is taken: #{other})",
+      "  Primary Language: English (U.S.)",
+      "  Bundle ID: Flowplan - #{BUNDLE_ID}",
+      "  SKU: #{SKU}",
+      "  User Access: Full Access",
+      "→ Create. Texts, screenshots, age rating and review information follow on the next run.",
+    ])
+    false
+  end
+
+  desc "One-click App Store setup: App IDs, signing (match), app record check, listing"
+  lane :setup do |options|
+    flag = ->(name, default) { options.key?(name) ? options[name].to_s == "true" : default }
+    identifiers = flag.call(:identifiers, true)
+    signing = flag.call(:signing, true)
+    listing = flag.call(:listing, true)
+    screenshots = flag.call(:screenshots, true)
+    submit = flag.call(:submit, false)
+    force = flag.call(:force_profiles, false)
+
+    register_identifiers if identifiers
+    if signing
+      if match?
+        begin
+          setup_signing(force: force)
+        rescue => e
+          # The listing does not depend on signing: go on, report at the end.
+          manual_step("Signing failed: #{e.message.lines.first.to_s.strip}", [
+            "See the log above. Common causes: the API key is not Admin; the team already has",
+            "the maximum of Apple Distribution certificates (revoke an unused one at",
+            "developer.apple.com → Certificates); MATCH_GIT_BASIC_AUTHORIZATION cannot push to the repository.",
+          ])
+        end
+      else
+        manual_step("Signing skipped: create the secrets MATCH_PASSWORD and MATCH_GIT_BASIC_AUTHORIZATION", [
+          "Settings → Secrets and variables → Actions (store/README.md → One-click setup)",
+        ])
+      end
+    end
+    if listing || submit
+      if app_record?
+        upload_listing(screenshots: screenshots, submit: submit)
+        step_summary("### Listing\n\nTexts, age rating, review information#{screenshots ? ", screenshots (iPhone 6.9\", 6.5\", iPad 13\")" : ""} uploaded for #{package_version}#{submit ? " and submitted for review" : " (not submitted)"}.")
+      end
+    end
+
+    unless manual_steps.empty?
+      step_summary((["### Still to do", ""] + manual_steps.flat_map { |title, lines| ["**#{title}**", "", "```", *lines, "```", ""] }).join("\n"))
+      UI.user_error!("#{manual_steps.size} manual step(s) left: #{manual_steps.map(&:first).join(" · ")} – see above or the run's summary")
+    end
+    UI.success("iOS setup complete")
   end
 end
 

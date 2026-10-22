@@ -164,13 +164,15 @@ Settings → Secrets and variables → Actions.
 | `APP_STORE_CONNECT_API_KEY_ID` | secret | Key ID of an App Store Connect API key (Users and Access → Integrations → App Store Connect API, role *Admin* for cloud signing, otherwise *App Manager*) |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | secret | Issuer ID shown above the keys |
 | `APP_STORE_CONNECT_API_KEY` | secret | The `.p8` file, as text or base64 |
+| `MATCH_PASSWORD` | secret, optional | Encrypts certificate and profiles in the private repository `yannicschuller/flowplan-certificates` (fastlane match, written by **Actions → iOS setup**) |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | secret, optional | Access to that repository: base64 of `user:token` ([store/README.md → One-click setup](store/README.md#one-click-setup)) |
 | `IOS_DISTRIBUTION_CERTIFICATE` | secret, optional | *Apple Distribution* certificate as `.p12`, base64 (`base64 -i cert.p12 \| pbcopy`) |
 | `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD` | secret, optional | Its password |
 | `IOS_PROVISIONING_PROFILE` | secret, optional | App Store profile for `app.flowplan.mobile`, base64 |
 | `IOS_WIDGETS_PROVISIONING_PROFILE` | secret, optional | App Store profile for `app.flowplan.mobile.widgets` (widgets and Live Activity), base64 |
 | `IOS_PROVISIONING_PROFILE_NAME`, `IOS_WIDGETS_PROVISIONING_PROFILE_NAME` | variables, optional | The profiles' names (default `Flowplan App Store`, `Flowplan Widgets App Store`) |
 
-With only the API key (role *Admin*), Xcode signs with cloud-managed certificates and creates the App IDs, the App Group and the profiles itself. With certificate and profiles, the build signs manually; then both App IDs need the capability *App Groups* (`group.app.flowplan.mobile`) and the app also *Push Notifications*.
+With the two match secrets, builds take certificate and profiles read-only from the certificates repository, which **Actions → iOS setup** ([`ios-setup.yml`](.github/workflows/ios-setup.yml)) fills; it also registers the App IDs and uploads the store listing ([store/README.md → One-click setup](store/README.md#one-click-setup)). Without them, with only the API key (role *Admin*), Xcode signs with cloud-managed certificates and creates the App IDs, the App Group and the profiles itself. With certificate and profiles, the build signs manually; then both App IDs need the capability *App Groups* (`group.app.flowplan.mobile`) and the app also *Push Notifications*.
 
 ### Android (Google Play)
 

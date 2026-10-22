@@ -23,6 +23,91 @@ So texts and images can be uploaded with one command or copied into App Store Co
 
 All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too; see the main README.
 
+## One-click setup
+
+**Actions → iOS setup → Run workflow** ([`ios-setup.yml`](../.github/workflows/ios-setup.yml), `fastlane ios setup`) does on the own Mac everything the App Store Connect API key allows. Re-running it is safe: what exists is kept.
+
+1. Registers the App IDs `app.flowplan.mobile` (*App Groups*, *Push Notifications*) and `app.flowplan.mobile.widgets` (*App Groups*). The app uses no Associated Domains, iCloud or Sign in with Apple.
+2. Creates or reuses the *Apple Distribution* certificate and the App Store profiles of both App IDs with **fastlane match**. They are stored encrypted in the private repository `yannicschuller/flowplan-certificates`. Only this workflow writes there; builds (`build.yml`, `release.yml`) read them when the match secrets exist. If a profile lacks the App Group or push, the setup renews it once.
+3. Checks that the app exists in App Store Connect.
+4. Uploads texts, categories, copyright, age rating, review information and screenshots for iPhone 6.9″, iPhone 6.5″ and iPad 13″, for the version in `package.json`. It does **not** submit for review unless *submit* is on.
+
+The API cannot create the app record or register the App Group. When one of them is missing, the run does everything else and then ends red, with the exact values in the log and on the run's summary page. Do the step in the browser and run it again.
+
+### Secrets and variables
+
+Settings → Secrets and variables → Actions:
+
+| Name | Kind | Where to find it |
+| --- | --- | --- |
+| `IOS_TEAM_ID` | variable | developer.apple.com → Account → Membership details → *Team ID* |
+| `APP_STORE_CONNECT_API_KEY_ID` | secret | App Store Connect → Users and Access → Integrations → App Store Connect API → *Team Keys* → **+**, name e.g. "GitHub Actions", access **Admin** → column *Key ID*. Admin is needed for certificates, identifiers and profiles. |
+| `APP_STORE_CONNECT_API_ISSUER_ID` | secret | Same page, *Issuer ID* above the list |
+| `APP_STORE_CONNECT_API_KEY` | secret | Content of the downloaded `AuthKey_<KeyID>.p8`, as text. It can be downloaded only once. |
+| `MATCH_PASSWORD` | secret | A new random password (`openssl rand -base64 32`); also keep it in the password manager. It encrypts the certificates repository. |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | secret | `printf 'yannicschuller:<token>' \| base64` (see below) |
+| `DEMO_USER`, `DEMO_PASSWORD`, `REVIEW_EMAIL`, `REVIEW_PHONE` | secrets | App Review's demo account and contact (below) |
+| `MATCH_GIT_URL` | variable, optional | Only if the certificates live elsewhere (default `https://github.com/yannicschuller/flowplan-certificates.git`) |
+
+**Certificates repository.** Create it at github.com/new: owner `yannicschuller`, name `flowplan-certificates`, **Private**, empty. match writes `certs/` and `profiles/` there, encrypted with `MATCH_PASSWORD`.
+
+**Access to it** is a token sent over HTTPS, not a deploy key. This needs one secret and no SSH set-up on the Mac. Create a fine-grained personal access token (GitHub → Settings → Developer settings → Fine-grained tokens):
+
+- resource owner `yannicschuller`;
+- *Only select repositories*: `flowplan-certificates`;
+- *Repository permissions → Contents*: **Read and write**.
+
+Store `printf 'yannicschuller:github_pat_…' | base64` as `MATCH_GIT_BASIC_AUTHORIZATION`. Renew the token before it expires; builds stop signing with match without it.
+
+**Fallback.** Without the two match secrets, builds still sign as before: with `IOS_DISTRIBUTION_CERTIFICATE` and the profile secrets if set, otherwise with Xcode's cloud signing (main README → Signing).
+
+### Run
+
+Actions → **iOS setup** → Run workflow, from `main`, with the default inputs. The first run usually ends with the two browser steps below; after them, run it again until it is green.
+
+| Input | Default | What |
+| --- | --- | --- |
+| `identifiers` | on | App IDs and capabilities |
+| `signing` | on | Certificate and profiles (match) |
+| `force_profiles` | off | Renew the profiles anyway, e.g. after a capability changed |
+| `listing` | on | Texts, age rating, review information |
+| `screenshots` | on | … and the screenshots; replaces those in App Store Connect |
+| `submit` | off | Submit the version for review; needs a processed build of that version in TestFlight |
+
+### What stays in the browser
+
+1. **Agreements.** The Account Holder accepts the current agreement in App Store Connect → Business (and at developer.apple.com → Account). Flowplan is free: the *Paid Apps* agreement, tax forms and banking are only needed for paid apps or in-app purchases.
+2. **App record**, if the run asks for it: App Store Connect → Apps → **+** → New App.
+   - Platforms: **iOS**
+   - Name: **Flowplan – Notes & Projects**. If the name is taken, use *Flowplan – Notizen & Projekte*.
+   - Primary Language: **English (U.S.)**. It is the fallback in every country without a German listing.
+   - Bundle ID: **Flowplan - app.flowplan.mobile** (registered by the run before)
+   - SKU: **flowplan-ios**
+   - User Access: **Full Access**
+3. **App Group**, if the run asks for it: developer.apple.com → Certificates, Identifiers & Profiles.
+   - Identifiers → **+** → *App Groups*. Description `Flowplan`, identifier **`group.app.flowplan.mobile`** → Register.
+   - Identifiers → `app.flowplan.mobile` → App Groups → *Configure* → tick `group.app.flowplan.mobile` → Save.
+   - Do the same for `app.flowplan.mobile.widgets`.
+   - The next run renews the profiles by itself.
+4. **App Privacy** (App Store Connect → the app → App Privacy). The API key cannot set it. Answers, as above:
+   - Privacy policy URL: `https://flowplan.org/datenschutz`.
+   - *Do you or your third-party partners collect data from this app?* **Yes.**
+   - Data types:
+     - *Contact Info*: **Name**, **Email Address**;
+     - *User Content*: **Photos or Videos**, **Other User Content**;
+     - *Identifiers*: **User ID**, **Device ID**.
+   - For each type:
+     - purpose **App Functionality** only;
+     - *linked to the user's identity*: **Yes**;
+     - *used for tracking*: **No**.
+   - Leave everything else unselected (no Diagnostics, Usage Data, Location, Contacts, Financial Info), then **Publish**.
+5. **Age rating, newer questions.** `app_rating_config.json` answers every content question with "None". It also answers "No" for advertising, age assurance, parental controls, health/wellness, gambling and unrestricted web access. Two questions are left to you in App Information → Age Rating:
+   - *Messaging and Chat*;
+   - *User-Generated Content*. Flowplan has comments, shared pages and public share links, so the honest answer is probably *Yes*.
+6. **Pricing and Availability:** price **Free** (USD 0.00), all countries or regions.
+7. **App preview video** (`app-store/preview/`): fastlane does not upload videos.
+8. **Submit:** choose the build on the version page and press *Add for Review* → *Submit*, or run iOS setup with *submit* on.
+
 ## App Review: demo account and contact
 
 `review_information/` holds only what may be public: the notes (`notes.txt`) and the name. The demo account and the contact for App Review are **not files in the repository** – `fastlane ios metadata` takes them from the environment and sends them along with the metadata:
@@ -77,7 +162,7 @@ Apple and Google, however, count the data that the developer's own service recei
 
 ### Age rating
 
-- **App Store:** every content question is "None" (`app_rating_config.json`). With *Unrestricted Web Access* set to "No" the rating is 4+. The app only shows the user's own Flowplan instance, and other sites open in the system browser.
+- **App Store:** every content question is "None" (`app_rating_config.json`, in App Store Connect's current keys). With *Unrestricted Web Access* set to "No" the rating is 4+. *Messaging and Chat* and *User-Generated Content* are answered in the browser (One-click setup → What stays in the browser). The app only shows the user's own Flowplan instance, and other sites open in the system browser.
 - **Google Play (IARC questionnaire):** category *Utility, Productivity, Communication, or Other*. No violence, sexuality, language, controlled substances or gambling. Users can interact and share content with each other within their workspace (comments, shared pages), which the questionnaire asks about; there is no public sharing to strangers in the app. Expected rating: Everyone / PEGI 3 / USK 0.
 
 ### Categories
@@ -90,12 +175,12 @@ Apple and Google, however, count the data that the developer's own service recei
 ### Once: accounts and app records
 
 1. **Apple Developer Program** (99 USD/year) at developer.apple.com, as an organisation (needs a D-U-N-S number) or as an individual. The seller name in the store is the account's name.
-2. In **Certificates, Identifiers & Profiles**, register the App IDs `app.flowplan.mobile` (capabilities *Push Notifications* and *App Groups*: `group.app.flowplan.mobile`) and `app.flowplan.mobile.widgets` (*App Groups*). With cloud signing (API key with role *Admin*) Xcode does this itself on the first build.
-3. In **App Store Connect → Apps → +**, create the app:
-   - platform iOS, name "Flowplan – Notizen & Projekte" (or the English name);
-   - primary language German or English;
-   - bundle ID `app.flowplan.mobile`, SKU e.g. `flowplan-ios`.
-4. Create an **App Store Connect API key** (Users and Access → Integrations) and store it and the team ID as secrets (main README → Signing).
+2. **Actions → iOS setup** (One-click setup above) does steps 2 and 3 as far as Apple allows. By hand: in **Certificates, Identifiers & Profiles**, register the App IDs `app.flowplan.mobile` (capabilities *Push Notifications* and *App Groups*: `group.app.flowplan.mobile`) and `app.flowplan.mobile.widgets` (*App Groups*). With cloud signing (API key with role *Admin*) Xcode does this itself on the first build.
+3. In **App Store Connect → Apps → +**, create the app with the values in One-click setup → What stays in the browser:
+   - platform iOS, name "Flowplan – Notes & Projects" (or the German name);
+   - primary language English (U.S.);
+   - bundle ID `app.flowplan.mobile`, SKU `flowplan-ios`, full access.
+4. Create an **App Store Connect API key** (Users and Access → Integrations, access *Admin*) and store it and the team ID as secrets (One-click setup above, main README → Signing).
 5. **Google Play Console** (one-time 25 USD) at play.google.com/console:
    - Personal accounts created after November 2023 must run a **closed test with at least 12 testers for 14 days** before production access. Organisation accounts are exempt (D-U-N-S needed).
    - Plan time for this.
