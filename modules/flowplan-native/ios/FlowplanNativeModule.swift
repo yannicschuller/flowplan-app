@@ -1,21 +1,26 @@
 import ExpoModulesCore
 import UIKit
+import WebKit
 
 /// What the Flowplan app needs from iOS beyond Expo's modules:
 /// - the address a managed installation suggests (MDM "Managed App
 ///   Configuration", key "server");
 /// - Apple Pencil double-tap and squeeze, with the action chosen in the
 ///   iPad's settings (Settings → Apple Pencil), for the whiteboard and the
-///   image markup of the page.
+///   image markup of the page;
+/// - the swipe from the left edge for "back" (the web view's own gesture
+///   walks its history, which is not what back means in Flowplan): a chevron
+///   follows the finger, and the app asks the page what back is.
 /// Sharing and the timer notification are Android's (iOS has the Live
 /// Activity from expo-widgets instead).
 public class FlowplanNativeModule: Module {
   private var pencil: PencilObserver?
+  private var edgeSwipe: EdgeSwipeObserver?
 
   public func definition() -> ModuleDefinition {
     Name("FlowplanNative")
 
-    Events("onShare", "onPencil")
+    Events("onShare", "onPencil", "onEdgeSwipe")
 
     Function("getManagedServer") { () -> String? in
       let managed = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
@@ -46,10 +51,28 @@ public class FlowplanNativeModule: Module {
       }
     }
 
+    // The edge swipe is on while the window on the instance is in front
+    // and the page has a step back.
+    Function("setEdgeSwipe") { (enabled: Bool) in
+      Task { @MainActor [weak self] in
+        guard let self = self else { return }
+        if self.edgeSwipe == nil {
+          let observer = EdgeSwipeObserver { [weak self] in
+            self?.sendEvent("onEdgeSwipe", [:])
+          }
+          guard observer.attach() else { return }
+          self.edgeSwipe = observer
+        }
+        self.edgeSwipe?.enabled = enabled
+      }
+    }
+
     OnDestroy {
       let observer = self.pencil
+      let edge = self.edgeSwipe
       Task { @MainActor in
         observer?.detach()
+        edge?.detach()
       }
     }
   }
@@ -114,5 +137,140 @@ final class PencilObserver: NSObject, UIPencilInteractionDelegate {
     if #available(iOS 17.5, *), action == .showContextualPalette { return "showContextualPalette" }
     // "Ignore" and system shortcuts: nothing for the page to do.
     return "ignore"
+  }
+}
+
+/// Swipe from the left edge of the window: a round chevron comes in with the
+/// finger; past the threshold (or with a quick flick) it fires "back".
+/// The web view's own gestures wait until this one has failed, which an
+/// edge swipe does at once when the touch does not begin at the edge.
+@MainActor
+final class EdgeSwipeObserver: NSObject, UIGestureRecognizerDelegate {
+  private let fire: () -> Void
+  private var recognizer: UIScreenEdgePanGestureRecognizer?
+  private weak var host: UIWindow?
+  private var indicator: UIView?
+  private var armed = false
+  private let threshold: CGFloat = 72
+  private let size: CGFloat = 40
+
+  var enabled = false {
+    didSet { recognizer?.isEnabled = enabled }
+  }
+
+  init(fire: @escaping () -> Void) {
+    self.fire = fire
+  }
+
+  func attach() -> Bool {
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+    guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return false }
+    let recognizer = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(pan(_:)))
+    recognizer.edges = .left
+    recognizer.delegate = self
+    recognizer.isEnabled = enabled
+    window.addGestureRecognizer(recognizer)
+    self.recognizer = recognizer
+    host = window
+    return true
+  }
+
+  func detach() {
+    if let recognizer = recognizer {
+      host?.removeGestureRecognizer(recognizer)
+    }
+    recognizer = nil
+    indicator?.removeFromSuperview()
+    indicator = nil
+  }
+
+  // Only over the web view: the app's own screens (settings, setup) keep
+  // their gestures.
+  func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    guard let window = host else { return false }
+    let point = gestureRecognizer.location(in: window)
+    var view = window.hitTest(point, with: nil)
+    while let current = view {
+      if current is WKWebView { return true }
+      view = current.superview
+    }
+    return false
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+    var view = other.view
+    while let current = view {
+      if current is WKWebView { return true }
+      view = current.superview
+    }
+    return false
+  }
+
+  @objc private func pan(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+    guard let window = host else { return }
+    let distance = max(0, recognizer.translation(in: window).x)
+    let y = recognizer.location(in: window).y
+    switch recognizer.state {
+    case .began:
+      armed = false
+      show(in: window, y: y)
+      move(distance: distance, y: y)
+    case .changed:
+      move(distance: distance, y: y)
+      let past = distance >= threshold
+      if past != armed {
+        armed = past
+        if past { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        UIView.animate(withDuration: 0.12) {
+          self.indicator?.transform = past ? CGAffineTransform(scaleX: 1.12, y: 1.12) : .identity
+          self.indicator?.alpha = past ? 1 : 0.85
+        }
+      }
+    case .ended:
+      let flick = recognizer.velocity(in: window).x > 700 && distance > 24
+      hide()
+      if armed || flick { fire() }
+      armed = false
+    default:
+      hide()
+      armed = false
+    }
+  }
+
+  private func show(in window: UIWindow, y: CGFloat) {
+    indicator?.removeFromSuperview()
+    let view = UIView(frame: CGRect(x: -size, y: y - size / 2, width: size, height: size))
+    view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.96)
+    view.layer.cornerRadius = size / 2
+    view.layer.shadowColor = UIColor.black.cgColor
+    view.layer.shadowOpacity = 0.18
+    view.layer.shadowRadius = 6
+    view.layer.shadowOffset = CGSize(width: 0, height: 2)
+    view.isUserInteractionEnabled = false
+    view.alpha = 0.85
+    let chevron = UIImageView(image: UIImage(systemName: "chevron.left", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)))
+    chevron.tintColor = UIColor.label
+    chevron.contentMode = .center
+    chevron.frame = view.bounds
+    view.addSubview(chevron)
+    window.addSubview(view)
+    indicator = view
+  }
+
+  private func move(distance: CGFloat, y: CGFloat) {
+    // Follows the finger, slower past the threshold (rubber band).
+    let travel = distance < threshold ? distance : threshold + (distance - threshold) * 0.25
+    indicator?.center = CGPoint(x: -size / 2 + min(travel, threshold + 24) * 0.9 + 8, y: y)
+  }
+
+  private func hide() {
+    guard let view = indicator else { return }
+    indicator = nil
+    UIView.animate(withDuration: 0.18, animations: {
+      view.alpha = 0
+      view.center.x = -self.size / 2
+    }, completion: { _ in view.removeFromSuperview() })
   }
 }

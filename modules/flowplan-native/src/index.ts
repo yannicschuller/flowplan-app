@@ -28,8 +28,10 @@ type NativeModule = {
   showTimer(options: TimerOptions): void;
   hideTimer(): void;
   startPencil(): void;
+  setEdgeSwipe?(enabled: boolean): void;
   addListener(event: "onShare", listener: (share: SharedText) => void): EventSubscription;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
+  addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
 };
 
 const native = requireOptionalNativeModule<NativeModule>("FlowplanNative");
@@ -65,4 +67,17 @@ export function addPencilListener(listener: (action: PencilAction) => void) {
   const subscription = native.addListener("onPencil", listener);
   native.startPencil();
   return subscription;
+}
+
+// iOS: the swipe from the left edge for "back" (Shell.tsx asks the page).
+// On while the window on the instance is in front and back does something.
+export function setEdgeSwipe(enabled: boolean) {
+  if (Platform.OS !== "ios") return;
+  try {
+    native?.setEdgeSwipe?.(enabled);
+  } catch {}
+}
+export function addEdgeSwipeListener(listener: () => void) {
+  if (Platform.OS !== "ios" || !native) return { remove() {} };
+  return native.addListener("onEdgeSwipe", listener);
 }

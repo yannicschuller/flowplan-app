@@ -306,6 +306,7 @@ function Root() {
           onAppLink={appLink}
           onProfiles={() => setSetup(true)}
           onPageLoaded={onPageLoaded}
+          active={!settings && !locked && !covered}
         />
       )}
       {server ? (

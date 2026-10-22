@@ -15,7 +15,12 @@ export type PageMessage =
   | { type: "openSettings" }
   | { type: "registered"; status: number; body: unknown }
   | { type: "downloadFailed"; name: string }
-  | { type: "signedOut" };
+  | { type: "signedOut" }
+  // Whether "back" would do something in the page (lib/app-back.ts in
+  // Flowplan), and what the page did when asked (null: no answer, an
+  // instance from before window.FlowplanNavigation).
+  | { type: "backState"; canGoBack: boolean }
+  | { type: "back"; handled: boolean | null };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -39,6 +44,7 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     saveFile: (name, base64, mime) => post({ type: "saveFile", name: String(name), base64: String(base64), mime: String(mime || "") }),
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
+    backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
   });
   // Vibrations of the page become haptic taps.
   try {
@@ -169,3 +175,17 @@ export function downloadScript(url: string) {
 })();
 true;`;
 }
+
+// "Back" (iOS edge swipe, Android's back): the page goes one step back the
+// way its interface is built and says whether it did (lib/app-back.ts in
+// Flowplan). Instances without it answer null; the app then uses the web
+// view's history.
+export const backScript = `(() => {
+  const nav = window.FlowplanNavigation;
+  let handled = null;
+  if (nav && typeof nav.back === "function") {
+    try { handled = nav.back() === true; } catch (e) { handled = false; }
+  }
+  try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: "back", handled })); } catch (e) {}
+})();
+true;`;

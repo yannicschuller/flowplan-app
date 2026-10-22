@@ -14,8 +14,10 @@ import * as Application from "expo-application";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { PencilAction } from "../../modules/flowplan-native/src";
+import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
+import { afterAnswer, backAction } from "../back";
 import {
+  backScript,
   bridgeScript,
   downloadScript,
   parsePageMessage,
@@ -54,6 +56,9 @@ type Props = {
   onAppLink: (link: string) => void;
   onProfiles: () => void;
   onPageLoaded: () => void;
+  // The window is in front (no app settings, lock or setup over it): only
+  // then does the edge swipe go back in the page.
+  active: boolean;
 };
 
 const version = Application.nativeApplicationVersion || "1.0.0";
@@ -66,7 +71,7 @@ function luminance(color: string) {
 }
 const transparent = (color: string) => color.replace(/^rgba?\(([^,]+),([^,]+),([^,)]+).*$/, "rgba($1,$2,$3,0)");
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onMessage, onAppLink, onProfiles, onPageLoaded }, ref) {
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   // WebView<object>: its typings make the props `never` without a type argument.
@@ -80,6 +85,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const pageUrl = useRef("");
   const signedOut = useRef<(() => void) | null>(null);
   const canGoBack = useRef(false);
+  // What the page reported about "back" (back.ts); null until it does.
+  const pageCanGoBack = useRef<boolean | null>(null);
+  const [backable, setBackable] = useState(false);
   const navigation = useRef(navigationState());
   // The foreign page the web view was sent back from (Android, see below).
   const bounced = useRef("");
@@ -197,17 +205,42 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     setOffline(false);
   }, [server]);
 
-  // Android's back button goes back in the page first.
+  // "Back" (back.ts): the page decides on instances that know how, the web
+  // view's history on older ones; otherwise back is the system's.
+  const backState = () => ({ offline, onServer: onServer(), pageCanGoBack: pageCanGoBack.current, historyCanGoBack: canGoBack.current });
+  const updateBackable = () => setBackable(backAction(backState()) !== "system");
+  const goBack = () => {
+    const action = backAction(backState());
+    if (action === "page") run(backScript);
+    else if (action === "history") web.current?.goBack();
+    return action !== "system";
+  };
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  const handleBackAnswer = (handled: boolean | null) => {
+    const next = afterAnswer(handled, canGoBack.current);
+    if (next === "history") web.current?.goBack();
+    // The page had nothing left to close (it changed meanwhile): Android
+    // leaves the app as its back would have.
+    else if (next === "system" && Platform.OS === "android") BackHandler.exitApp();
+  };
+
+  // Android's back button and gesture.
   useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (canGoBack.current && !offline) {
-        web.current?.goBack();
-        return true;
-      }
-      return false;
-    });
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => goBackRef.current());
     return () => subscription.remove();
-  }, [offline]);
+  }, []);
+
+  // iOS: the swipe from the left edge (modules/flowplan-native) instead of
+  // the web view's own, which walks its history.
+  useEffect(() => {
+    const subscription = addEdgeSwipeListener(() => void goBackRef.current());
+    return () => {
+      subscription.remove();
+      setEdgeSwipe(false);
+    };
+  }, []);
+  useEffect(() => setEdgeSwipe(active && backable && !offline), [active, backable, offline]);
 
   // Android draws edge to edge: the page makes room for the keyboard itself.
   useEffect(() => {
@@ -244,6 +277,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     if (!message) return;
     if (message.type === "edges") handleEdges(message);
     else if (message.type === "signedOut") signedOut.current?.();
+    else if (message.type === "backState") {
+      pageCanGoBack.current = message.canGoBack;
+      updateBackable();
+    } else if (message.type === "back") handleBackAnswer(message.handled);
     else onMessage(message);
   };
 
@@ -292,6 +329,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       bottomSettled.current = false;
     }
     bounceForeign(state.url);
+    updateBackable();
   };
 
   const fallback = palette.background;
@@ -330,6 +368,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           onNavigationStateChange={onNavigationStateChange}
           onLoadStart={(event) => {
             const url = event.nativeEvent.url;
+            // Another document (not just another #route): it reports anew
+            // whether back does something; until then the history counts.
+            if (url.split("#")[0] !== pageUrl.current.split("#")[0]) pageCanGoBack.current = null;
             loadStarted(navigation.current, url, server);
             bounceForeign(url);
           }}
@@ -366,7 +407,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           thirdPartyCookiesEnabled={false}
           domStorageEnabled
           javaScriptEnabled
-          allowsBackForwardNavigationGestures
+          // Back is the app's (back.ts), not a walk through the history.
+          allowsBackForwardNavigationGestures={false}
           allowsInlineMediaPlayback
           allowsLinkPreview={false}
           mediaPlaybackRequiresUserAction
