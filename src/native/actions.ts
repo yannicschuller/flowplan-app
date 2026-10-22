@@ -29,7 +29,7 @@ export function haptic(kind: string) {
 }
 
 // Long press on the app icon. Paths open in the instance (hash routes of the
-// web app); "server" opens the setup.
+// web app); "server" opens the profiles (switch or add one).
 export function setQuickActions(signedIn: boolean) {
   const ios = Platform.OS === "ios";
   const items: QuickActions.Action[] = [
@@ -41,7 +41,7 @@ export function setQuickActions(signedIn: boolean) {
           { id: "new", title: t("actionNew"), icon: ios ? "symbol:square.and.pencil" : null, params: { path: "/#new" } },
         ]
       : []),
-    { id: "server", title: t("changeServer"), icon: ios ? "symbol:server.rack" : null, params: { path: "" } },
+    { id: "server", title: t("switchProfile"), icon: ios ? "symbol:server.rack" : null, params: { path: "" } },
   ];
   void QuickActions.setItems(items).catch(() => {});
 }

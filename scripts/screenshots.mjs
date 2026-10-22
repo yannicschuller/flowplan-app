@@ -161,8 +161,8 @@ async function shoot(browser, name, device, { dark = false, url, steps } = {}) {
 }
 function setupPreview() {
   const text = say(
-    ["Willkommen bei Flowplan", "Verbinde dich mit app.flowplan.org oder gib die Adresse deiner eigenen Flowplan-Instanz ein.", "Adresse der Instanz", "Verbinden", "Ändern kannst du sie später in den App-Einstellungen oder, indem du das App-Symbol gedrückt hältst: „Server wechseln“."],
-    ["Welcome to Flowplan", "Connect to app.flowplan.org or enter the address of your own Flowplan instance.", "Instance address", "Connect", "You can change it later in the app settings or by pressing and holding the app icon: “Change server”."],
+    ["Willkommen bei Flowplan", "Verbinde dich mit app.flowplan.org oder gib die Adresse deiner eigenen Flowplan-Instanz ein.", "Adresse der Instanz", "Verbinden", "Weitere Instanzen fügst du später in den App-Einstellungen unter „Profile“ hinzu. Wechseln kannst du dort oder, indem du das App-Symbol gedrückt hältst: „Profil wechseln“."],
+    ["Welcome to Flowplan", "Connect to app.flowplan.org or enter the address of your own Flowplan instance.", "Instance address", "Connect", "You can add more instances later in the app settings under “Profiles”. Switch there or by pressing and holding the app icon: “Switch profile”."],
   );
   return `<!doctype html><html lang="${de ? "de" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="color-scheme" content="light dark"><link rel="stylesheet" href="/style.css"></head>
 <body><main><img src="/icon.png" alt=""><h1>${text[0]}</h1><p>${text[1]}</p>

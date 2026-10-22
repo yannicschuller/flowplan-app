@@ -1,5 +1,5 @@
 The first version of Flowplan for iPhone and iPad:
-• Connects to app.flowplan.org or your own Flowplan instance
+• Connects to app.flowplan.org or your own Flowplan instances, several of them as profiles
 • Push notifications with the number of unread ones on the app icon
 • Widgets for the home and lock screen: tasks due, inbox, running timer
 • The running timer as Live Activity on the lock screen and in the Dynamic Island

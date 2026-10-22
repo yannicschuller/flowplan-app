@@ -1,5 +1,6 @@
-// The app's own settings: the instance, notifications, the app lock, what the
-// widgets and the timer do, and leaving the instance. Opened from the quick
+// The app's own settings: the profiles (switch, rename, add), notifications,
+// the app lock, what the widgets and the timer do, and leaving the active
+// profile's instance. Opened from the quick
 // actions, the offline page or Flowplan's settings (window.FlowplanApp).
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
@@ -7,34 +8,41 @@ import * as Application from "expo-application";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { t } from "../i18n";
+import { activeProfile, type ProfileState } from "../profiles";
 import { shortServer } from "../server";
 import { store } from "../store";
 import { Button, styles, usePalette } from "../ui";
 import { askForPush, pushPermission, type PushState } from "../native/notifications";
+import { ProfileList } from "./Profiles";
 
 export function Settings({
   visible,
-  server,
+  profiles,
   signedIn,
   pushAvailable,
   onClose,
-  onChangeServer,
+  onSwitch,
+  onRename,
+  onAddProfile,
   onForget,
   onPushChanged,
   onLockChanged,
 }: {
   visible: boolean;
-  server: string;
+  profiles: ProfileState;
   signedIn: boolean;
   pushAvailable: boolean;
   onClose: () => void;
-  onChangeServer: () => void;
+  onSwitch: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onAddProfile: () => void;
   onForget: () => void;
   onPushChanged: () => void;
   onLockChanged: () => void;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  const current = activeProfile(profiles);
   const [push, setPush] = useState<PushState>("undetermined");
   const [lock, setLock] = useState(store.appLock());
   const [lockAvailable, setLockAvailable] = useState(true);
@@ -90,11 +98,10 @@ export function Settings({
           </Text>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, maxWidth: 640, width: "100%", alignSelf: "center" }}>
-          <Text style={heading}>{t("server")}</Text>
-          <View style={section}>
-            <Text style={[styles.text, { color: p.text }]}>{shortServer(server)}</Text>
-            <Button title={t("changeServer")} kind="secondary" onPress={onChangeServer} style={{ marginTop: 12 }} />
-          </View>
+          <Text style={heading}>{t("profiles")}</Text>
+          <ProfileList profiles={profiles.profiles} active={profiles.active} onSwitch={onSwitch} onRename={onRename} />
+          <Text style={[styles.small, { color: p.muted, marginTop: 8, marginHorizontal: 4 }]}>{t("profilesText")}</Text>
+          <Button title={t("addProfile")} kind="secondary" onPress={onAddProfile} style={{ marginTop: 12 }} />
 
           <Text style={heading}>{t("notifications")}</Text>
           <View style={section}>
@@ -125,7 +132,7 @@ export function Settings({
             kind="danger"
             style={{ marginTop: 28 }}
             onPress={() =>
-              Alert.alert(t("forget"), t("forgetConfirm", { server: shortServer(server) }), [
+              Alert.alert(t("forget"), t("forgetConfirm", { server: shortServer(current?.server ?? ""), name: current?.name ?? "" }), [
                 { text: t("cancel"), style: "cancel" },
                 { text: t("forget"), style: "destructive", onPress: onForget },
               ])

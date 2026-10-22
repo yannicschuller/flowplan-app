@@ -16,7 +16,7 @@ FOR TEAMS
 Teamspaces, permissions, comments, mentions, notifications, templates and search across everything.
 
 YOUR DATA, YOUR SERVER
-Flowplan is open source (AGPL) and can be self-hosted. The app connects to app.flowplan.org or to your company's Flowplan instance – just enter its address on first start. Your content lives on that server, not in the app. The app itself collects no data and contains no tracking.
+Flowplan is open source (AGPL) and can be self-hosted. The app connects to app.flowplan.org or to your company's Flowplan instance – just enter its address on first start. Several instances, for example work and private, are saved as profiles and switched with one tap. Your content lives on that server, not in the app. The app itself collects no data and contains no tracking.
 
 SIGN IN YOUR WAY
 E-mail and password, passkeys or your organisation's single sign-on (SSO) – passkeys and SSO run securely through the system's sign-in window.

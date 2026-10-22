@@ -1,5 +1,5 @@
 // Shown when the instance cannot be reached. Tries again by itself once the
-// connection is back.
+// connection is back; another profile is a tap away.
 import { useEffect } from "react";
 import { ScrollView, Text, View } from "react-native";
 import * as Network from "expo-network";
@@ -8,7 +8,7 @@ import { t } from "../i18n";
 import { shortServer } from "../server";
 import { Button, Logo, styles, usePalette } from "../ui";
 
-export function Offline({ server, onRetry, onChangeServer }: { server: string; onRetry: () => void; onChangeServer: () => void }) {
+export function Offline({ server, onRetry, onProfiles }: { server: string; onRetry: () => void; onProfiles: () => void }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   useEffect(() => {
@@ -29,7 +29,7 @@ export function Offline({ server, onRetry, onChangeServer }: { server: string; o
         </Text>
         <Text style={[styles.text, styles.centered, { color: p.muted }]}>{t("offlineServer", { server: shortServer(server) })}</Text>
         <Button title={t("retry")} onPress={onRetry} style={{ marginTop: 22 }} />
-        <Button title={t("changeServer")} kind="secondary" onPress={onChangeServer} style={{ marginTop: 10 }} />
+        <Button title={t("switchProfile")} kind="secondary" onPress={onProfiles} style={{ marginTop: 10 }} />
       </ScrollView>
     </View>
   );

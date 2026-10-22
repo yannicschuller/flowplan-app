@@ -1,5 +1,5 @@
 Die erste Version von Flowplan für iPhone und iPad:
-• Verbindet sich mit app.flowplan.org oder deiner eigenen Flowplan-Instanz
+• Verbindet sich mit app.flowplan.org oder deinen eigenen Flowplan-Instanzen, auch mehreren als Profile
 • Mitteilungen mit der Zahl der ungelesenen am App-Symbol
 • Widgets für Home- und Sperrbildschirm: fällige Aufgaben, Posteingang, laufende Zeiterfassung
 • Die laufende Zeiterfassung als Live-Aktivität auf dem Sperrbildschirm und in der Dynamic Island

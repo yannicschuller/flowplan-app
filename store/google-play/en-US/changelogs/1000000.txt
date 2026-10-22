@@ -1,5 +1,5 @@
 The first version of Flowplan for Android:
-• Connects to app.flowplan.org or your own Flowplan instance
+• Connects to app.flowplan.org or your own Flowplan instances, several of them as profiles
 • Push notifications and home screen widgets: tasks due, inbox, running timer
 • The running timer as notification with a running clock
 • Sign in with a passkey or SSO, app lock with fingerprint

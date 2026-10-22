@@ -52,7 +52,7 @@ type Props = {
   server: string;
   onMessage: (message: PageMessage) => void;
   onAppLink: (link: string) => void;
-  onChangeServer: () => void;
+  onProfiles: () => void;
   onPageLoaded: () => void;
 };
 
@@ -66,7 +66,7 @@ function luminance(color: string) {
 }
 const transparent = (color: string) => color.replace(/^rgba?\(([^,]+),([^,]+),([^,)]+).*$/, "rgba($1,$2,$3,0)");
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onMessage, onAppLink, onChangeServer, onPageLoaded }, ref) {
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onMessage, onAppLink, onProfiles, onPageLoaded }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   // WebView<object>: its typings make the props `never` without a type argument.
@@ -185,9 +185,14 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     [navigate, signInLink, server, run],
   );
 
-  // A new instance: start there, forget pending sign-ins.
+  // A new instance (another profile): start there, forget pending sign-ins,
+  // the identity provider of the previous one and a sign-in waiting to be
+  // redeemed – nothing of one profile's sign-in reaches the next.
   useEffect(() => {
     pending.current.clear();
+    navigation.current = navigationState();
+    redeemWhenLoaded.current = null;
+    pageUrl.current = "";
     setSource({ uri: server });
     setOffline(false);
   }, [server]);
@@ -297,7 +302,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     setOffline(false);
     setAttempt((value) => value + 1);
   }, []);
-  if (offline) return <Offline server={server} onRetry={retry} onChangeServer={onChangeServer} />;
+  if (offline) return <Offline server={server} onRetry={retry} onProfiles={onProfiles} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: bars.top }}>

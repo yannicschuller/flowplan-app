@@ -42,10 +42,10 @@ The app itself collects nothing. It has:
 
 - no analytics, ads or tracking SDKs;
 - no third-party code apart from Expo and React Native;
-- on the device only: the server address, a device token for the widgets, the last summary the widgets show (in the keychain / Keystore), and the web view's own storage (session cookie, offline data of the web app);
+- on the device only: the addresses and names of the saved profiles (instances), per profile a device token for the widgets and the last summary the widgets show (in the keychain / Keystore), and the web view's own storage (session cookies per instance, offline data of the web app);
 - push notifications through Expo's push service: the instance sends the app's push token, a general text ("something new in the inbox") and the number of unread notifications to Expo, which hands them to Apple or Google.
 
-Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing. Check that the privacy policy at flowplan.org/datenschutz names the app.
+Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing – also when it is one of several profiles in the app: the app sends nothing of one profile to another instance or to the developer. Check that the privacy policy at flowplan.org/datenschutz names the app.
 
 ### App Store: App Privacy ("nutrition label")
 
@@ -128,7 +128,8 @@ Apple and Google, however, count the data that the developer's own service recei
    - e-mail sign-in, passkey and SSO sign-in;
    - offline page;
    - links to other sites;
-   - **Change server**;
+   - **Profiles**: add a second instance, switch with the quick action **Switch profile** and in the app settings, rename, **Sign out and remove the profile**; after switching, widgets, badge and notifications show the active profile only, and switching back finds you still signed in;
+   - an update from a version with a single address keeps that instance (as the first profile) and its sign-in;
    - sharing into Flowplan (Android);
    - dark mode.
 3. Update `release_notes.txt` (App Store) and `changelogs/<versionCode>.txt` (Play), then run `bundle exec fastlane ios metadata` / `android metadata`, or paste the texts.
@@ -151,6 +152,7 @@ Apple and Google, however, count the data that the developer's own service recei
 - offline handling;
 - quick actions;
 - managed configuration for companies;
+- profiles for several instances (work and private), each with its own device registration;
 - system integration of the bars;
 - share target on Android.
 

@@ -1,6 +1,8 @@
 // The app: first the instance (setup), then the window on it (shell) – with
 // what makes it native around it: push notifications, widgets and the timer
 // (sync.ts), quick actions, shared text, the app lock and its own settings.
+// Several instances are kept as profiles (profiles.ts); push, widgets, badge
+// and timer belong to the active one.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus, Linking, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +17,7 @@ import type { PageMessage } from "./bridge-script";
 import { deviceName } from "./device";
 import { pickLocale, setLocale } from "./i18n";
 import { pathOfAppLink } from "./navigation";
+import { activeProfile, addProfile, removeProfile, renameProfile, switchProfile, type ProfileState } from "./profiles";
 import { store } from "./store";
 import { BACKGROUND } from "./ui";
 import { Cover, Lock } from "./screens/Lock";
@@ -41,7 +44,8 @@ export default function App() {
 }
 
 function Root() {
-  const [server, setServer] = useState(store.server());
+  const [profiles, setProfiles] = useState<ProfileState>(() => store.profiles());
+  const server = activeProfile(profiles)?.server ?? null;
   const [setup, setSetup] = useState(!store.server());
   const [settings, setSettings] = useState(false);
   const [locked, setLocked] = useState(store.appLock());
@@ -231,53 +235,86 @@ function Root() {
     else void register();
   }, [register, signedOut]);
 
-  // Leaves the current instance: its entry for this phone goes, nothing of it
-  // stays in widgets and badge.
-  const leave = async (from: string) => {
-    await leaveInstance(from, store.deviceToken());
-    store.forgetInstance();
-    signedOut();
+  const saveProfiles = (next: ProfileState) => {
+    store.setProfiles(next);
+    setProfiles(next);
   };
 
-  const connect = (origin: string) => {
-    if (server && origin !== server) void leave(server);
-    store.setServer(origin);
-    setServer(origin);
+  // Leaves the active profile's instance before another one becomes active:
+  // its entry for this phone goes (push and widgets follow the active profile
+  // only), nothing of it stays in widgets and badge. Read and cleared while
+  // it is still the active one; the sign-in in the web view stays, so coming
+  // back registers again.
+  const leaveActive = () => {
+    const current = activeProfile(store.profiles());
+    if (!current) return;
+    const token = store.deviceToken();
+    signedOut();
+    store.forgetInstance(current.id);
+    pendingPath.current = null;
+    void leaveInstance(current.server, token);
+  };
+
+  const switchTo = (id: string) => {
+    setSettings(false);
+    setSetup(false);
+    if (id === store.profiles().active) return;
+    leaveActive();
+    saveProfiles(switchProfile(store.profiles(), id));
+  };
+
+  // A new instance from the setup (checked there): a new profile, active.
+  const connect = (origin: string, name: string) => {
+    const current = store.profiles();
+    const { state } = addProfile(current, { server: origin, name });
+    leaveActive();
+    saveProfiles(state);
     setSetup(false);
   };
 
+  // Signs out of the active profile's instance and removes the profile; the
+  // next one becomes active, or the setup shows.
   const forget = async () => {
-    if (!server) return;
+    const current = activeProfile(store.profiles());
+    if (!current) return;
     setSettings(false);
-    await leave(server);
+    leaveActive();
     await shell.current?.signOut();
-    store.setServer(null);
-    setServer(null);
-    setSetup(true);
+    const next = removeProfile(store.profiles(), current.id);
+    saveProfiles(next);
+    if (!next.active) setSetup(true);
   };
 
   return (
     <>
       {setup || !server ? (
-        <Setup current={server} suggested={server ? null : getManagedServer()} onConnect={connect} onCancel={server ? () => setSetup(false) : undefined} />
+        <Setup
+          profiles={profiles}
+          suggested={server ? null : getManagedServer()}
+          onConnect={connect}
+          onSwitch={switchTo}
+          onCancel={server ? () => setSetup(false) : undefined}
+        />
       ) : (
         <Shell
           ref={shell}
           server={server}
           onMessage={(message) => void onMessage(message)}
           onAppLink={appLink}
-          onChangeServer={() => setSetup(true)}
+          onProfiles={() => setSetup(true)}
           onPageLoaded={onPageLoaded}
         />
       )}
       {server ? (
         <Settings
           visible={settings}
-          server={server}
+          profiles={profiles}
           signedIn={signedIn}
           pushAvailable={pushAvailable}
           onClose={() => setSettings(false)}
-          onChangeServer={() => {
+          onSwitch={switchTo}
+          onRename={(id, name) => saveProfiles(renameProfile(store.profiles(), id, name))}
+          onAddProfile={() => {
             setSettings(false);
             setSetup(true);
           }}

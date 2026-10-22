@@ -1,5 +1,5 @@
 Die erste Version von Flowplan für Android:
-• Verbindet sich mit app.flowplan.org oder deiner eigenen Flowplan-Instanz
+• Verbindet sich mit app.flowplan.org oder deinen eigenen Flowplan-Instanzen, auch mehreren als Profile
 • Benachrichtigungen und Widgets: fällige Aufgaben, Posteingang, laufende Zeiterfassung
 • Die laufende Zeiterfassung als Benachrichtigung mit laufender Uhr
 • Anmeldung mit Passkey und SSO, App-Sperre mit Fingerabdruck

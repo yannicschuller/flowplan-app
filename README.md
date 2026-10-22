@@ -14,13 +14,13 @@
 
 The app shows a Flowplan instance in the system web view and adds what only a native app can do. All data stays on the server; Flowplan itself, and every new feature of it, arrives with the server and needs no app update. The app:
 
-- remembers the address of the instance and accepts only a real Flowplan;
+- remembers one or several instances as **profiles** (e.g. work and private), switches between them with one tap and accepts only a real Flowplan;
 - signs in with passkeys and SSO through the system's sign-in sheet;
 - receives **push notifications** with the number of unread notifications on the app icon;
 - has **widgets** for the home screen (and the lock screen on iOS): tasks due, the inbox, the running timer;
 - shows a running **timer** of the time tracking as a **Live Activity** (lock screen, Dynamic Island) on iOS and as an ongoing notification with a running clock (a Live Update on Android 16) on Android;
 - refreshes widgets, badge and timer in the background;
-- has **quick actions** on the app icon: inbox, my tasks, search, new page, change server;
+- has **quick actions** on the app icon: inbox, my tasks, search, new page, switch profile;
 - can be locked with Face ID, Touch ID, a fingerprint or the device code;
 - hands exports and downloads to the share sheet;
 - takes text and links shared from other apps (Android);
@@ -36,6 +36,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | Setup, offline page, app settings, app lock (with the lock on, the page is covered while the app is not in front and screenshots are blocked while locked) | [`src/screens/`](src/screens) | React Native, `expo-local-authentication`, `expo-screen-capture` |
 | Window on the instance | [`src/screens/Shell.tsx`](src/screens/Shell.tsx) | `react-native-webview` (WKWebView, Android System WebView) |
 | Which address is accepted | [`src/server.ts`](src/server.ts) | – (tested in [`test/`](test)) |
+| Profiles: several instances, migration of the single address | [`src/profiles.ts`](src/profiles.ts), [`src/store.ts`](src/store.ts) | `expo-secure-store` (tested in [`test/profiles.test.ts`](test/profiles.test.ts)) |
 | Links: app, system browser, sign-in | [`src/navigation.ts`](src/navigation.ts) | `expo-linking` |
 | Passkeys and SSO | [`src/sign-in.ts`](src/sign-in.ts) | `expo-web-browser` (ASWebAuthenticationSession, Custom Tabs), `expo-crypto` |
 | Bridge to the page | [`src/bridge-script.ts`](src/bridge-script.ts) | `window.FlowplanApp` in the page, see below |
@@ -49,8 +50,10 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | | |
 | --- | --- |
 | **First start** | Asks for the instance and suggests `https://app.flowplan.org`. Managed installations can suggest their own address: iOS Managed App Configuration or Android app restrictions, key `server`. The app accepts only a real Flowplan: `/api/health` must answer `"service": "flowplan"`, and the address must not redirect to another site. HTTPS only; plain HTTP only for `localhost` and `10.0.2.2`, the development machine as seen from the Android emulator. |
-| **Changing the server** | App settings, the quick action **Change server**, or the button on the offline page. **Sign out and forget the server** signs out and removes the phone from the instance. |
-| **Links** | Pages of the instance stay in the app. Other sites, `mailto:` and `tel:` links open in the system. Embedded content (videos, maps) stays in the page. `flowplan://open?path=/#inbox` opens a path of the instance (widgets, notifications, Live Activity). |
+| **Profiles** | Several instances, e.g. **Work – flowplan.company.com** and **Private – notes.example**. Switch in the app settings (**Profiles**), with the quick action **Switch profile** or from the offline page; the same screen adds a profile (address and an optional name). Rename in the app settings. **Sign out and remove the profile** signs out of the active profile's instance, removes the phone from it and switches to the next profile. An address that already has a profile switches to it. |
+| **Separate profiles** | Per profile, the device token and the last summary live under keys of their own in the keychain / Keystore (`flowplan.profile.<id>.…`), so nothing of one instance is ever sent to another. Push, widgets, badge and the timer belong to the active profile: switching unregisters the phone from the previous instance (`/api/mobile/unregister`) and clears widgets and badge; the web view keeps that instance's sign-in, so switching back registers again without signing in. The web view's cookie store is shared by the whole app and keeps sign-ins per address – which is why each instance can be saved as one profile only. Pending passkey/SSO sign-ins and identity-provider hosts are dropped on a switch. |
+| **Update from a single address** | The address of earlier versions becomes the first profile automatically, together with its device token and summary; the old keys are removed. |
+| **Links** | Pages of the active profile's instance stay in the app. Other sites, `mailto:` and `tel:` links open in the system. Embedded content (videos, maps) stays in the page. `flowplan://open?path=/#inbox` opens a path of the instance (widgets, notifications, Live Activity). |
 | **Offline** | When the instance cannot be reached, the app shows its own page and reconnects by itself when the connection is back. |
 | **Native feel** | Status bar and home indicator / navigation bar take the colours the page has at its top and bottom edge; on pages that scroll as a whole they keep them, and content fades out at the edges. Dark mode follows the system. Swipe back on iOS, the back button on Android. No zooming into form fields and no "previous/next/done" bar above the keyboard on iOS. |
 | **Languages** | German, English and French (own screens, notifications, widgets, permission prompts). |
@@ -82,7 +85,7 @@ The page tells the app about changes through `window.FlowplanApp` (Flowplan's `l
 
 ### Push notifications
 
-Push goes through **Expo's push service**: every Flowplan instance – also a self-hosted one – sends to the app's Expo push token at `exp.host`, Expo hands it to Apple (APNs) and Google (FCM). Instances need no keys for that. Like Web Push, a notification only says that something new is in the inbox and sets the badge to the number of unread notifications; tapping it opens the right page. Operators can switch it off (`MOBILE_PUSH=off`) or send the notification text along (`MOBILE_PUSH_CONTENT=on`, see Flowplan's `.env.example`).
+Push goes through **Expo's push service**: every Flowplan instance – also a self-hosted one – sends to the app's Expo push token at `exp.host`, Expo hands it to Apple (APNs) and Google (FCM). Instances need no keys for that. Like Web Push, a notification only says that something new is in the inbox and sets the badge to the number of unread notifications; tapping it opens the right page. Only the active profile's instance sends to the phone: a notification carries a path, not the instance, so the app unregisters from an instance when another profile becomes active. Operators can switch it off (`MOBILE_PUSH=off`) or send the notification text along (`MOBILE_PUSH_CONTENT=on`, see Flowplan's `.env.example`).
 
 Set up once:
 
