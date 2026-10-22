@@ -30,7 +30,7 @@ export class ProfileError extends Error {
 
 // The keys that belong to one profile; everything else (installation id, app
 // lock, push asked) is the app's.
-export const PROFILE_KEYS = ["deviceToken", "summary"] as const;
+export const PROFILE_KEYS = ["deviceToken", "summary", "adminSummary"] as const;
 export type ProfileKey = (typeof PROFILE_KEYS)[number];
 export function profileKey(id: string, key: ProfileKey) {
   if (!ID.test(id)) throw new ProfileError("invalid");
@@ -96,7 +96,7 @@ export function loadProfiles(read: Read, write: Write): ProfileState {
   const server = originOf(read(LEGACY_KEYS.server));
   const state: ProfileState = server ? { profiles: [{ id: "main", name: cleanName("", server), server }], active: "main" } : { profiles: [], active: null };
   if (server)
-    for (const key of PROFILE_KEYS) {
+    for (const key of ["deviceToken", "summary"] as const) {
       const value = read(LEGACY_KEYS[key]);
       if (value !== null) write(profileKey("main", key), value);
     }

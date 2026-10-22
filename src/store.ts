@@ -16,6 +16,7 @@ import {
   type ProfileState,
 } from "./profiles";
 import type { Summary } from "./summary";
+import { parseAdminState, type AdminState } from "./admin";
 
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 const KEYS = {
@@ -87,6 +88,16 @@ export const store = {
   setSummary(summary: Summary | null) {
     const key = activeKey("summary");
     if (key) write(key, summary ? JSON.stringify(summary) : null);
+  },
+
+  // What the administrators' widgets show (admin.ts).
+  adminState(): AdminState {
+    const key = activeKey("adminSummary");
+    return key ? parseAdminState(read(key)) : null;
+  },
+  setAdminState(state: AdminState) {
+    const key = activeKey("adminSummary");
+    if (key) write(key, state ? JSON.stringify(state) : null);
   },
 
   appLock: () => read(KEYS.appLock) === "1",

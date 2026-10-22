@@ -11,7 +11,8 @@ import { locale, t } from "../i18n";
 import { timeoutSignal } from "../server";
 import { store } from "../store";
 import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, widgetProps, type Summary } from "../summary";
-import { renderInbox, renderTasks } from "../widgets/android";
+import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary, type AdminState } from "../admin";
+import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
 import type * as IosWidgets from "../widgets/ios";
 
 // expo-widgets only on iOS: Android draws its widgets with
@@ -38,6 +39,33 @@ export async function fetchSummary(server: string | null = store.server(), token
   }
 }
 
+// GET /api/mobile/admin-summary (administrators only, lib/mobile-admin.ts in
+// Flowplan). undefined: not reachable now – the last state stays.
+export async function fetchAdminState(server: string | null = store.server(), token: string | null = store.deviceToken()): Promise<AdminState | undefined> {
+  if (!server || !token) return null;
+  try {
+    const response = await fetch(`${server}/api/mobile/admin-summary`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: timeoutSignal(15_000),
+    });
+    if (response.status === 401) return null;
+    if (response.status === 403 || response.status === 404) return { kind: "notAdmin" };
+    const data = await response.json().catch(() => null);
+    return response.ok && isAdminSummary(data) ? { kind: "data", data } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// What the administrators' widgets show after a summary: asked only when
+// the summary says the person administers the instance.
+export async function adminStateFor(summary: Summary | null): Promise<AdminState> {
+  if (!summary) return null;
+  if (!summary.admin) return { kind: "notAdmin" };
+  const state = await fetchAdminState();
+  return state === undefined ? store.adminState() : state;
+}
+
 // The app leaves the instance: its entry there (device token, push) goes.
 export async function leaveInstance(server: string, token: string | null) {
   if (!token) return;
@@ -53,7 +81,7 @@ export async function leaveInstance(server: string, token: string | null) {
 // Fetches and shows; offline the last summary stays.
 export async function refresh(): Promise<FetchResult> {
   const result = await fetchSummary();
-  if ("summary" in result) await apply(result.summary);
+  if ("summary" in result) await apply(result.summary, await adminStateFor(result.summary));
   else if ("signedOut" in result) {
     store.setDeviceToken(null);
     await apply(null);
@@ -63,36 +91,52 @@ export async function refresh(): Promise<FetchResult> {
 
 let lastTimer = "";
 
-export async function apply(summary: Summary | null) {
+// Without a summary (signed out) the administrators' widgets are cleared too.
+export async function apply(summary: Summary | null, admin: AdminState = null) {
   store.setSummary(summary);
-  await Promise.allSettled([updateWidgets(summary), updateTimer(summary), Notifications.setBadgeCountAsync(summary?.unread ?? 0)]);
+  store.setAdminState(summary ? admin : null);
+  await Promise.allSettled([
+    updateWidgets(summary, summary ? admin : null),
+    updateTimer(summary),
+    Notifications.setBadgeCountAsync(summary?.unread ?? 0),
+  ]);
 }
 
-export async function updateWidgets(summary: Summary | null = store.summary()) {
+export async function updateWidgets(summary: Summary | null = store.summary(), admin: AdminState = store.adminState()) {
   const lang = locale();
   const tasks = tasksWidget(summary, lang),
-    inbox = inboxWidget(summary, lang);
+    inbox = inboxWidget(summary, lang),
+    status = adminStatusWidget(admin, lang),
+    live = adminLiveWidget(admin, lang),
+    storage = adminStorageWidget(admin, lang);
   if (ios) {
-    // Each widget on its own: one that fails does not keep the other empty.
-    // widgetProps: no null reaches the App Group (summary.ts).
+    // Each widget on its own: one that fails does not keep the others
+    // empty. widgetProps: no null reaches the App Group (summary.ts).
     try {
       ios.localizeSamples(lang);
     } catch {}
-    try {
-      ios.tasksWidget.updateSnapshot(widgetProps(tasks));
-    } catch (error) {
-      if (__DEV__) console.warn("Flowplan: tasks widget not updated", error);
-    }
-    try {
-      ios.inboxWidget.updateSnapshot(widgetProps(inbox));
-    } catch (error) {
-      if (__DEV__) console.warn("Flowplan: inbox widget not updated", error);
+    const updates: [string, { updateSnapshot: (props: never) => void }, object][] = [
+      ["tasks", ios.tasksWidget, tasks],
+      ["inbox", ios.inboxWidget, inbox],
+      ["instance", ios.adminStatusWidget, status],
+      ["live", ios.adminLiveWidget, live],
+      ["storage", ios.adminStorageWidget, storage],
+    ];
+    for (const [name, widget, props] of updates) {
+      try {
+        widget.updateSnapshot(widgetProps(props) as never);
+      } catch (error) {
+        if (__DEV__) console.warn(`Flowplan: ${name} widget not updated`, error);
+      }
     }
     return;
   }
   await Promise.allSettled([
     requestWidgetUpdate({ widgetName: "FlowplanTasks", renderWidget: (info) => renderTasks(tasks, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanInbox", renderWidget: () => renderInbox(inbox) }),
+    requestWidgetUpdate({ widgetName: "FlowplanInstance", renderWidget: () => renderAdminStatus(status) }),
+    requestWidgetUpdate({ widgetName: "FlowplanLive", renderWidget: (info) => renderAdminLive(live, info.height) }),
+    requestWidgetUpdate({ widgetName: "FlowplanStorage", renderWidget: () => renderAdminStorage(storage) }),
   ]);
 }
 

@@ -5,24 +5,39 @@ import type { WidgetTaskHandlerProps } from "react-native-android-widget";
 import { pickLocale, setLocale } from "../i18n";
 import { store } from "../store";
 import { inboxWidget, tasksWidget } from "../summary";
-import { renderInbox, renderTasks } from "../widgets/android";
-import { apply, fetchSummary } from "./sync";
+import { adminLiveWidget, adminStatusWidget, adminStorageWidget } from "../admin";
+import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
+import { adminStateFor, apply, fetchSummary } from "./sync";
 
 export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget }: WidgetTaskHandlerProps) {
   if (widgetAction === "WIDGET_DELETED" || widgetAction === "WIDGET_CLICK") return;
   const lang = pickLocale(getLocales().map((l) => l.languageTag));
   setLocale(lang);
-  let summary = store.summary();
+  let summary = store.summary(),
+    admin = store.adminState();
   // Fresh data for the regular update; added and resized widgets show at once.
   if (widgetAction === "WIDGET_UPDATE") {
     const result = await fetchSummary();
-    if ("summary" in result) summary = result.summary;
-    if ("signedOut" in result) summary = null;
-    if (!("failed" in result)) await apply(summary);
+    if ("summary" in result) {
+      summary = result.summary;
+      admin = await adminStateFor(summary);
+    }
+    if ("signedOut" in result) {
+      summary = null;
+      admin = null;
+    }
+    if (!("failed" in result)) await apply(summary, admin);
   }
+  const name = widgetInfo.widgetName;
   renderWidget(
-    widgetInfo.widgetName === "FlowplanInbox"
+    name === "FlowplanInbox"
       ? renderInbox(inboxWidget(summary, lang))
-      : renderTasks(tasksWidget(summary, lang), widgetInfo.height),
+      : name === "FlowplanInstance"
+        ? renderAdminStatus(adminStatusWidget(admin, lang))
+        : name === "FlowplanLive"
+          ? renderAdminLive(adminLiveWidget(admin, lang), widgetInfo.height)
+          : name === "FlowplanStorage"
+            ? renderAdminStorage(adminStorageWidget(admin, lang))
+            : renderTasks(tasksWidget(summary, lang), widgetInfo.height),
   );
 }

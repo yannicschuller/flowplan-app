@@ -17,6 +17,9 @@ export type Summary = {
   timer: { start: number; title: string; database: string; url: string } | null;
   today: string;
   at: number;
+  // The person administers the instance (newer instances): the app also
+  // fetches the administrators' widgets (admin.ts).
+  admin?: boolean;
 };
 
 export function isSummary(value: unknown): value is Summary {

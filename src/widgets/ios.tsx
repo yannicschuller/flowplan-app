@@ -4,20 +4,31 @@
 // and run in the widget's own small runtime: they may only use their props,
 // the environment and Expo UI – no other code of the app. The texts come
 // finished from summary.ts.
-import { HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Chart, Gauge, HStack, Image, ProgressView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
   activityBackgroundTint,
   containerBackground,
   font,
   foregroundStyle,
   frame,
+  gaugeStyle,
   lineLimit,
   monospacedDigit,
   padding,
+  tint,
   widgetURL,
 } from "@expo/ui/swift-ui/modifiers";
 import { createLiveActivity, createWidget, type LiveActivityEnvironment, type WidgetEnvironment } from "expo-widgets";
 import type { Locale } from "../i18n";
+import {
+  adminLiveWidget as liveProps,
+  adminStatusWidget as statusProps,
+  adminStorageWidget as storageProps,
+  sampleAdminSummary,
+  type AdminLiveProps,
+  type AdminStatusProps,
+  type AdminStorageProps,
+} from "../admin";
 import { inboxWidget as inboxProps, sampleSummary, tasksWidget as tasksProps, widgetProps, type InboxWidgetProps, type TasksWidgetProps, type TimerProps } from "../summary";
 
 // Tasks due, the inbox and the running timer.
@@ -125,6 +136,231 @@ function FlowplanInbox(props: InboxWidgetProps, environment: WidgetEnvironment) 
   );
 }
 
+
+// ---- Administrators (admin.ts): the instance's state, live numbers and
+// storage. Everyone else sees "Administrators only".
+
+// State: all fine / notices / problems with the first one, version and
+// update, the last backup.
+function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironment) {
+  "widget";
+  const family = environment.widgetFamily || "systemSmall";
+  const brand = "#4146e6";
+  const background = environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8";
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
+        <Image systemName="server.rack" modifiers={[foregroundStyle(brand), font({ size: 15 })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
+  const closed = props.state === "signedOut" || props.state === "notAdmin";
+  const tone = props.state === "problem" ? "#d14343" : props.state === "notice" ? "#c27c0e" : props.state === "ok" ? "#2f855a" : brand;
+  const icon =
+    props.state === "problem" ? "xmark.octagon.fill" : props.state === "notice" ? "exclamationmark.triangle.fill" : props.state === "ok" ? "checkmark.seal.fill" : "lock.fill";
+  if (family === "accessoryInline")
+    return <Text modifiers={[widgetURL(props.url)]}>{closed ? props.message : props.detail ? `${props.headline} · ${props.detail}` : props.headline}</Text>;
+  if (family === "accessoryRectangular")
+    return (
+      <VStack alignment="leading" spacing={1} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
+        <HStack spacing={4}>
+          <Image systemName={icon} modifiers={[font({ textStyle: "caption" })]} />
+          <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.title}</Text>
+        </HStack>
+        <Text modifiers={[font({ textStyle: "headline" }), lineLimit(1)]}>{closed ? props.message : props.headline}</Text>
+        {!closed ? <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.detail || props.backup}</Text> : null}
+      </VStack>
+    );
+  return (
+    <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
+      <HStack spacing={6}>
+        <Image systemName="server.rack" modifiers={[foregroundStyle(brand), font({ size: 13, weight: "semibold" })]} />
+        <Text modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(brand)]}>{props.title}</Text>
+        <Spacer />
+        {!closed && family !== "systemSmall" ? (
+          <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.version}</Text>
+        ) : null}
+      </HStack>
+      {closed ? <Spacer /> : null}
+      {closed ? (
+        <Text modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(3)]}>{props.message}</Text>
+      ) : (
+        <HStack spacing={6}>
+          <Image systemName={icon} modifiers={[foregroundStyle(tone), font({ size: 17, weight: "semibold" })]} />
+          <Text modifiers={[font({ size: family === "systemSmall" ? 16 : 18, weight: "bold" }), lineLimit(1)]}>{props.headline}</Text>
+        </HStack>
+      )}
+      {!closed && props.detail ? <Text modifiers={[font({ size: 12 }), lineLimit(2)]}>{props.detail}</Text> : null}
+      {!closed && props.more && family !== "systemSmall" ? (
+        <Text modifiers={[font({ size: 11 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.more}</Text>
+      ) : null}
+      {!closed ? <Spacer /> : null}
+      {!closed && props.update ? <Text modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(brand), lineLimit(1)]}>{props.update}</Text> : null}
+      {!closed ? (
+        <Text modifiers={[font({ size: 11 }), foregroundStyle(props.backupLate ? "#d14343" : { type: "hierarchical", style: "secondary" }), lineLimit(1)]}>{props.backup}</Text>
+      ) : null}
+    </VStack>
+  );
+}
+
+// Live numbers: active people, requests per minute, error rate, sign-ins
+// today; the requests of the last 24 hours as a line from medium up.
+function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment) {
+  "widget";
+  const family = environment.widgetFamily || "systemMedium";
+  const brand = "#4146e6";
+  const background = environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8";
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
+        <Image systemName="waveform.path.ecg" modifiers={[foregroundStyle(brand), font({ size: 15 })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
+  const open = props.state === "data";
+  const tiles = open ? props.tiles : [];
+  if (family === "accessoryRectangular")
+    return (
+      <VStack alignment="leading" spacing={1} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
+        <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.title}</Text>
+        {open ? (
+          tiles.slice(0, 3).map((tile, index) => (
+            <Text key={index} modifiers={[font({ textStyle: index === 0 ? "headline" : "caption" }), lineLimit(1), monospacedDigit()]}>{`${tile.value} ${tile.label}`}</Text>
+          ))
+        ) : (
+          <Text modifiers={[font({ textStyle: "headline" }), lineLimit(2)]}>{props.message}</Text>
+        )}
+      </VStack>
+    );
+  const shown = family === "systemSmall" ? tiles.slice(0, 2) : tiles;
+  const chart = open && family !== "systemSmall" && props.spark.length > 0;
+  const tile = (index: number) => (
+    <VStack key={index} alignment="leading" spacing={0}>
+      <Text
+        modifiers={[
+          font({ size: family === "systemLarge" ? 26 : 20, weight: "bold", design: "rounded" }),
+          monospacedDigit(),
+          lineLimit(1),
+          ...(index === 2 && props.errorsHigh ? [foregroundStyle("#d14343")] : []),
+        ]}
+      >
+        {shown[index].value}
+      </Text>
+      <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(1)]}>{shown[index].label}</Text>
+    </VStack>
+  );
+  return (
+    <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
+      <HStack spacing={6}>
+        <Image systemName="waveform.path.ecg" modifiers={[foregroundStyle(brand), font({ size: 13, weight: "semibold" })]} />
+        <Text modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(brand)]}>{props.title}</Text>
+      </HStack>
+      {!open ? <Spacer /> : null}
+      {!open ? (
+        <Text modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(3)]}>{props.message}</Text>
+      ) : family === "systemLarge" ? (
+        <VStack alignment="leading" spacing={10}>
+          <HStack spacing={12}>
+            {tile(0)}
+            <Spacer />
+            {tile(1)}
+            <Spacer />
+          </HStack>
+          <HStack spacing={12}>
+            {tile(2)}
+            <Spacer />
+            {tile(3)}
+            <Spacer />
+          </HStack>
+        </VStack>
+      ) : (
+        <HStack spacing={10}>
+          {shown.map((_, index) => tile(index))}
+          <Spacer />
+        </HStack>
+      )}
+      {chart ? (
+        <Chart
+          type="area"
+          data={props.spark.map((y, x) => ({ x, y }))}
+          showGrid={false}
+          animate={false}
+          areaStyle={{ color: brand }}
+          modifiers={[frame({ height: family === "systemLarge" ? 110 : 40 })]}
+        />
+      ) : null}
+      {chart && family === "systemLarge" ? (
+        <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.sparkLabel}</Text>
+      ) : null}
+      <Spacer />
+    </VStack>
+  );
+}
+
+// Storage: database and files, the disk, the fullest workspace's quota.
+function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironment) {
+  "widget";
+  const family = environment.widgetFamily || "systemSmall";
+  const brand = "#4146e6";
+  const late = "#d14343";
+  const background = environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8";
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
+        <Image systemName="internaldrive" modifiers={[foregroundStyle(brand), font({ size: 15 })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
+  const open = props.state === "data";
+  if (family === "accessoryCircular") {
+    const share = props.disk >= 0 ? props.disk : props.quota;
+    return share >= 0 && open ? (
+      <Gauge
+        value={share}
+        currentValueLabel={<Text modifiers={[monospacedDigit()]}>{String(Math.round(share * 100))}</Text>}
+        modifiers={[widgetURL(props.url), gaugeStyle("circularCapacity"), containerBackground({ type: "material", material: "thin" }, "widget")]}
+      >
+        <Image systemName="internaldrive" />
+      </Gauge>
+    ) : (
+      <VStack spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
+        <Image systemName={open ? "internaldrive" : "lock.fill"} modifiers={[font({ size: 18 })]} />
+      </VStack>
+    );
+  }
+  if (family === "accessoryRectangular")
+    return (
+      <VStack alignment="leading" spacing={1} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
+        <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.title}</Text>
+        <Text modifiers={[font({ textStyle: "headline" }), lineLimit(1)]}>{open ? props.used : props.message}</Text>
+        {open ? <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.diskLabel || props.quotaLabel}</Text> : null}
+      </VStack>
+    );
+  const meter = (share: number, label: string) => (
+    <VStack alignment="leading" spacing={3}>
+      <Text modifiers={[font({ size: 11 }), foregroundStyle(share >= 0.9 ? late : { type: "hierarchical", style: "secondary" }), lineLimit(1)]}>{label}</Text>
+      {share >= 0 ? <ProgressView value={share} modifiers={[tint(share >= 0.9 ? late : brand)]} /> : null}
+    </VStack>
+  );
+  return (
+    <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
+      <HStack spacing={6}>
+        <Image systemName="internaldrive" modifiers={[foregroundStyle(brand), font({ size: 13, weight: "semibold" })]} />
+        <Text modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(brand)]}>{props.title}</Text>
+      </HStack>
+      {!open ? <Spacer /> : null}
+      {!open ? (
+        <Text modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(3)]}>{props.message}</Text>
+      ) : null}
+      {open ? <Text modifiers={[font({ size: 24, weight: "bold", design: "rounded" }), lineLimit(1)]}>{props.used}</Text> : null}
+      {open ? <Text modifiers={[font({ size: 11 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.usedLabel}</Text> : null}
+      {open ? <Spacer /> : null}
+      {open && props.disk >= 0 ? meter(props.disk, props.diskLabel) : null}
+      {open ? meter(family === "systemSmall" && props.disk >= 0 ? -1 : props.quota, props.quotaLabel) : null}
+    </VStack>
+  );
+}
+
 // The running timer on the lock screen and in the Dynamic Island.
 function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) {
   "widget";
@@ -177,16 +413,30 @@ function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) 
 // again in the person's language once the app knows it (samples below).
 const samples = (lang: Locale) => {
   const summary = sampleSummary(lang);
-  return { tasks: widgetProps(tasksProps(summary, lang)), inbox: widgetProps(inboxProps(summary, lang)) };
+  const admin = { kind: "data" as const, data: sampleAdminSummary() };
+  return {
+    tasks: widgetProps(tasksProps(summary, lang)),
+    inbox: widgetProps(inboxProps(summary, lang)),
+    status: widgetProps(statusProps(admin, lang)),
+    live: widgetProps(liveProps(admin, lang)),
+    storage: widgetProps(storageProps(admin, lang)),
+  };
 };
-export let tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, samples("en").tasks);
-export let inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, samples("en").inbox);
+const english = samples("en");
+export let tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, english.tasks);
+export let inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, english.inbox);
+export let adminStatusWidget = createWidget<AdminStatusProps>("FlowplanInstance", FlowplanInstance, english.status);
+export let adminLiveWidget = createWidget<AdminLiveProps>("FlowplanLive", FlowplanLive, english.live);
+export let adminStorageWidget = createWidget<AdminStorageProps>("FlowplanStorage", FlowplanStorage, english.storage);
 let samplesLocale: Locale = "en";
 export function localizeSamples(lang: Locale) {
   if (lang === samplesLocale) return;
   samplesLocale = lang;
-  const { tasks, inbox } = samples(lang);
-  tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, tasks);
-  inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, inbox);
+  const sample = samples(lang);
+  tasksWidget = createWidget<TasksWidgetProps>("FlowplanTasks", FlowplanTasks, sample.tasks);
+  inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, sample.inbox);
+  adminStatusWidget = createWidget<AdminStatusProps>("FlowplanInstance", FlowplanInstance, sample.status);
+  adminLiveWidget = createWidget<AdminLiveProps>("FlowplanLive", FlowplanLive, sample.live);
+  adminStorageWidget = createWidget<AdminStorageProps>("FlowplanStorage", FlowplanStorage, sample.storage);
 }
 export const timerActivity = createLiveActivity<TimerProps>("FlowplanTimer", FlowplanTimer);
