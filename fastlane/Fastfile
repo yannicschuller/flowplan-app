@@ -250,6 +250,8 @@ platform :ios do
       app_version: package_version,
       metadata_path: File.join(ROOT, "store/app-store"),
       screenshots_path: File.join(ROOT, "store/app-store/screenshots"),
+      # The screenshots and the preview video live next to the locale folders.
+      ignore_language_directory_validation: true,
       app_rating_config_path: File.join(ROOT, "store/app-store/app_rating_config.json"),
       app_review_information: review_information,
       skip_binary_upload: true,
