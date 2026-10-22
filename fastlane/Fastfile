@@ -19,8 +19,6 @@
 
 require "json"
 require "securerandom"
-require "tmpdir"
-require "fileutils"
 
 ROOT = File.expand_path("..", __dir__)
 BUNDLE_ID = "app.flowplan.mobile"
@@ -247,16 +245,10 @@ platform :ios do
   def upload_listing(screenshots: true, submit: false)
     review = review_information
     metadata = File.join(ROOT, "store/app-store")
-    # App Store Connect only takes review details together with a contact
-    # e-mail and phone number. Until REVIEW_EMAIL and REVIEW_PHONE are set,
-    # upload from a copy without review_information so the rest goes through.
+    # deliver always reads the version's review details, and App Store
+    # Connect only creates them together with a contact e-mail and phone.
     unless review[:email_address] && review[:phone_number]
-      UI.important("No REVIEW_EMAIL / REVIEW_PHONE set: the review information is skipped in this upload.")
-      UI.user_error!("Submitting for review needs REVIEW_EMAIL and REVIEW_PHONE.") if submit
-      copy = Dir.mktmpdir("flowplan-metadata")
-      FileUtils.cp_r(Dir.glob(File.join(metadata, "*")).reject { |path| File.basename(path) == "review_information" }, copy)
-      metadata = copy
-      review = {}
+      UI.user_error!("Set the secrets REVIEW_EMAIL and REVIEW_PHONE (international format, e.g. +49 151 2345678) – App Store Connect needs a review contact before the listing can be uploaded. DEMO_USER / DEMO_PASSWORD can follow later.")
     end
     deliver(
       api_key: api_key,
