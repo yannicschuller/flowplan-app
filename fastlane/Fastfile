@@ -19,6 +19,8 @@
 
 require "json"
 require "securerandom"
+require "tmpdir"
+require "fileutils"
 
 ROOT = File.expand_path("..", __dir__)
 BUNDLE_ID = "app.flowplan.mobile"
@@ -243,17 +245,30 @@ platform :ios do
   # off) screenshots for iPhone and iPad from store/app-store, for the
   # version in package.json. Submits for review only when asked.
   def upload_listing(screenshots: true, submit: false)
+    review = review_information
+    metadata = File.join(ROOT, "store/app-store")
+    # App Store Connect only takes review details together with a contact
+    # e-mail and phone number. Until REVIEW_EMAIL and REVIEW_PHONE are set,
+    # upload from a copy without review_information so the rest goes through.
+    unless review[:email_address] && review[:phone_number]
+      UI.important("No REVIEW_EMAIL / REVIEW_PHONE set: the review information is skipped in this upload.")
+      UI.user_error!("Submitting for review needs REVIEW_EMAIL and REVIEW_PHONE.") if submit
+      copy = Dir.mktmpdir("flowplan-metadata")
+      FileUtils.cp_r(Dir.glob(File.join(metadata, "*")).reject { |path| File.basename(path) == "review_information" }, copy)
+      metadata = copy
+      review = {}
+    end
     deliver(
       api_key: api_key,
       app_identifier: BUNDLE_ID,
       platform: "ios",
       app_version: package_version,
-      metadata_path: File.join(ROOT, "store/app-store"),
-      screenshots_path: File.join(ROOT, "store/app-store/screenshots"),
+      metadata_path: metadata,
+      screenshots_path: File.join(metadata, "screenshots"),
       # The screenshots and the preview video live next to the locale folders.
       ignore_language_directory_validation: true,
-      app_rating_config_path: File.join(ROOT, "store/app-store/app_rating_config.json"),
-      app_review_information: review_information,
+      app_rating_config_path: File.join(metadata, "app_rating_config.json"),
+      app_review_information: review,
       skip_binary_upload: true,
       skip_app_version_update: false,
       skip_screenshots: !screenshots,
