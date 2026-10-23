@@ -14,6 +14,7 @@ import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, widgetProps,
 import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary, type AdminState } from "../admin";
 import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
 import type * as IosWidgets from "../widgets/ios";
+import { refreshSuite } from "./suite";
 
 // expo-widgets only on iOS: Android draws its widgets with
 // react-native-android-widget, the timer as notification.
@@ -99,6 +100,9 @@ export async function apply(summary: Summary | null, admin: AdminState = null) {
     updateWidgets(summary, summary ? admin : null),
     updateTimer(summary),
     Notifications.setBadgeCountAsync(summary?.unread ?? 0),
+    // The configurable widgets: one batched request (Android) or a reload
+    // of the extension (iOS); signed out they ask to sign in.
+    refreshSuite(),
   ]);
 }
 

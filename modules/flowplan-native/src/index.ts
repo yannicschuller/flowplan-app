@@ -22,8 +22,38 @@ export type PencilAction = {
   preferred: "switchEraser" | "switchPrevious" | "showColorPalette" | "showInkAttributes" | "showContextualPalette" | "ignore";
 };
 
+// The configurable widgets' session (iOS: the widget extension reads it
+// from the App Group's keychain). token null: signed out.
+export type WidgetSession = { server: string; token: string | null; profile: string; lang: string };
+
+// An ongoing notification (Android): Android's counterpart of a Live
+// Activity – focus, meeting, import/export, voice memo, incident.
+export type OngoingOptions = {
+  id: string;
+  channelId: string;
+  channelName: string;
+  channelDescription: string;
+  title: string;
+  text: string;
+  label: string;
+  url: string;
+  // A running clock: up from `start`, or down to `end` (ms).
+  start?: number;
+  end?: number;
+  // 0–100, or -1 for indeterminate; left out without a bar.
+  progress?: number;
+  // Buttons that open the app with a link.
+  actions?: { label: string; url: string }[];
+};
+
 type NativeModule = {
   getManagedServer(): string | null;
+  setWidgetSession?(session: WidgetSession | null): void;
+  reloadWidgets?(): void;
+  consumePendingLink?(): string | null;
+  donateShortcut?(name: string): void;
+  showOngoing?(options: OngoingOptions): void;
+  hideOngoing?(id: string): void;
   consumeSharedText(): SharedText | null;
   showTimer(options: TimerOptions): void;
   hideTimer(): void;
@@ -32,6 +62,7 @@ type NativeModule = {
   addListener(event: "onShare", listener: (share: SharedText) => void): EventSubscription;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
   addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
+  addListener(event: "onAppLink", listener: (event: { url: string }) => void): EventSubscription;
 };
 
 const native = requireOptionalNativeModule<NativeModule>("FlowplanNative");
@@ -80,4 +111,56 @@ export function setEdgeSwipe(enabled: boolean) {
 export function addEdgeSwipeListener(listener: () => void) {
   if (Platform.OS !== "ios" || !native) return { remove() {} };
   return native.addListener("onEdgeSwipe", listener);
+}
+
+// iOS: the session of the configurable widgets; their settings stay when it
+// is cleared (signed out), their answers go.
+export function setWidgetSession(session: WidgetSession | null) {
+  if (Platform.OS !== "ios") return;
+  try {
+    native?.setWidgetSession?.(session);
+  } catch {}
+}
+export function reloadWidgets() {
+  if (Platform.OS !== "ios") return;
+  try {
+    native?.reloadWidgets?.();
+  } catch {}
+}
+
+// iOS: links from App Shortcuts and Siri that opened the app.
+export function consumePendingLink(): string | null {
+  if (Platform.OS !== "ios") return null;
+  try {
+    return native?.consumePendingLink?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+export function addAppLinkListener(listener: (url: string) => void) {
+  if (Platform.OS !== "ios" || !native) return { remove() {} };
+  return native.addListener("onAppLink", ({ url }) => listener(url));
+}
+
+// iOS: tells Siri what the person does, for suggestions.
+export function donateShortcut(name: "note" | "voice" | "timer" | "focus" | "today") {
+  if (Platform.OS !== "ios") return;
+  try {
+    native?.donateShortcut?.(name);
+  } catch {}
+}
+
+// Android: ongoing notifications for focus, meetings, imports, voice memos
+// and incidents.
+export function showOngoing(options: OngoingOptions) {
+  if (Platform.OS !== "android") return;
+  try {
+    native?.showOngoing?.(options);
+  } catch {}
+}
+export function hideOngoing(id: string) {
+  if (Platform.OS !== "android") return;
+  try {
+    native?.hideOngoing?.(id);
+  } catch {}
 }

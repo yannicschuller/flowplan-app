@@ -28,6 +28,7 @@ import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actio
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
 import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
+import { clearSuiteAnswers, forgetSuiteProfile, refreshSuite } from "./native/suite";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -254,6 +255,7 @@ function Root() {
     const token = store.deviceToken();
     signedOut();
     store.forgetInstance(current.id);
+    void clearSuiteAnswers(current.id);
     pendingPath.current = null;
     void leaveInstance(current.server, token);
   };
@@ -264,6 +266,9 @@ function Root() {
     if (id === store.profiles().active) return;
     leaveActive();
     saveProfiles(switchProfile(store.profiles(), id));
+    // The widgets belong to the new profile now (signed in there again
+    // after its registration).
+    void refreshSuite({ force: true });
   };
 
   // A new instance from the setup (checked there): a new profile, active.
@@ -273,6 +278,7 @@ function Root() {
     leaveActive();
     saveProfiles(state);
     setSetup(false);
+    void refreshSuite({ force: true });
   };
 
   // Signs out of the active profile's instance and removes the profile; the
@@ -285,6 +291,8 @@ function Root() {
     await shell.current?.signOut();
     const next = removeProfile(store.profiles(), current.id);
     saveProfiles(next);
+    void forgetSuiteProfile(current.id);
+    void refreshSuite({ force: true });
     if (!next.active) setSetup(true);
   };
 

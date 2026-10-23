@@ -241,3 +241,15 @@ test("every text of the app exists in German, English and French", () => {
       assert.deepEqual(names(text), names(strings.de[key as keyof typeof strings.de]), `${lang}.${key}`);
     }
 });
+
+test("the widgets' session follows the active profile; signing out keeps it without token", async () => {
+  const { widgetSessionFor } = await import("../src/widgets/suite");
+  const { addProfile, switchProfile } = await import("../src/profiles");
+  let state = addProfile({ profiles: [], active: null }, { server: "https://work.example", name: "Work" }, "work").state;
+  state = addProfile(state, { server: "https://home.example", name: "Home" }, "home").state;
+  assert.deepEqual(widgetSessionFor(state, "fpd_home", "de"), { server: "https://home.example", token: "fpd_home", profile: "home", lang: "de" });
+  // Switched: another profile, its own token (none until it registered).
+  state = switchProfile(state, "work");
+  assert.deepEqual(widgetSessionFor(state, null, "fr"), { server: "https://work.example", token: null, profile: "work", lang: "fr" });
+  assert.equal(widgetSessionFor({ profiles: [], active: null }, "fpd_x", "en"), null);
+});

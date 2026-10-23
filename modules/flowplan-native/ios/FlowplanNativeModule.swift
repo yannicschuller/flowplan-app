@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import UIKit
 import WebKit
+import WidgetKit
 
 /// What the Flowplan app needs from iOS beyond Expo's modules:
 /// - the address a managed installation suggests (MDM "Managed App
@@ -11,16 +12,70 @@ import WebKit
 /// - the swipe from the left edge for "back" (the web view's own gesture
 ///   walks its history, which is not what back means in Flowplan): a chevron
 ///   follows the finger, and the app asks the page what back is.
+/// - the session of the configurable widgets (WidgetShared.swift): the
+///   widget extension reads instance, device token, profile and language
+///   from the App Group's keychain and asks the instance itself;
+/// - links that App Shortcuts and Siri hand to the app ("Voice memo",
+///   "Start focus"), and donations of those shortcuts.
 /// Sharing and the timer notification are Android's (iOS has the Live
 /// Activity from expo-widgets instead).
 public class FlowplanNativeModule: Module {
   private var pencil: PencilObserver?
   private var edgeSwipe: EdgeSwipeObserver?
+  private var linkObserver: NSObjectProtocol?
 
   public func definition() -> ModuleDefinition {
     Name("FlowplanNative")
 
-    Events("onShare", "onPencil", "onEdgeSwipe")
+    Events("onShare", "onPencil", "onEdgeSwipe", "onAppLink")
+
+    OnCreate {
+      // App Intents that open the app (FlowplanAppIntents.swift) leave
+      // their link here; a running app gets it at once.
+      self.linkObserver = NotificationCenter.default.addObserver(forName: Notification.Name("FlowplanAppLink"), object: nil, queue: .main) { [weak self] _ in
+        if let link = Self.takePendingLink() {
+          self?.sendEvent("onAppLink", ["url": link])
+        }
+      }
+    }
+
+    // Instance, device token (nil: signed out – the widgets ask to sign in
+    // and keep their settings), profile and language for the widgets.
+    // Another profile: the previous one's answers go.
+    Function("setWidgetSession") { (session: [String: Any]?) in
+      let previous = FPKeychain.load()
+      guard let session,
+            let server = session["server"] as? String,
+            let profile = session["profile"] as? String else {
+        if let previous { FPStore.clear(profile: previous.profile) }
+        FPKeychain.save(nil)
+        Self.reloadWidgets()
+        return
+      }
+      let next = FPSession(server: server, token: session["token"] as? String, profile: profile, lang: (session["lang"] as? String) ?? "en")
+      if previous == next { return }
+      if let previous, previous.profile != next.profile || previous.server != next.server || next.token == nil {
+        FPStore.clear(profile: previous.profile)
+      }
+      FPKeychain.save(next)
+      if next.token != nil { FPStore.signedIn(next) }
+      Self.reloadWidgets()
+    }
+
+    // After a change in the page or the app: widgets and controls ask again.
+    Function("reloadWidgets") {
+      Self.reloadWidgets()
+    }
+
+    Function("consumePendingLink") { () -> String? in
+      Self.takePendingLink()
+    }
+
+    // Siri suggestions: "note", "voice", "timer", "focus", "today".
+    Function("donateShortcut") { (name: String) in
+      guard let type = NSClassFromString("FlowplanIntentDonor") as? NSObject.Type else { return }
+      _ = type.init().perform(NSSelectorFromString("donate:"), with: name)
+    }
 
     Function("getManagedServer") { () -> String? in
       let managed = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
@@ -68,6 +123,9 @@ public class FlowplanNativeModule: Module {
     }
 
     OnDestroy {
+      if let linkObserver = self.linkObserver {
+        NotificationCenter.default.removeObserver(linkObserver)
+      }
       let observer = self.pencil
       let edge = self.edgeSwipe
       Task { @MainActor in
@@ -75,6 +133,24 @@ public class FlowplanNativeModule: Module {
         edge?.detach()
       }
     }
+  }
+}
+
+extension FlowplanNativeModule {
+  static func reloadWidgets() {
+    FPWidgets.reloadAll()
+    if #available(iOS 18.0, *) {
+      ControlCenter.shared.reloadAllControls()
+    }
+  }
+
+  static func takePendingLink() -> String? {
+    guard let defaults = FPShared.defaults, let link = defaults.string(forKey: "flowplan.pendingLink") else { return nil }
+    defaults.removeObject(forKey: "flowplan.pendingLink")
+    // Only the app's own links, fresh ones.
+    let at = defaults.double(forKey: "flowplan.pendingLinkAt")
+    guard link.hasPrefix("flowplan://"), Date().timeIntervalSince1970 - at < 120 else { return nil }
+    return link
   }
 }
 

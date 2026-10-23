@@ -6,11 +6,11 @@ import { FlexWidget, TextWidget, type WidgetTaskHandlerProps } from "react-nativ
 import type { InboxWidgetProps, TasksWidgetProps } from "../summary";
 import type { AdminLiveProps, AdminStatusProps, AdminStorageProps } from "../admin";
 
-type Theme = { background: string; text: string; muted: string; brand: string; late: string; line: string; warn: string; ok: string };
-const LIGHT: Theme = { background: "#fcfbf8", text: "#1d1b22", muted: "#6b6876", brand: "#4146e6", late: "#c23b3b", line: "#ebe8f2", warn: "#b7791f", ok: "#2f855a" };
-const DARK: Theme = { background: "#16151b", text: "#f2f0f7", muted: "#a19dad", brand: "#8f93ff", late: "#ff7a7a", line: "#2a2832", warn: "#f6c25b", ok: "#68d391" };
+export type Theme = { background: string; text: string; muted: string; brand: string; late: string; line: string; warn: string; ok: string };
+export const LIGHT: Theme = { background: "#fcfbf8", text: "#1d1b22", muted: "#6b6876", brand: "#4146e6", late: "#c23b3b", line: "#ebe8f2", warn: "#b7791f", ok: "#2f855a" };
+export const DARK: Theme = { background: "#16151b", text: "#f2f0f7", muted: "#a19dad", brand: "#8f93ff", late: "#ff7a7a", line: "#2a2832", warn: "#f6c25b", ok: "#68d391" };
 type Hex = `#${string}`;
-const hex = (value: string) => value as Hex;
+export const hex = (value: string) => value as Hex;
 
 function TasksView({ props, theme, rows }: { props: TasksWidgetProps; theme: Theme; rows: number }) {
   const items = props.items.slice(0, rows);

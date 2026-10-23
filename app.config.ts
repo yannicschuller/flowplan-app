@@ -2,8 +2,46 @@
 // Xcode and Gradle projects from it (ios/ and android/ are not kept in the
 // repository). See README → How it works.
 import type { ExpoConfig } from "expo/config";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { buildNumber } from "./src/version";
+
+// The native texts of the widgets, controls and App Shortcuts (German,
+// English, French): Localizable.strings of the app and the widget extension.
+const nativeStrings = require("./plugins/widget-suite/strings") as {
+  strings: Record<string, { de: string; fr: string }>;
+  gallery: Record<string, { label: string[]; description: string[] }>;
+  localizable: (table: Record<string, { de: string; fr: string }>, lang: string) => Record<string, string>;
+  galleryStrings: (lang: string) => Record<string, string>;
+};
+const locale = (lang: "de" | "en" | "fr") => {
+  const json = JSON.parse(readFileSync(`./locales/${lang}.json`, "utf8")) as { ios: Record<string, string>; android: Record<string, string> };
+  return {
+    ...json,
+    ios: { ...json.ios, "Localizable.strings": nativeStrings.localizable(nativeStrings.strings, lang) },
+    // The widget gallery (labels and descriptions) in the person's language.
+    android: { ...json.android, ...nativeStrings.galleryStrings(lang) },
+  };
+};
+// The configurable widgets on Android and their first size (cells).
+const SUITE_ANDROID: [string, [number, number]][] = [
+  ["FlowplanCapture", [4, 1]],
+  ["FlowplanTaskList", [4, 2]],
+  ["FlowplanAgenda", [4, 2]],
+  ["FlowplanPinned", [4, 2]],
+  ["FlowplanCounter", [2, 2]],
+  ["FlowplanJournal", [4, 2]],
+  ["FlowplanTime", [4, 2]],
+  ["FlowplanMentions", [4, 2]],
+  ["FlowplanForms", [2, 2]],
+];
+// Android widgets: name, label and description from the gallery table.
+const androidWidget = (name: string, size: Record<string, unknown>) => ({
+  name,
+  label: `@string/widget_label_${name.toLowerCase()}`,
+  description: nativeStrings.gallery[name].description[1],
+  updatePeriodMillis: 1800000,
+  ...size,
+});
 
 const { version } = require("./package.json") as { version: string };
 const build = buildNumber(version, process.env.FLOWPLAN_BUILD);
@@ -33,11 +71,7 @@ const config: ExpoConfig = {
   icon: "./assets/icon.png",
   backgroundColor: BACKGROUND.light,
   primaryColor: BRAND,
-  locales: {
-    de: "./locales/de.json",
-    en: "./locales/en.json",
-    fr: "./locales/fr.json",
-  },
+  locales: { de: locale("de"), en: locale("en"), fr: locale("fr") },
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     buildNumber: String(build),
@@ -143,6 +177,10 @@ const config: ExpoConfig = {
     "expo-web-browser",
     "expo-localization",
     "expo-quick-actions",
+    // iOS: the configurable widgets, controls and App Shortcuts in Swift,
+    // added to expo-widgets' extension and the app. Before expo-widgets:
+    // mods run last-added first (plugins/with-widget-suite.js).
+    WIDGETS && "./plugins/with-widget-suite",
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).
     WIDGETS && [
@@ -154,8 +192,8 @@ const config: ExpoConfig = {
         widgets: [
           {
             name: "FlowplanTasks",
-            displayName: "Flowplan",
-            description: "Tasks due, the inbox and the running timer.",
+            displayName: nativeStrings.gallery.FlowplanTasks.label[1],
+            description: nativeStrings.gallery.FlowplanTasks.description[1],
             ios: {
               // systemExtraLarge: the iPad's widest widget.
               supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "systemExtraLarge", "accessoryRectangular", "accessoryInline"],
@@ -167,8 +205,8 @@ const config: ExpoConfig = {
           },
           {
             name: "FlowplanInbox",
-            displayName: "Flowplan Inbox",
-            description: "Unread notifications.",
+            displayName: nativeStrings.gallery.FlowplanInbox.label[1],
+            description: nativeStrings.gallery.FlowplanInbox.description[1],
             ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
@@ -176,96 +214,56 @@ const config: ExpoConfig = {
           // "Administrators only".
           {
             name: "FlowplanInstance",
-            displayName: "Flowplan Instance",
-            description: "For administrators: state, version and last backup.",
+            displayName: nativeStrings.gallery.FlowplanInstance.label[1],
+            description: nativeStrings.gallery.FlowplanInstance.description[1],
             ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
           {
             name: "FlowplanLive",
-            displayName: "Flowplan Live",
-            description: "For administrators: active people, requests, errors and sign-ins.",
+            displayName: nativeStrings.gallery.FlowplanLive.label[1],
+            description: nativeStrings.gallery.FlowplanLive.description[1],
             ios: { supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryRectangular"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
           {
             name: "FlowplanStorage",
-            displayName: "Flowplan Storage",
-            description: "For administrators: storage, disk and quotas.",
+            displayName: nativeStrings.gallery.FlowplanStorage.label[1],
+            description: nativeStrings.gallery.FlowplanStorage.description[1],
             ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
         ],
       },
     ],
-    // Android: home screen widgets (RemoteViews, rendered from React).
+    // Android: the gallery's English labels and descriptions (translations:
+    // locales above); before react-native-android-widget so that its
+    // untranslatable descriptions are replaced (mods run last-added first).
+    "./plugins/with-widget-gallery",
+    // Android: home screen widgets (RemoteViews, rendered from React). The
+    // configurable ones have settings per widget ("Configure" on the home
+    // screen, src/screens/WidgetConfig.tsx) but work without them.
     [
       "react-native-android-widget",
       {
         widgets: [
-          {
-            name: "FlowplanTasks",
-            label: "Flowplan",
-            description: "Tasks due, the inbox and the running timer.",
-            minWidth: "250dp",
-            minHeight: "110dp",
-            targetCellWidth: 4,
-            targetCellHeight: 2,
-            maxResizeWidth: "500dp",
-            maxResizeHeight: "500dp",
-            resizeMode: "horizontal|vertical",
-            updatePeriodMillis: 1800000,
-          },
-          {
-            name: "FlowplanInbox",
-            label: "Flowplan Inbox",
-            description: "Unread notifications.",
-            minWidth: "110dp",
-            minHeight: "110dp",
-            targetCellWidth: 2,
-            targetCellHeight: 2,
-            resizeMode: "none",
-            updatePeriodMillis: 1800000,
-          },
-          {
-            name: "FlowplanInstance",
-            label: "Flowplan Instance",
-            description: "For administrators: state, version and last backup.",
-            minWidth: "110dp",
-            minHeight: "110dp",
-            targetCellWidth: 2,
-            targetCellHeight: 2,
-            maxResizeWidth: "400dp",
-            maxResizeHeight: "250dp",
-            resizeMode: "horizontal|vertical",
-            updatePeriodMillis: 1800000,
-          },
-          {
-            name: "FlowplanLive",
-            label: "Flowplan Live",
-            description: "For administrators: active people, requests, errors and sign-ins.",
-            minWidth: "250dp",
-            minHeight: "110dp",
-            targetCellWidth: 4,
-            targetCellHeight: 2,
-            maxResizeWidth: "500dp",
-            maxResizeHeight: "300dp",
-            resizeMode: "horizontal|vertical",
-            updatePeriodMillis: 1800000,
-          },
-          {
-            name: "FlowplanStorage",
-            label: "Flowplan Storage",
-            description: "For administrators: storage, disk and quotas.",
-            minWidth: "110dp",
-            minHeight: "110dp",
-            targetCellWidth: 2,
-            targetCellHeight: 2,
-            maxResizeWidth: "400dp",
-            maxResizeHeight: "250dp",
-            resizeMode: "horizontal|vertical",
-            updatePeriodMillis: 1800000,
-          },
+          androidWidget("FlowplanTasks", { minWidth: "250dp", minHeight: "110dp", targetCellWidth: 4, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "500dp", resizeMode: "horizontal|vertical" }),
+          androidWidget("FlowplanInbox", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, resizeMode: "none" }),
+          androidWidget("FlowplanInstance", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),
+          androidWidget("FlowplanLive", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "300dp", resizeMode: "horizontal|vertical" }),
+          androidWidget("FlowplanStorage", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),
+          ...SUITE_ANDROID.map(([name, cells]) =>
+            androidWidget(name, {
+              minWidth: cells[0] > 2 ? "250dp" : "110dp",
+              minHeight: "110dp",
+              targetCellWidth: cells[0],
+              targetCellHeight: cells[1],
+              maxResizeWidth: "500dp",
+              maxResizeHeight: "500dp",
+              resizeMode: "horizontal|vertical",
+              widgetFeatures: "reconfigurable|configuration_optional",
+            }),
+          ),
         ],
       },
     ],

@@ -10,6 +10,8 @@
 // plugins/widget-suite/); Android stores them per appWidgetId and profile
 // (widget-config.ts). Pure functions – tested in test/widget-suite.test.ts.
 
+import { activeProfile, type ProfileState } from "../profiles";
+
 export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms"] as const;
 export type SuiteKind = (typeof SUITE_KINDS)[number];
 // Kinds the app asks for itself: Live Activities and system controls.
@@ -206,6 +208,14 @@ export function configKey(kind: string, config: Record<string, unknown>) {
           )
         : value;
   return `${kind}:${JSON.stringify(stable(config))}`;
+}
+
+// What the iOS widget extension gets (native/suite.ts): the active
+// profile's instance and device token. Signed out (no token) the widgets
+// keep their settings and ask to sign in; without a profile they are empty.
+export function widgetSessionFor(state: ProfileState, token: string | null, lang: string) {
+  const profile = activeProfile(state);
+  return profile ? { server: profile.server, token: token || null, profile: profile.id, lang } : null;
 }
 
 // The instance answers at most 16 widgets per data request.

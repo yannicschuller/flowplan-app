@@ -7,12 +7,24 @@ import { store } from "../store";
 import { inboxWidget, tasksWidget } from "../summary";
 import { adminLiveWidget, adminStatusWidget, adminStorageWidget } from "../admin";
 import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
+import { kindOfWidget } from "../widgets/suite";
 import { adminStateFor, apply, fetchSummary } from "./sync";
+import { handleSuiteClick, refreshAndroidSuite, suiteRender, widgetRemoved } from "./suite";
 
-export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget }: WidgetTaskHandlerProps) {
-  if (widgetAction === "WIDGET_DELETED" || widgetAction === "WIDGET_CLICK") return;
+export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget, clickAction, clickActionData }: WidgetTaskHandlerProps) {
   const lang = pickLocale(getLocales().map((l) => l.languageTag));
   setLocale(lang);
+  // The configurable widgets (native/suite.ts): their own requests.
+  const kind = kindOfWidget(widgetInfo.widgetName);
+  if (kind) {
+    if (widgetAction === "WIDGET_DELETED") return widgetRemoved(widgetInfo.widgetId);
+    if (widgetAction === "WIDGET_CLICK") return clickAction ? handleSuiteClick(clickAction, clickActionData ?? {}) : undefined;
+    // Drawn at once from what is known, then fresh for the regular update.
+    renderWidget(suiteRender(kind, widgetInfo.widgetId, widgetInfo));
+    if (widgetAction === "WIDGET_UPDATE" || widgetAction === "WIDGET_ADDED") await refreshAndroidSuite({ fetch: true });
+    return;
+  }
+  if (widgetAction === "WIDGET_DELETED" || widgetAction === "WIDGET_CLICK") return;
   let summary = store.summary(),
     admin = store.adminState();
   // Fresh data for the regular update; added and resized widgets show at once.
