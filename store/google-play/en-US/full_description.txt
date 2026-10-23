@@ -15,6 +15,9 @@ One entry a day, with a review, streaks and "On this day". For a diary, a work l
 FOR TEAMS
 Teamspaces, permissions, comments, mentions, notifications, templates and search across everything.
 
+WIDGETS AND QUICK CAPTURE
+Check off tasks right on the home screen, see today's appointments, favorites, numbers from your databases, journal and habits, this week's time, mentions and form responses – each widget shows one thing and has its own settings. Capture notes, voice memos and photos in one tap, also from Quick Settings. Focus, the meeting now, imports and the timer stay visible as notifications.
+
 YOUR DATA, YOUR SERVER
 Flowplan is open source (AGPL) and can be self-hosted. The app connects to app.flowplan.org or to your company's Flowplan instance – just enter its address on first start. Several instances, for example work and private, are saved as profiles and switched with one tap. Your content lives on that server, not in the app. The app itself collects no data and contains no tracking.
 

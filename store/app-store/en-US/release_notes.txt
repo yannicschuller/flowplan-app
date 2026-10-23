@@ -1,8 +1,9 @@
 The first version of Flowplan for iPhone and iPad:
 • Connects to app.flowplan.org or your own Flowplan instances, several of them as profiles
 • Push notifications with the number of unread ones on the app icon
-• Widgets for the home and lock screen: tasks due, inbox, running timer – and for administrators the state, live numbers and storage of the instance
-• The running timer as Live Activity on the lock screen and in the Dynamic Island
+• Widgets with settings of their own: tasks to check off, today, favorites, counters, journal and habits, time, mentions, forms, quick capture – for administrators state, live numbers and storage
+• Live Activities: timer, focus, the meeting now, imports, voice memo
+• Siri, Shortcuts, Control Center and the Action button: note, timer, voice memo, focus, “What's on today?”
 • Sign in with a passkey or SSO, app lock with Face ID
-• Quick actions: inbox, my tasks, search, new page
+• Quick actions: inbox, my tasks, search, new note, voice memo
 • Apple Pencil on whiteboards: pressure, eraser, double-tap and squeeze; fingers move the board

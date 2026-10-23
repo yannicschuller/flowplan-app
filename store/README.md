@@ -128,6 +128,8 @@ The app itself collects nothing. It has:
 - no analytics, ads or tracking SDKs;
 - no third-party code apart from Expo and React Native;
 - on the device only: the addresses and names of the saved profiles (instances), per profile a device token for the widgets and the last summary the widgets show – for administrators also the instance's numbers (counts and states, no personal data) – (in the keychain / Keystore), and the web view's own storage (session cookies per instance, offline data of the web app);
+- for the configurable widgets: each widget's settings (ids of pages, views and properties) and the last answers they show (task titles, appointments, names of favorites …), per profile – iOS in the App Group the app shares with its widget extension (the device token in the App Group's keychain), Android in the app's own files. Pages behind a journal PIN or end-to-end encrypted show only their state; switching or leaving a profile removes its answers;
+- voice memos and photos from the capture screen go straight to the user's instance (no copy is kept beyond the upload);
 - push notifications through Expo's push service: the instance sends the app's push token, a general text ("something new in the inbox") and the number of unread notifications to Expo, which hands them to Apple or Google.
 
 Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing – also when it is one of several profiles in the app: the app sends nothing of one profile to another instance or to the developer. Check that the privacy policy at flowplan.org/datenschutz names the app.
@@ -143,6 +145,7 @@ Apple and Google, however, count the data that the developer's own service recei
   | User Content | Photos or Videos, Other User Content | Pages, uploads, comments |
   | Identifiers | User ID | Account |
   | Identifiers | Device ID | Push notifications (the push token) |
+  | User Content | Audio Data | Voice memos from the capture screen (widgets, Siri), uploaded to the user's pages |
 
   The hosted service also writes logs of IP addresses for security. Apple's *Diagnostics* category covers crash and performance data, so leave it unselected unless the server stores such data for analysis.
 - Privacy policy URL: `https://flowplan.org/datenschutz`
@@ -156,6 +159,7 @@ Apple and Google, however, count the data that the developer's own service recei
   - **Personal info:** name, email address, user IDs;
   - **Photos and videos:** photos (if uploaded);
   - **Files and docs:** files and docs (pages, uploads).
+  - **Audio:** voice or sound recordings (voice memos the user records for a page; optional).
   - **Device or other IDs:** the push token, for push notifications (shared with no one; Expo, Apple and Google only deliver).
 - No location, no contacts, no financial info, no app activity for analytics.
 - **Ads:** no. **Target audience:** 18+ (work and productivity app, not designed for children). **News app:** no. **Government app:** no.
@@ -215,7 +219,10 @@ Apple and Google, however, count the data that the developer's own service recei
    - links to other sites;
    - **Profiles**: add a second instance, switch with the quick action **Switch profile** and in the app settings, rename, **Sign out and remove the profile**; after switching, widgets, badge and notifications show the active profile only, and switching back finds you still signed in;
    - an update from a version with a single address keeps that instance (as the first profile) and its sign-in;
-   - **Widgets** (add each from the gallery – it shows sample data): *Flowplan* and *Flowplan Inbox* show *Open Flowplan to sign in* until you have signed in, then your tasks and inbox, and follow changes within seconds; as an administrator *Flowplan Instance*, *Flowplan Live* and *Flowplan Storage* show the instance (others see *Administrators only*), each opens its page of the administration;
+   - **Widgets** (add each from the gallery – it shows sample data): *Flowplan* and *Flowplan Inbox* show *Open Flowplan to sign in* until you have signed in, then your tasks and inbox, and follow changes within seconds; as an administrator *Flowplan Instance*, *Flowplan Live* and *Flowplan Storage* show the instance (others see *Administrators only*), each opens its page of the administration; edit each one's setting (Live: error rate → the lock screen gauge);
+   - **Configurable widgets**: add each of the nine without changing anything (it works with its defaults; *Database counter* and *Form responses* ask for a page), then edit its settings (iOS: long press → Edit Widget, lists come from the instance; Android: long press → settings). Check off a task, a habit, mark a mention read, start and stop the timer – on the home screen, without opening the app. Sign out in the page: every widget says *Open Flowplan to sign in* and keeps its settings; sign in again: they fill at once. Switch profiles: nothing of the other instance stays;
+   - **Live Activities / ongoing notifications**: start focus (Control Center or quick action), a meeting in a calendar view that runs now (*Open notes*), an import (indeterminate bar), a voice memo (lock the screen, *Stop* from the lock screen); as an administrator an incident (e.g. a failed backup) appears and ends when it is fixed;
+   - **Siri / Shortcuts** in German, English, French: "Notiz zu Flowplan hinzufügen", "Was steht heute in Flowplan an", "Timer in Flowplan starten"; Control Center controls and the Action button (iOS 18); Android Quick Settings tile *New note*;
    - **Back**: the swipe from the left edge (iOS) and Android's back close an open dialog or menu first, then go from a record to its database, from a settings section to the overview and from a page to the previous one; on the start page the iOS gesture is off and Android's back leaves the app;
    - sharing into Flowplan (Android);
    - dark mode.
@@ -231,6 +238,21 @@ Apple and Google, however, count the data that the developer's own service recei
    - promote the internal release to closed testing (if required), then to production;
    - for the promo video, upload `flowplan-preview-iphone.mp4` to YouTube and enter the URL in `google-play/<locale>/video.txt`.
 
+### Widgets, Live Activities, Siri: what Apple and Google look at
+
+- **Background audio (iOS) and the microphone foreground service (Android).** Voice memos keep recording when the screen locks (`UIBackgroundModes: audio`, expo-audio's `enableBackgroundRecording`); the recording shows as Live Activity / ongoing notification with *Stop*. In App Review's notes and in Play Console (App content → **Foreground service permissions** → `FOREGROUND_SERVICE_MICROPHONE`: "user-initiated voice memo recording that continues with the screen off") explain this, with a short screen recording for Play.
+- **Camera (Android).** expo-image-picker brings the `CAMERA` permission for "Take a photo" on the capture screen; Play's Data safety needs no extra entry (the photo is uploaded as user content).
+- **Live Activities** are started only by the person's own actions or what runs for them (focus, meeting, import, voice memo; incidents only for administrators), never for marketing.
+- **Siri phrases** exist in German, English and French (`AppShortcuts.strings`); Apple checks that each names the app.
+
+### Screenshots of the widgets
+
+The store screenshots (`npm run screenshots`) show the web app. For widget screenshots (optional, they help with guideline 4.2):
+
+1. Sign in on a simulator (iPhone 6.9″, iPad 13″) or the Pixel emulator with an account that has tasks with due dates, a journal with a habits database, a recent timer and a form with responses (seed them by hand; the screenshot script does not create them).
+2. Add from the gallery, from top left: *Tasks* (medium, filter *Due today*), *Today* (small), *Database counter* (small, the roadmap database), *Journal and habits* (medium), *Time this week* (small) and on the lock screen *Tasks* (rectangular) and *Database counter* (circular). Start focus from Control Center for the Dynamic Island.
+3. Light and dark, German and English; frame them with `npm run store:images` like the others (name them `08-widgets-*.png`).
+
 ### What the review notes say
 
 `review_information/notes.txt` tells Apple what Flowplan is (open source, self-hostable) and why the first start asks for a server: to keep app.flowplan.org. It also points to the demo account (in the sign-in information fields, see above) and the **Try the demo** button and explains passkey/SSO sign-in through the system sheet. Apple sometimes rejects apps that "only wrap a website" (guideline 4.2). The native parts are worth naming if asked:
@@ -241,6 +263,7 @@ Apple and Google, however, count the data that the developer's own service recei
 - managed configuration for companies;
 - profiles for several instances (work and private), each with its own device registration;
 - system integration of the bars;
-- share target on Android.
+- share target on Android;
+- configurable widgets with buttons (check off tasks and habits, timer), Live Activities, Control Center controls, App Shortcuts and Siri phrases, a native capture screen for notes, voice memos and photos.
 
-Push notifications and a share extension (main README → Ideas) would strengthen that case.
+A share extension (main README → Ideas) would strengthen that case further.

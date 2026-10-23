@@ -5,3 +5,5 @@ Demo account on app.flowplan.org: the user name and password are in the sign-in 
 Sign-in: e-mail and password work directly in the app. "Sign in with a passkey" and "Sign in with SSO" open ASWebAuthenticationSession (the system sign-in sheet) and return to the app with a one-time code.
 
 The app contains no tracking, no ads and no in-app purchases. Content is stored on the Flowplan server the user connects to. Several instances can be saved as profiles: long-press the app icon → "Switch profile", or App settings → Profiles, to add another instance or switch between them.
+
+Widgets, Live Activities and Siri: after signing in, add the Flowplan widgets (each has settings: long press → Edit Widget; tasks and habits can be checked off right there). Voice memos (long-press the icon → "Voice memo", or Siri "Record a voice memo in Flowplan") keep recording when the screen locks – that is the only use of background audio; the recording shows as a Live Activity with "Stop".

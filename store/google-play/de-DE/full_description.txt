@@ -15,6 +15,9 @@ Ein Eintrag pro Tag, mit Rückblick, Serien und „An diesem Tag“. Für Tagebu
 FÜR TEAMS
 Teamspaces, Rechte, Kommentare, Erwähnungen, Benachrichtigungen, Vorlagen und eine Suche über alles.
 
+WIDGETS UND SCHNELLERFASSUNG
+Aufgaben direkt auf dem Startbildschirm abhaken, die Termine von heute, Favoriten, Zahlen aus Datenbanken, Journal und Gewohnheiten, die Zeit dieser Woche, Erwähnungen und Formular-Eingänge – jedes Widget zeigt eine Sache und hat eigene Einstellungen. Notizen, Sprachnotizen und Fotos erfasst du mit einem Tipp, auch über die Schnelleinstellungen. Fokus, die laufende Besprechung, Importe und die Zeiterfassung bleiben als Benachrichtigung sichtbar.
+
 DEINE DATEN, DEIN SERVER
 Flowplan ist Open Source (AGPL) und lässt sich selbst betreiben. Die App verbindet sich mit app.flowplan.org oder mit der Flowplan-Instanz deines Unternehmens – du gibst beim ersten Start einfach die Adresse ein. Mehrere Instanzen, etwa für Arbeit und Privates, speicherst du als Profile und wechselst mit einem Tipp. Deine Inhalte liegen auf diesem Server, nicht in der App. Die App selbst sammelt keine Daten und enthält kein Tracking.
 

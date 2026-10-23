@@ -1,8 +1,9 @@
 Die erste Version von Flowplan für iPhone und iPad:
 • Verbindet sich mit app.flowplan.org oder deinen eigenen Flowplan-Instanzen, auch mehreren als Profile
 • Mitteilungen mit der Zahl der ungelesenen am App-Symbol
-• Widgets für Home- und Sperrbildschirm: fällige Aufgaben, Posteingang, laufende Zeiterfassung – und für Administratoren Zustand, Live-Zahlen und Speicher der Instanz
-• Die laufende Zeiterfassung als Live-Aktivität auf dem Sperrbildschirm und in der Dynamic Island
+• Widgets mit eigenen Einstellungen: Aufgaben zum Abhaken, Heute, Favoriten, Zähler, Journal und Gewohnheiten, Zeit, Erwähnungen, Formulare, Schnellerfassung – für Administratoren Zustand, Live-Zahlen und Speicher
+• Live-Aktivitäten: Zeiterfassung, Fokus, laufende Besprechung, Importe, Sprachnotiz
+• Siri, Kurzbefehle, Kontrollzentrum und Aktionstaste: Notiz, Timer, Sprachnotiz, Fokus, „Was steht heute an?“
 • Anmeldung mit Passkey und SSO, App-Sperre mit Face ID
-• Schnellaktionen: Posteingang, meine Aufgaben, Suche, neue Seite
+• Schnellaktionen: Posteingang, meine Aufgaben, Suche, neue Notiz, Sprachnotiz
 • Apple Pencil auf Whiteboards: Druckstärke, Radierer, Doppeltippen und Drücken; Finger verschieben das Board

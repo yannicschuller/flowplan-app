@@ -27,8 +27,11 @@ APP_GROUP = "group.#{BUNDLE_ID}"
 # Every target of the Xcode project that app.config.ts generates, with what
 # its App ID needs in the developer portal: the app (push, App Group) and the
 # widgets and Live Activity extension (App Group; expo-widgets with
-# enablePushNotifications: false). No Associated Domains, iCloud or Sign in
-# with Apple. A new target or capability in app.config.ts belongs here too.
+# enablePushNotifications: false) – which also holds the configurable widgets,
+# controls and their App Intents (plugins/with-widget-suite.js), and whose
+# keychain items use the App Group as access group: no further App ID or
+# capability. No Associated Domains, iCloud or Sign in with Apple. A new
+# target or capability in app.config.ts belongs here too.
 IOS_TARGETS = [
   { target: "Flowplan", bundle_id: BUNDLE_ID, name: "Flowplan", capabilities: %w[APP_GROUPS PUSH_NOTIFICATIONS] },
   { target: "ExpoWidgetsTarget", bundle_id: WIDGETS_ID, name: "Flowplan Widgets", capabilities: %w[APP_GROUPS] },
