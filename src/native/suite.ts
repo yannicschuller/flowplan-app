@@ -116,14 +116,18 @@ export function suiteRender(kind: SuiteKind, widgetId: number, size: { width: nu
 
 // One batched request for every configurable widget, then draws them all.
 // fetch false: draws from the last answers (signed out, offline, resize).
-export async function refreshAndroidSuite(options: { fetch: boolean }) {
+// Android asks each widget for its update on its own: within a minute the
+// first request answers them all (force: after an action or new settings).
+let lastFetch = 0;
+export async function refreshAndroidSuite(options: { fetch: boolean; force?: boolean }) {
   if (Platform.OS !== "android") return;
   const widgets = await androidWidgets();
   if (!widgets.length) return;
   const profile = store.profiles().active;
   const configs = readConfigs();
   const target = connection();
-  if (options.fetch && target && profile) {
+  if (options.fetch && target && profile && (options.force || Date.now() - lastFetch > 60_000)) {
+    lastFetch = Date.now();
     const requests = widgets
       .map((w) => ({ w, config: configFor(configs, profile, w.id, w.kind) }))
       .filter(({ w, config }) => !needsSetup(w.kind, config))
@@ -166,7 +170,7 @@ export async function handleSuiteClick(clickAction: string, data: Record<string,
   const action = actions[clickAction];
   if (!action) return;
   await widgetAction(target, action, action === "task.complete" ? { ...fields, done: true } : fields);
-  await refreshAndroidSuite({ fetch: true });
+  await refreshAndroidSuite({ fetch: true, force: true });
 }
 
 // The configuration screen saved a widget's settings.
@@ -175,7 +179,7 @@ export async function saveWidgetConfig(widgetName: string, widgetId: number, con
   const profile = store.profiles().active;
   if (!kind || !profile) return;
   await writeConfigs(setConfig(readConfigs(), profile, widgetId, kind, config));
-  await refreshAndroidSuite({ fetch: true });
+  await refreshAndroidSuite({ fetch: true, force: true });
 }
 
 export async function widgetRemoved(widgetId: number) {
@@ -200,7 +204,7 @@ export async function refreshSuite(options: { force?: boolean } = {}) {
     }
     return;
   }
-  await refreshAndroidSuite({ fetch: !!connection() });
+  await refreshAndroidSuite({ fetch: !!connection(), force: options.force });
 }
 
 // A removed profile: its answers and (Android) its widgets' settings go.
