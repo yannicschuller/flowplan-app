@@ -7,7 +7,7 @@
 //   checkboxes and buttons run the action and draw the widget again.
 // Signing out keeps every widget's settings and shows "Open Flowplan to sign
 // in"; a new sign-in refreshes them at once.
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
 import { getWidgetInfo, requestWidgetUpdateById } from "react-native-android-widget";
@@ -186,11 +186,14 @@ export async function widgetRemoved(widgetId: number) {
 
 // After a change (the page reported one, back in the foreground, the
 // background task): the widgets follow. iOS reloads at most once a minute
-// unless forced (the extension then asks the instance once for all).
+// unless forced (the extension then asks the instance once for all), and
+// not from the background: reloads from there count against the widgets'
+// daily budget, and the extension refreshes on its own schedule.
 export async function refreshSuite(options: { force?: boolean } = {}) {
   if (!withWidgets) return;
   if (Platform.OS === "ios") {
     if (syncWidgetSession()) return;
+    if (AppState.currentState !== "active" && !options.force) return;
     if (options.force || Date.now() - lastReload > 60_000) {
       lastReload = Date.now();
       reloadWidgets();

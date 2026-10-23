@@ -1,6 +1,7 @@
 import AppIntents
 import Charts
 import SwiftUI
+import UIKit
 import WidgetKit
 
 // How the configurable widgets look: one thing per widget, small sizes show
