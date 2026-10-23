@@ -4,8 +4,10 @@
 // and run in the widget's own small runtime: they may only use their props,
 // the environment and Expo UI – no other code of the app. The texts come
 // finished from summary.ts.
-import { Chart, Gauge, HStack, Image, ProgressView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, Chart, Gauge, HStack, Image, Link, ProgressView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
+  accessibilityLabel,
   activityBackgroundTint,
   containerBackground,
   font,
@@ -29,6 +31,7 @@ import {
   type AdminStatusProps,
   type AdminStorageProps,
 } from "../admin";
+import type { FocusProps, IncidentProps, JobsProps, MeetingProps, RecordingProps } from "../activities";
 import { inboxWidget as inboxProps, sampleSummary, tasksWidget as tasksProps, widgetProps, type InboxWidgetProps, type TasksWidgetProps, type TimerProps } from "../summary";
 
 // Tasks due, the inbox and the running timer.
@@ -408,6 +411,229 @@ function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) 
   };
 }
 
+// ---- Live Activities of what runs now (activities.ts): focus, the meeting
+// now, imports and exports, an incident, a voice memo being recorded. The
+// buttons ("End", "Stop") reach the app (native/activities.ts); links open it.
+
+// Focus or break, counting down; "End" stops focus and its timer.
+function FlowplanFocus(props: FocusProps, environment: LiveActivityEnvironment) {
+  "widget";
+  const accent = props.phase === "break" ? "#2f9e6e" : "#6f74ff";
+  const icon = props.phase === "break" ? "cup.and.saucer.fill" : "scope";
+  const ends = new Date(props.endsAt);
+  const countdown = (size: number) => (
+    <Text date={ends} dateStyle="timer" modifiers={[font({ size, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent), frame({ maxWidth: 80 })]} />
+  );
+  const stop = <Button label={props.stopLabel} systemImage="stop.fill" target="stop" modifiers={[tint(accent), accessibilityLabel(props.stopLabel)]} />;
+  return {
+    banner: (
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+        <HStack spacing={12}>
+          <Image systemName={icon} modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
+          <VStack alignment="leading" spacing={2}>
+            <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.title}</Text>
+            <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(1)]}>{`${props.label} · ${props.untilLabel}`}</Text>
+          </VStack>
+          <Spacer />
+          {countdown(26)}
+        </HStack>
+        <HStack spacing={10}>
+          <ProgressView timerInterval={{ lower: new Date(props.startedAt), upper: ends }} countsDown={false} modifiers={[tint(accent)]} />
+          {stop}
+        </HStack>
+      </VStack>
+    ),
+    compactLeading: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    compactTrailing: countdown(14),
+    minimal: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    expandedLeading: (
+      <HStack spacing={6}>
+        <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />
+        <Text modifiers={[font({ size: 13, weight: "medium" })]}>{props.label}</Text>
+      </HStack>
+    ),
+    expandedTrailing: countdown(18),
+    expandedBottom: (
+      <HStack spacing={10}>
+        <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.title}</Text>
+        <Spacer />
+        {stop}
+      </HStack>
+    ),
+  };
+}
+
+// The meeting now: its title, the time left, "Open notes".
+function FlowplanMeeting(props: MeetingProps, environment: LiveActivityEnvironment) {
+  "widget";
+  const accent = "#6f74ff";
+  const ends = new Date(props.end);
+  const left = (size: number) => (
+    <Text date={ends} dateStyle="timer" modifiers={[font({ size, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent), frame({ maxWidth: 80 })]} />
+  );
+  const notes = (
+    <Link destination={props.notesUrl} modifiers={[accessibilityLabel(props.notesLabel)]}>
+      <HStack spacing={4}>
+        <Image systemName="note.text" modifiers={[font({ size: 13 }), foregroundStyle(accent)]} />
+        <Text modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(accent)]}>{props.notesLabel}</Text>
+      </HStack>
+    </Link>
+  );
+  return {
+    banner: (
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+        <HStack spacing={12}>
+          <Image systemName="person.2.fill" modifiers={[font({ size: 20 }), foregroundStyle(accent), accessibilityHidden(true)]} />
+          <VStack alignment="leading" spacing={2}>
+            <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.title}</Text>
+            <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(1)]}>
+              {props.calendar ? `${props.endsLabel} · ${props.calendar}` : props.endsLabel}
+            </Text>
+          </VStack>
+          <Spacer />
+          {left(24)}
+        </HStack>
+        <HStack>
+          <ProgressView timerInterval={{ lower: new Date(props.start), upper: ends }} countsDown={false} modifiers={[tint(accent)]} />
+        </HStack>
+        {notes}
+      </VStack>
+    ),
+    compactLeading: <Image systemName="person.2.fill" modifiers={[foregroundStyle(accent)]} />,
+    compactTrailing: left(14),
+    minimal: <Image systemName="person.2.fill" modifiers={[foregroundStyle(accent)]} />,
+    expandedLeading: (
+      <HStack spacing={6}>
+        <Image systemName="person.2.fill" modifiers={[foregroundStyle(accent)]} />
+        <Text modifiers={[font({ size: 13, weight: "medium" })]}>{props.label}</Text>
+      </HStack>
+    ),
+    expandedTrailing: left(18),
+    expandedBottom: (
+      <VStack alignment="leading" spacing={6}>
+        <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.title}</Text>
+        {notes}
+      </VStack>
+    ),
+  };
+}
+
+// An import or export: name, what, a bar (moving stripes without an estimate).
+function FlowplanJobs(props: JobsProps, environment: LiveActivityEnvironment) {
+  "widget";
+  const accent = props.status === "failed" || props.status === "interrupted" ? "#d14343" : props.status === "done" ? "#2f9e6e" : "#6f74ff";
+  const icon = props.status === "done" ? "checkmark.circle.fill" : props.status === "running" ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle.fill";
+  const bar = props.progress >= 0 ? <ProgressView value={props.progress} modifiers={[tint(accent)]} /> : <ProgressView modifiers={[tint(accent)]} />;
+  const percent = props.progress >= 0 ? `${Math.round(props.progress * 100)} %` : props.statusLabel;
+  return {
+    banner: (
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+        <HStack spacing={12}>
+          <Image systemName={icon} modifiers={[font({ size: 20 }), foregroundStyle(accent), accessibilityHidden(true)]} />
+          <VStack alignment="leading" spacing={2}>
+            <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.label ? `${props.name}: ${props.label}` : props.name}</Text>
+            <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), lineLimit(1)]}>
+              {props.more ? `${props.statusLabel} · +${props.more}` : props.statusLabel}
+            </Text>
+          </VStack>
+          <Spacer />
+          <Text modifiers={[font({ size: 15, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent)]}>{percent}</Text>
+        </HStack>
+        {props.status === "running" ? bar : null}
+      </VStack>
+    ),
+    compactLeading: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    compactTrailing: <Text modifiers={[font({ size: 13, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent)]}>{props.progress >= 0 ? `${Math.round(props.progress * 100)}%` : "…"}</Text>,
+    minimal: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    expandedLeading: (
+      <HStack spacing={6}>
+        <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />
+        <Text modifiers={[font({ size: 13, weight: "medium" })]}>{props.name}</Text>
+      </HStack>
+    ),
+    expandedTrailing: <Text modifiers={[font({ size: 15, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent)]}>{percent}</Text>,
+    expandedBottom: (
+      <VStack alignment="leading" spacing={6}>
+        <Text modifiers={[font({ size: 14 }), lineLimit(1)]}>{props.label || props.title}</Text>
+        {props.status === "running" ? bar : null}
+      </VStack>
+    ),
+  };
+}
+
+// An incident of the instance (administrators), only while it lasts.
+function FlowplanIncident(props: IncidentProps, environment: LiveActivityEnvironment) {
+  "widget";
+  const accent = props.level === "critical" ? "#d14343" : "#c27c0e";
+  const icon = props.level === "critical" ? "xmark.octagon.fill" : "exclamationmark.triangle.fill";
+  return {
+    banner: (
+      <HStack spacing={12} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+        <Image systemName={icon} modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
+        <VStack alignment="leading" spacing={2}>
+          <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(accent)]}>{`${props.title} · ${props.levelLabel}`}</Text>
+          <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(2)]}>{props.headline}</Text>
+          {props.detail ? <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.detail}</Text> : null}
+        </VStack>
+        <Spacer />
+      </HStack>
+    ),
+    compactLeading: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    compactTrailing: <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(accent)]}>{props.levelLabel}</Text>,
+    minimal: <Image systemName={icon} modifiers={[foregroundStyle(accent)]} />,
+    expandedLeading: <Image systemName={icon} modifiers={[font({ size: 18 }), foregroundStyle(accent)]} />,
+    expandedTrailing: <Text modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(accent)]}>{props.levelLabel}</Text>,
+    expandedBottom: (
+      <VStack alignment="leading" spacing={2}>
+        <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(2)]}>{props.headline}</Text>
+        {props.detail ? <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.detail}</Text> : null}
+      </VStack>
+    ),
+  };
+}
+
+// A voice memo being recorded in the app: the running time, "Stop".
+function FlowplanRecording(props: RecordingProps, environment: LiveActivityEnvironment) {
+  "widget";
+  const accent = "#e5484d";
+  const since = new Date(props.start);
+  const clockView = (size: number) => (
+    <Text date={since} dateStyle="timer" modifiers={[font({ size, weight: "semibold" }), monospacedDigit(), foregroundStyle(accent), frame({ maxWidth: 80 })]} />
+  );
+  const stop = <Button label={props.stopLabel} systemImage="stop.fill" target="stop" modifiers={[tint(accent), accessibilityLabel(props.stopLabel)]} />;
+  return {
+    banner: (
+      <HStack spacing={12} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+        <Image systemName="mic.fill" modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
+        <VStack alignment="leading" spacing={2}>
+          <Text modifiers={[font({ size: 15, weight: "semibold" })]}>{props.title}</Text>
+          <Text modifiers={[font({ size: 12 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.label}</Text>
+        </VStack>
+        <Spacer />
+        {clockView(24)}
+        {stop}
+      </HStack>
+    ),
+    compactLeading: <Image systemName="mic.fill" modifiers={[foregroundStyle(accent)]} />,
+    compactTrailing: clockView(14),
+    minimal: <Image systemName="mic.fill" modifiers={[foregroundStyle(accent)]} />,
+    expandedLeading: (
+      <HStack spacing={6}>
+        <Image systemName="mic.fill" modifiers={[foregroundStyle(accent)]} />
+        <Text modifiers={[font({ size: 13, weight: "medium" })]}>{props.label}</Text>
+      </HStack>
+    ),
+    expandedTrailing: clockView(18),
+    expandedBottom: (
+      <HStack>
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>{props.title}</Text>
+        <Spacer />
+        {stop}
+      </HStack>
+    ),
+  };
+}
+
 // The widget gallery and the placeholder show made-up tasks (initial props;
 // the real timeline replaces them once the app has written one). Created
 // again in the person's language once the app knows it (samples below).
@@ -440,3 +666,10 @@ export function localizeSamples(lang: Locale) {
   adminStorageWidget = createWidget<AdminStorageProps>("FlowplanStorage", FlowplanStorage, sample.storage);
 }
 export const timerActivity = createLiveActivity<TimerProps>("FlowplanTimer", FlowplanTimer);
+export const liveActivities = {
+  focus: createLiveActivity<FocusProps>("FlowplanFocus", FlowplanFocus),
+  meeting: createLiveActivity<MeetingProps>("FlowplanMeeting", FlowplanMeeting),
+  jobs: createLiveActivity<JobsProps>("FlowplanJobs", FlowplanJobs),
+  incident: createLiveActivity<IncidentProps>("FlowplanIncident", FlowplanIncident),
+  recording: createLiveActivity<RecordingProps>("FlowplanRecording", FlowplanRecording),
+};

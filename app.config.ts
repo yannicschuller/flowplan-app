@@ -83,12 +83,12 @@ const config: ExpoConfig = {
       CFBundleLocalizations: ["de", "en", "fr"],
       // The web app records audio (voice notes: getUserMedia({ audio })) and
       // takes files with <input type=file accept="image/*"> (pages,
-      // whiteboard), for which the web view offers "Take Photo or Video" –
-      // that is the camera and microphone use these texts describe (also in
-      // locales/*.json). On Android the system camera app takes the picture
-      // for that chooser, so the app needs no CAMERA permission there; add it
-      // (android.permissions below) only when the web app itself captures
-      // video or photos (getUserMedia({ video }), <input capture>).
+      // whiteboard), for which the web view offers "Take Photo or Video";
+      // the app's own capture screen (widgets, Siri) records voice memos
+      // (expo-audio) and takes photos (expo-image-picker, which on Android
+      // brings the CAMERA permission). That is the camera and microphone use
+      // these texts describe (also in locales/*.json). Photos are chosen with
+      // the system picker, which needs no photo library permission.
       NSCameraUsageDescription: "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
       NSMicrophoneUsageDescription: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       NSPhotoLibraryAddUsageDescription: "Flowplan saves images to your photos when you ask it to.",
@@ -177,6 +177,24 @@ const config: ExpoConfig = {
     "expo-web-browser",
     "expo-localization",
     "expo-quick-actions",
+    // The capture screen: voice memos (recording goes on with the screen
+    // locked, shown as Live Activity / ongoing notification) and photos.
+    [
+      "expo-audio",
+      {
+        microphonePermission: "Flowplan uses the microphone when you record a voice note or a video for a page.",
+        enableBackgroundRecording: true,
+        enableBackgroundPlayback: false,
+      },
+    ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: false,
+        cameraPermission: "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
+        microphonePermission: "Flowplan uses the microphone when you record a voice note or a video for a page.",
+      },
+    ],
     // iOS: the configurable widgets, controls and App Shortcuts in Swift,
     // added to expo-widgets' extension and the app. Before expo-widgets:
     // mods run last-added first (plugins/with-widget-suite.js).

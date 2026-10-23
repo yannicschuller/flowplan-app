@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- "New note" in Quick Settings: opens the app's capture screen. -->
+    <service
+      android:name="app.flowplan.nativeshell.CaptureTileService"
+      android:exported="true"
+      android:icon="@drawable/flowplan_tile_note"
+      android:label="@string/flowplan_tile_note"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>

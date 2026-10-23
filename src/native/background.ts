@@ -6,6 +6,7 @@ import * as TaskManager from "expo-task-manager";
 import { setLocale, pickLocale } from "../i18n";
 import { getLocales } from "expo-localization";
 import { refresh } from "./sync";
+import { refreshActivities } from "./activities";
 
 const TASK = "flowplan-refresh";
 
@@ -14,6 +15,9 @@ export function defineBackgroundRefresh() {
     try {
       setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
       const result = await refresh();
+      // Running Live Activities and ongoing notifications follow (iOS does
+      // not start new ones in the background).
+      await refreshActivities().catch(() => {});
       return "failed" in result ? BackgroundTask.BackgroundTaskResult.Failed : BackgroundTask.BackgroundTaskResult.Success;
     } catch {
       return BackgroundTask.BackgroundTaskResult.Failed;

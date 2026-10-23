@@ -14,6 +14,7 @@ import { store } from "../store";
 import { Button, styles, usePalette } from "../ui";
 import { askForPush, pushPermission, type PushState } from "../native/notifications";
 import { ProfileList } from "./Profiles";
+import { activityChoices, setActivityChoices } from "../native/activities";
 
 export function Settings({
   visible,
@@ -46,6 +47,7 @@ export function Settings({
   const [push, setPush] = useState<PushState>("undetermined");
   const [lock, setLock] = useState(store.appLock());
   const [lockAvailable, setLockAvailable] = useState(true);
+  const [choices, setChoices] = useState(activityChoices);
 
   const load = useCallback(async () => {
     setPush(await pushPermission());
@@ -125,6 +127,28 @@ export function Settings({
             <Text style={[styles.small, { color: p.muted, marginTop: 8 }]}>
               {Platform.OS === "ios" ? t("liveActivityText") : t("timerNotificationText")}
             </Text>
+          </View>
+
+          <Text style={heading}>{Platform.OS === "ios" ? t("liveActivitiesTitle") : t("ongoingTitle")}</Text>
+          <View style={section}>
+            {(["meeting", "jobs", "incident"] as const).map((kind, index) => (
+              <View key={kind} style={{ flexDirection: "row", alignItems: "center", marginTop: index ? 12 : 0 }}>
+                <Text style={[styles.text, { color: p.text, flex: 1 }]}>
+                  {t(({ meeting: "activityMeeting", jobs: "activityJobs", incident: "activityIncident" } as const)[kind])}
+                </Text>
+                <Switch
+                  value={choices[kind]}
+                  onValueChange={(on) => {
+                    const next = { ...choices, [kind]: on };
+                    setChoices(next);
+                    setActivityChoices(next);
+                  }}
+                  trackColor={{ true: p.brand }}
+                  accessibilityLabel={t(({ meeting: "activityMeeting", jobs: "activityJobs", incident: "activityIncident" } as const)[kind])}
+                />
+              </View>
+            ))}
+            <Text style={[styles.small, { color: p.muted, marginTop: 12 }]}>{t("activitiesText")}</Text>
           </View>
 
           <Button

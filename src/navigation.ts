@@ -130,3 +130,57 @@ export function safePath(path: string | null | undefined): string | null {
 }
 
 export const appLink = (path: string) => `${APP_SCHEME}://open?path=${encodeURIComponent(path)}`;
+
+// flowplan://do?action=focus.start&minutes=25 (controls, Siri, notification
+// buttons): only the app's own steps, nothing else.
+export const DO_ACTIONS = ["focus.start", "focus.stop", "timer.stop", "recording.stop"] as const;
+export function doLink(link: string): { action: (typeof DO_ACTIONS)[number]; minutes: number } | null {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== `${APP_SCHEME}:` || url.hostname !== "do") return null;
+  const action = url.searchParams.get("action") as (typeof DO_ACTIONS)[number];
+  if (!DO_ACTIONS.includes(action)) return null;
+  const minutes = Math.round(Number(url.searchParams.get("minutes")));
+  return { action, minutes: Number.isFinite(minutes) && minutes >= 1 && minutes <= 180 ? minutes : 25 };
+}
+
+// flowplan://meeting?pageId=…&rowId=…&date=…&start=…&end=… ("Open notes" of
+// the meeting's Live Activity): creates or opens the meeting's note.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function meetingLink(link: string): { pageId: string; rowId: string; date: string; start: string; end: string } | null {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== `${APP_SCHEME}:` || url.hostname !== "meeting") return null;
+  const q = url.searchParams;
+  const value = { pageId: q.get("pageId") || "", rowId: q.get("rowId") || "", date: q.get("date") || "", start: q.get("start") || "", end: q.get("end") || "" };
+  if (!UUID.test(value.pageId) || !UUID.test(value.rowId) || !/^\d{4}-\d{2}-\d{2}$/.test(value.date) || !value.start || value.start.length > 40 || value.end.length > 40)
+    return null;
+  return value;
+}
+
+// The capture screen (screens/Capture.tsx) from widgets, controls, Siri and
+// quick actions.
+export type CaptureRequest = { mode: "note" | "task" | "voice" | "photo"; target?: string; record?: boolean };
+
+// flowplan://capture?mode=voice&target=<uuid>&record=1 → what to capture.
+export function captureRequest(link: string): CaptureRequest | null {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "flowplan:" || url.hostname !== "capture") return null;
+  const mode = url.searchParams.get("mode") as CaptureRequest["mode"];
+  if (!["note", "task", "voice", "photo"].includes(mode)) return null;
+  const target = url.searchParams.get("target");
+  return { mode, ...(target && UUID.test(target) ? { target: target.toLowerCase() } : {}), ...(url.searchParams.get("record") === "1" ? { record: true } : {}) };
+}

@@ -29,7 +29,8 @@ export function haptic(kind: string) {
 }
 
 // Long press on the app icon. Paths open in the instance (hash routes of the
-// web app); "server" opens the profiles (switch or add one).
+// web app), links the app's own screens (capture: a note, a voice memo);
+// "server" opens the profiles (switch or add one). iOS shows the first four.
 export function setQuickActions(signedIn: boolean) {
   const ios = Platform.OS === "ios";
   const items: QuickActions.Action[] = [
@@ -38,16 +39,18 @@ export function setQuickActions(signedIn: boolean) {
           { id: "inbox", title: t("actionInbox"), icon: ios ? "symbol:tray" : null, params: { path: "/#inbox" } },
           { id: "tasks", title: t("actionTasks"), icon: ios ? "symbol:checklist" : null, params: { path: "/#tasks" } },
           { id: "search", title: t("actionSearch"), icon: ios ? "symbol:magnifyingglass" : null, params: { path: "/#search" } },
-          { id: "new", title: t("actionNew"), icon: ios ? "symbol:square.and.pencil" : null, params: { path: "/#new" } },
+          { id: "note", title: t("actionNote"), icon: ios ? "symbol:square.and.pencil" : null, params: { link: "flowplan://capture?mode=note" } },
         ]
       : []),
     { id: "server", title: t("switchProfile"), icon: ios ? "symbol:server.rack" : null, params: { path: "" } },
+    ...(signedIn ? [{ id: "voice", title: t("actionVoice"), icon: ios ? "symbol:mic" : null, params: { link: "flowplan://capture?mode=voice&record=1" } }] : []),
   ];
   void QuickActions.setItems(items).catch(() => {});
 }
 
-export function onQuickAction(listener: (action: { id: string; path: string }) => void) {
-  const handle = (action: QuickActions.Action) => listener({ id: action.id, path: String(action.params?.path ?? "") });
+export function onQuickAction(listener: (action: { id: string; path: string; link: string }) => void) {
+  const handle = (action: QuickActions.Action) =>
+    listener({ id: action.id, path: String(action.params?.path ?? ""), link: String(action.params?.link ?? "") });
   if (QuickActions.initial) handle(QuickActions.initial);
   return QuickActions.addListener(handle);
 }
