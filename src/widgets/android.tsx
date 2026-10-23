@@ -144,53 +144,47 @@ function StatusView({ props, theme }: { props: AdminStatusProps; theme: Theme })
   );
 }
 
+// One number big (active now, or the error rate when it is high), the
+// others small and muted; the requests of the last 24 hours as bars when
+// there is room.
 function LiveView({ props, theme, chart }: { props: AdminLiveProps; theme: Theme; chart: boolean }) {
   if (props.state !== "data") return <Closed {...props} theme={theme} />;
+  const main = props.tiles.find((tile) => tile.alert) ?? props.tiles[0];
+  const others = props.tiles.filter((tile) => tile !== main);
   const max = Math.max(1, ...props.spark);
   return (
-    <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)}>
+    <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)} accessibilityLabel={`${props.title}: ${main.value} ${main.label}`}>
       <TextWidget text={props.title} style={{ fontSize: 13, fontWeight: "600", color: hex(theme.brand) }} />
-      <FlexWidget style={{ flexDirection: "row", width: "match_parent", marginTop: 6 }}>
-        {props.tiles.map((tile, index) => (
-          <FlexWidget key={index} style={{ flex: 1, flexDirection: "column" }}>
-            <TextWidget
-              text={tile.value}
-              style={{ fontSize: 18, fontWeight: "700", color: hex(index === 2 && props.errorsHigh ? theme.late : theme.text) }}
-            />
-            <TextWidget text={tile.label} maxLines={2} style={{ fontSize: 10, color: hex(theme.muted) }} />
-          </FlexWidget>
-        ))}
-      </FlexWidget>
       <FlexWidget style={{ flex: 1 }} />
+      <TextWidget text={main.value} maxLines={1} style={{ fontSize: 34, fontWeight: "700", color: hex(theme.text) }} />
+      <TextWidget text={`${main.alert ? "⚠ " : ""}${main.label}`} maxLines={1} style={{ fontSize: 12, color: hex(main.alert ? theme.late : theme.muted) }} />
       {chart && props.spark.length ? (
-        <FlexWidget style={{ flexDirection: "row", width: "match_parent", height: 36, alignItems: "flex-end" }}>
+        <FlexWidget style={{ flexDirection: "row", width: "match_parent", height: 30, alignItems: "flex-end", marginTop: 6 }}>
           {props.spark.map((value, index) => (
-            <FlexWidget
-              key={index}
-              style={{ flex: 1, height: Math.max(2, Math.round((value / max) * 36)), marginLeft: 1, borderRadius: 1, backgroundColor: hex(theme.brand) }}
-            />
+            <FlexWidget key={index} style={{ flex: 1, height: Math.max(2, Math.round((value / max) * 30)), marginLeft: 1, borderRadius: 1, backgroundColor: hex(theme.brand) }} />
           ))}
         </FlexWidget>
+      ) : null}
+      {chart ? (
+        <TextWidget text={others.map((tile) => `${tile.value} ${tile.label}`).join(" · ")} maxLines={1} truncate="END" style={{ fontSize: 10, color: hex(theme.muted), marginTop: 4 }} />
       ) : null}
     </FlexWidget>
   );
 }
 
+// The disk (or the fullest quota) big with its bar; the rest small.
 function StorageView({ props, theme }: { props: AdminStorageProps; theme: Theme }) {
   if (props.state !== "data") return <Closed {...props} theme={theme} />;
+  const disk = props.disk >= 0;
+  const share = disk ? props.disk : props.quota;
   return (
     <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)}>
       <TextWidget text={props.title} style={{ fontSize: 13, fontWeight: "600", color: hex(theme.brand) }} />
-      <TextWidget text={props.used} style={{ fontSize: 22, fontWeight: "700", color: hex(theme.text), marginTop: 4 }} />
-      <TextWidget text={props.usedLabel} style={{ fontSize: 11, color: hex(theme.muted) }} />
       <FlexWidget style={{ flex: 1 }} />
-      {props.disk >= 0 ? (
-        <FlexWidget style={{ flexDirection: "column", width: "match_parent" }}>
-          <TextWidget text={props.diskLabel} style={{ fontSize: 11, color: hex(theme.text) }} />
-          <Meter share={props.disk} color={props.disk >= 0.9 ? theme.late : theme.brand} theme={theme} />
-        </FlexWidget>
-      ) : null}
-      <TextWidget text={props.quotaLabel} style={{ fontSize: 11, color: hex(props.quota >= 0.9 ? theme.late : theme.muted), marginTop: 6 }} />
+      <TextWidget text={disk ? props.diskValue : share >= 0 ? props.quotaValue : props.used} maxLines={1} style={{ fontSize: 30, fontWeight: "700", color: hex(theme.text) }} />
+      <TextWidget text={disk ? props.diskShort : share >= 0 ? props.quotaShort : props.usedLabel} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted) }} />
+      {share >= 0 ? <Meter share={share} color={share >= 0.9 ? theme.late : theme.brand} theme={theme} /> : null}
+      <TextWidget text={`${props.used} · ${props.usedLabel}`} maxLines={1} truncate="END" style={{ fontSize: 10, color: hex(theme.muted), marginTop: 6 }} />
     </FlexWidget>
   );
 }

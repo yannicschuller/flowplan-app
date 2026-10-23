@@ -241,7 +241,9 @@ const de = {
   actionNote: "Neue Notiz",
   actionVoice: "Sprachnotiz",
   actionFocus: "Fokus starten",
-  adminMetric: "Kennzahl",
+  adminLastBackup: "Letzte Sicherung",
+  adminDiskUsed: "Festplatte belegt",
+  adminFullestShort: "Vollster Arbeitsbereich",
 };
 type Key = keyof typeof de;
 
@@ -481,7 +483,9 @@ const en: Record<Key, string> = {
   actionNote: "New note",
   actionVoice: "Voice memo",
   actionFocus: "Start focus",
-  adminMetric: "Metric",
+  adminLastBackup: "Last backup",
+  adminDiskUsed: "Disk used",
+  adminFullestShort: "Fullest workspace",
 };
 
 const fr: Record<Key, string> = {
@@ -720,7 +724,9 @@ const fr: Record<Key, string> = {
   actionNote: "Nouvelle note",
   actionVoice: "Mémo vocal",
   actionFocus: "Démarrer la concentration",
-  adminMetric: "Indicateur",
+  adminLastBackup: "Dernière sauvegarde",
+  adminDiskUsed: "Disque utilisé",
+  adminFullestShort: "Espace le plus plein",
 };
 
 export const strings = { de, en, fr } as const;

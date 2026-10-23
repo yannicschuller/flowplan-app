@@ -127,6 +127,9 @@ type Common = {
 
 export type AdminStatusProps = Common & {
   state: "signedOut" | "notAdmin" | "ok" | "notice" | "problem";
+  // The last backup as one value ("14:05", "21 Oct", "–") and its label.
+  backupTime: string;
+  backupShort: string;
   headline: string;
   // The most important problem or notice (and how many more).
   detail: string;
@@ -137,9 +140,14 @@ export type AdminStatusProps = Common & {
   backupLate: boolean;
 };
 
+// The live numbers; the widget shows the one chosen in its settings
+// (active, requests, errors, signins) big, the others small.
+export const LIVE_METRICS = ["active", "requests", "errors", "signins"] as const;
 export type AdminLiveProps = Common & {
   state: "signedOut" | "notAdmin" | "data" | "off";
-  tiles: { label: string; value: string }[];
+  tiles: { id: (typeof LIVE_METRICS)[number]; label: string; value: string; alert: boolean }[];
+  // The error rate of the last hour, 0–1 (the lock screen's gauge).
+  errorRate: number;
   // Requests per hour, the last 24 hours (gaps as 0); empty without chart.
   spark: number[];
   sparkLabel: string;
@@ -156,6 +164,11 @@ export type AdminStorageProps = Common & {
   quota: number;
   quotaLabel: string;
   warn: boolean;
+  // One value each for the widget's choice (disk, database, quota).
+  diskValue: string;
+  diskShort: string;
+  quotaValue: string;
+  quotaShort: string;
 };
 
 function gate(admin: AdminState, locale: Locale, title: string) {
@@ -167,7 +180,7 @@ function gate(admin: AdminState, locale: Locale, title: string) {
 export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.now()): AdminStatusProps {
   const title = t("adminInstance", {}, locale);
   const closed = gate(admin, locale, title);
-  const empty = { headline: "", detail: "", more: "", version: "", update: "", backup: "", backupLate: false };
+  const empty = { headline: "", detail: "", more: "", version: "", update: "", backup: "", backupLate: false, backupTime: "", backupShort: "" };
   if (closed) return { ...closed, ...empty, headline: closed.message };
   const s = (admin as { data: AdminSummary }).data;
   const issues = [...s.health.problems, ...s.health.notices];
@@ -200,6 +213,8 @@ export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.
         ? t("adminBackupAt", { time: formatWhen(s.backup.lastAt, now, locale) }, locale)
         : t("adminBackupNone", {}, locale),
     backupLate,
+    backupTime: s.backup.enabled && s.backup.lastAt ? formatWhen(s.backup.lastAt, now, locale) : "–",
+    backupShort: !s.backup.enabled ? t("adminBackupOff", {}, locale) : t("adminLastBackup", {}, locale),
   };
 }
 
@@ -207,10 +222,10 @@ export function adminLiveWidget(admin: AdminState, locale: Locale): AdminLivePro
   const title = t("adminLive", {}, locale);
   const closed = gate(admin, locale, title);
   const sparkLabel = t("adminRequests24h", {}, locale);
-  if (closed) return { ...closed, tiles: [], spark: [], sparkLabel, errorsHigh: false };
+  if (closed) return { ...closed, tiles: [], errorRate: 0, spark: [], sparkLabel, errorsHigh: false };
   const s = (admin as { data: AdminSummary }).data;
   if (!s.live)
-    return { state: "off", title, message: t("adminStatsOff", {}, locale), url: appLink(MONITORING_URL), tiles: [], spark: [], sparkLabel, errorsHigh: false };
+    return { state: "off", title, message: t("adminStatsOff", {}, locale), url: appLink(MONITORING_URL), tiles: [], errorRate: 0, spark: [], sparkLabel, errorsHigh: false };
   const live = s.live;
   const values = live.requests24h.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : 0));
   return {
@@ -219,11 +234,17 @@ export function adminLiveWidget(admin: AdminState, locale: Locale): AdminLivePro
     message: "",
     url: appLink(MONITORING_URL),
     tiles: [
-      { label: t("adminActiveNow", {}, locale), value: formatNumber(live.activeNow, locale) },
-      { label: t("adminRequestsMinute", {}, locale), value: formatNumber(live.requestsPerMinute, locale) },
-      { label: t("adminErrorRate", {}, locale), value: formatPercent(live.errorRate, locale, live.errorRate > 0 && live.errorRate < 0.1 ? 1 : 0) },
-      { label: t("adminSigninsToday", {}, locale), value: formatNumber(live.signinsToday, locale) },
+      { id: "active", label: t("adminActiveNow", {}, locale), value: formatNumber(live.activeNow, locale), alert: false },
+      { id: "requests", label: t("adminRequestsMinute", {}, locale), value: formatNumber(live.requestsPerMinute, locale), alert: false },
+      {
+        id: "errors",
+        label: t("adminErrorRate", {}, locale),
+        value: formatPercent(live.errorRate, locale, live.errorRate > 0 && live.errorRate < 0.1 ? 1 : 0),
+        alert: live.errorRate >= 0.05,
+      },
+      { id: "signins", label: t("adminSigninsToday", {}, locale), value: formatNumber(live.signinsToday, locale), alert: false },
     ],
+    errorRate: Math.min(1, Math.max(0, live.errorRate)),
     // A chart only when something was collected.
     spark: values.some((v) => v > 0) ? values : [],
     sparkLabel,
@@ -234,7 +255,8 @@ export function adminLiveWidget(admin: AdminState, locale: Locale): AdminLivePro
 export function adminStorageWidget(admin: AdminState, locale: Locale): AdminStorageProps {
   const title = t("adminStorage", {}, locale);
   const closed = gate(admin, locale, title);
-  if (closed) return { ...closed, used: "", usedLabel: "", disk: -1, diskLabel: "", quota: -1, quotaLabel: "", warn: false };
+  if (closed)
+    return { ...closed, used: "", usedLabel: "", disk: -1, diskLabel: "", quota: -1, quotaLabel: "", warn: false, diskValue: "", diskShort: "", quotaValue: "", quotaShort: "" };
   const s = (admin as { data: AdminSummary }).data.storage;
   const disk = s.disk && s.disk.total > 0 ? Math.min(1, Math.max(0, 1 - s.disk.free / s.disk.total)) : -1;
   const quota = s.fullestQuota === null ? -1 : Math.min(1, Math.max(0, s.fullestQuota));
@@ -250,6 +272,10 @@ export function adminStorageWidget(admin: AdminState, locale: Locale): AdminStor
     quota,
     quotaLabel: quota >= 0 ? t("adminFullest", { percent: formatPercent(quota, locale) }, locale) : t("adminNoQuota", {}, locale),
     warn: disk >= 0.9 || quota >= 0.9 || s.nearlyFull > 0,
+    diskValue: disk >= 0 ? formatPercent(disk, locale) : "–",
+    diskShort: t("adminDiskUsed", {}, locale),
+    quotaValue: quota >= 0 ? formatPercent(quota, locale) : "–",
+    quotaShort: quota >= 0 ? t("adminFullestShort", {}, locale) : t("adminNoQuota", {}, locale),
   };
 }
 

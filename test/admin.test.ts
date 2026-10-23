@@ -133,3 +133,23 @@ test("the stored state is checked when read; it belongs to the profile", () => {
   assert.equal(stored.get("flowplan.profile.main.summary"), "{}");
   assert.equal(stored.has("flowplan.profile.main.adminSummary"), false);
 });
+
+test("each administrators' widget has one value per setting", () => {
+  const live = adminLiveWidget(data(), "en");
+  assert.deepEqual(live.tiles.map((tile) => tile.id), ["active", "requests", "errors", "signins"]);
+  assert.equal(live.errorRate, 0.002);
+  assert.equal(adminLiveWidget(data({ live: { ...base.live!, errorRate: 0.08 } }), "en").tiles[2].alert, true);
+  const storage = adminStorageWidget(data(), "de");
+  // German puts a narrow no-break space before the percent sign.
+  assert.equal(storage.diskValue.replace(/\s/g, " "), "62 %");
+  assert.equal(storage.diskShort, "Festplatte belegt");
+  assert.equal(storage.quotaValue.replace(/\s/g, " "), "92 %");
+  const noDisk = adminStorageWidget(data({ storage: { ...base.storage, disk: null, fullestQuota: null } }), "en");
+  assert.equal(noDisk.diskValue, "–");
+  assert.equal(noDisk.quotaShort, "No quotas");
+  const status = adminStatusWidget(data(), "en", now);
+  assert.equal(status.backupTime, formatWhen(base.backup.lastAt!, now, "en"));
+  assert.equal(status.backupShort, "Last backup");
+  assert.equal(adminStatusWidget(data({ backup: { enabled: false, lastAt: null, failed: false } }), "en", now).backupTime, "–");
+  for (const props of [live, storage, status, adminLiveWidget(null, "fr"), adminStorageWidget({ kind: "notAdmin" }, "fr")]) assert.deepEqual(nulls(props), []);
+});

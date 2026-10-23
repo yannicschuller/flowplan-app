@@ -118,3 +118,28 @@ test("Android keeps settings per profile and widget; sign-out keeps them, remova
   assert.deepEqual(parseConfigState("{"), {});
   assert.deepEqual(parseConfigState(JSON.stringify({ "../x": { 1: { kind: "tasks" } }, work: { abc: { kind: "tasks" }, 2: { kind: "nope" } } })), {});
 });
+
+test("the settings of the expo-widgets widgets are translated", () => {
+  const widgets = (config.plugins ?? []).find((p) => Array.isArray(p) && p[0] === "expo-widgets") as [
+    string,
+    { widgets: { name: string; ios?: { configuration?: { title: string; parameters: Record<string, { title: string; values?: { name: string; value: string }[] }> } } }[] },
+  ];
+  const texts: string[] = [];
+  for (const widget of widgets[1].widgets) {
+    const configuration = widget.ios?.configuration;
+    if (!configuration) continue;
+    texts.push(`${configuration.title} Configuration`);
+    for (const parameter of Object.values(configuration.parameters)) {
+      texts.push(parameter.title);
+      for (const value of parameter.values ?? []) texts.push(value.name);
+    }
+  }
+  assert.ok(texts.length > 10);
+  for (const lang of ["de", "fr"]) {
+    const table = localizable(strings, lang);
+    for (const text of texts) assert.ok(table[text] && table[text] !== "", `${lang}: ${text}`);
+  }
+  // The layouts read these settings.
+  const layouts = readFileSync(join(root, "src/widgets/ios.tsx"), "utf8");
+  for (const name of ["show", "timer", "metric"]) assert.ok(layouts.includes(`configuration?.${name}`), name);
+});

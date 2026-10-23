@@ -218,6 +218,14 @@ const config: ExpoConfig = {
               // Built into the extension: the widget has its layout and the
               // gallery its sample before the app has ever run.
               initialLayout: "./src/widgets/ios.tsx",
+              // Settings (iOS 17): what else besides the tasks due.
+              configuration: {
+                title: "Flowplan",
+                parameters: {
+                  show: { title: "Show", type: "enum", values: [{ name: "Tasks and inbox", value: "all" }, { name: "Tasks only", value: "tasks" }], default: "all" },
+                  timer: { title: "Running timer", type: "boolean", default: true },
+                },
+              },
             },
             android: null,
           },
@@ -229,26 +237,72 @@ const config: ExpoConfig = {
             android: null,
           },
           // Administrators of the instance (src/admin.ts); others see
-          // "Administrators only".
+          // "Administrators only". One thing each, chosen in the settings.
           {
             name: "FlowplanInstance",
             displayName: nativeStrings.gallery.FlowplanInstance.label[1],
             description: nativeStrings.gallery.FlowplanInstance.description[1],
-            ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
+            ios: {
+              supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular", "accessoryInline"],
+              initialLayout: "./src/widgets/ios.tsx",
+              configuration: {
+                title: "Flowplan Instance",
+                parameters: {
+                  show: { title: "Show", type: "enum", values: [{ name: "State", value: "state" }, { name: "Last backup", value: "backup" }, { name: "Version", value: "version" }], default: "state" },
+                },
+              },
+            },
             android: null,
           },
           {
             name: "FlowplanLive",
             displayName: nativeStrings.gallery.FlowplanLive.label[1],
             description: nativeStrings.gallery.FlowplanLive.description[1],
-            ios: { supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryRectangular"], initialLayout: "./src/widgets/ios.tsx" },
+            ios: {
+              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular"],
+              initialLayout: "./src/widgets/ios.tsx",
+              configuration: {
+                title: "Flowplan Live",
+                parameters: {
+                  metric: {
+                    title: "Metric",
+                    type: "enum",
+                    values: [
+                      { name: "Active now", value: "active" },
+                      { name: "Requests/min", value: "requests" },
+                      { name: "Error rate (1 h)", value: "errors" },
+                      { name: "Sign-ins today", value: "signins" },
+                    ],
+                    default: "active",
+                  },
+                },
+              },
+            },
             android: null,
           },
           {
             name: "FlowplanStorage",
             displayName: nativeStrings.gallery.FlowplanStorage.label[1],
             description: nativeStrings.gallery.FlowplanStorage.description[1],
-            ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular"], initialLayout: "./src/widgets/ios.tsx" },
+            ios: {
+              supportedFamilies: ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular"],
+              initialLayout: "./src/widgets/ios.tsx",
+              configuration: {
+                title: "Flowplan Storage",
+                parameters: {
+                  metric: {
+                    title: "Metric",
+                    type: "enum",
+                    values: [
+                      { name: "Disk used", value: "disk" },
+                      { name: "Database and files", value: "database" },
+                      { name: "Fullest workspace", value: "quota" },
+                    ],
+                    default: "disk",
+                  },
+                },
+              },
+            },
             android: null,
           },
         ],

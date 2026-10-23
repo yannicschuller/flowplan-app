@@ -168,6 +168,30 @@ const strings = {
   "Contact form": { de: "Kontaktformular", fr: "Formulaire de contact" },
 };
 
+// Settings of the expo-widgets widgets (app.config.ts → ios.configuration;
+// expo-widgets writes them into Swift as English text, "<title>
+// Configuration" is the settings' title).
+Object.assign(strings, {
+  "Flowplan Configuration": { de: "Flowplan-Einstellungen", fr: "Réglages Flowplan" },
+  "Flowplan Instance Configuration": { de: "Einstellungen Flowplan Instanz", fr: "Réglages Flowplan Instance" },
+  "Flowplan Live Configuration": { de: "Einstellungen Flowplan Live", fr: "Réglages Flowplan Live" },
+  "Flowplan Storage Configuration": { de: "Einstellungen Flowplan Speicher", fr: "Réglages Flowplan Stockage" },
+  "Tasks and inbox": { de: "Aufgaben und Posteingang", fr: "Tâches et boîte de réception" },
+  "Tasks only": { de: "Nur Aufgaben", fr: "Tâches seulement" },
+  "Running timer": { de: "Laufende Zeiterfassung", fr: "Chrono en cours" },
+  State: { de: "Zustand", fr: "État" },
+  "Last backup": { de: "Letzte Sicherung", fr: "Dernière sauvegarde" },
+  Version: { de: "Version", fr: "Version" },
+  Metric: { de: "Kennzahl", fr: "Indicateur" },
+  "Active now": { de: "Gerade aktiv", fr: "Actifs maintenant" },
+  "Requests/min": { de: "Anfragen/Min.", fr: "Requêtes/min" },
+  "Error rate (1 h)": { de: "Fehlerrate (1 Std.)", fr: "Taux d’erreur (1 h)" },
+  "Sign-ins today": { de: "Anmeldungen heute", fr: "Connexions aujourd’hui" },
+  "Disk used": { de: "Festplatte belegt", fr: "Disque utilisé" },
+  "Database and files": { de: "Datenbank und Dateien", fr: "Base de données et fichiers" },
+  "Fullest workspace": { de: "Vollster Arbeitsbereich", fr: "Espace le plus plein" },
+});
+
 // Siri and Shortcuts phrases (AppShortcuts.strings).
 const phrases = {
   "Add a note to ${applicationName}": { de: "Notiz zu ${applicationName} hinzufügen", fr: "Ajouter une note à ${applicationName}" },
