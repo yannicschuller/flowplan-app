@@ -58,6 +58,8 @@ jobs:
     env:
       FLOWPLAN_BUILD: ${{ inputs.build }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      # The push relay (empty: https://push.flowplan.org, app.config.ts).
+      PUSH_RELAY_URL: ${{ vars.PUSH_RELAY_URL }}
       IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
       SIGNED: ${{ secrets.APP_STORE_CONNECT_API_KEY != '' && vars.IOS_TEAM_ID != '' }}
       EXPO_NO_TELEMETRY: "1"
@@ -110,6 +112,8 @@ jobs:
           IOS_WIDGETS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_WIDGETS_PROVISIONING_PROFILE_NAME }}
           IOS_SHARE_PROVISIONING_PROFILE: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE }}
           IOS_SHARE_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_SHARE_PROVISIONING_PROFILE_NAME }}
+          IOS_NOTIFICATIONS_PROVISIONING_PROFILE: ${{ secrets.IOS_NOTIFICATIONS_PROVISIONING_PROFILE }}
+          IOS_NOTIFICATIONS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_NOTIFICATIONS_PROVISIONING_PROFILE_NAME }}
         run: bundle exec fastlane ios ${{ inputs.upload && 'beta' || 'build' }}
       - name: Unsigned build
         if: env.SIGNED != 'true'
@@ -151,6 +155,8 @@ jobs:
     env:
       FLOWPLAN_BUILD: ${{ inputs.build }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      # The push relay (empty: https://push.flowplan.org, app.config.ts).
+      PUSH_RELAY_URL: ${{ vars.PUSH_RELAY_URL }}
       SIGNED: ${{ secrets.ANDROID_KEYSTORE != '' }}
       UPLOAD: ${{ inputs.upload && secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
       EXPO_NO_TELEMETRY: "1"

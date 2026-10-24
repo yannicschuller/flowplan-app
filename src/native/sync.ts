@@ -17,6 +17,7 @@ import type * as IosWidgets from "../widgets/ios";
 import { refreshSuite } from "./suite";
 import { syncSpotlight } from "./spotlight";
 import { syncLocalReminders } from "./local-reminders";
+import { endLiveActivity, watchLiveActivity, type PushTokenActivity } from "./live-push";
 
 // expo-widgets only on iOS: Android draws its widgets with
 // react-native-android-widget, the timer as notification.
@@ -187,6 +188,7 @@ export async function updateTimer(summary: Summary | null) {
   try {
     const running = ios.timerActivity.getInstances();
     if (!props) {
+      endLiveActivity("timer");
       await Promise.allSettled(running.map((activity) => activity.end("immediate")));
       lastTimer = "";
       return;
@@ -194,11 +196,12 @@ export async function updateTimer(summary: Summary | null) {
     if (key === lastTimer && running.length) return;
     if (running.length) {
       await running[0].update(props);
+      watchLiveActivity("timer", running[0] as PushTokenActivity);
       await Promise.allSettled(running.slice(1).map((activity) => activity.end("immediate")));
     } else {
       // iOS starts Live Activities only while the app is in the foreground;
       // in the background this fails and the next foreground refresh starts it.
-      ios.timerActivity.start(props, props.url);
+      watchLiveActivity("timer", ios.timerActivity.start(props, props.url) as PushTokenActivity);
     }
     lastTimer = key;
   } catch {}

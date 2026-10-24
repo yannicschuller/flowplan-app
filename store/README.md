@@ -103,8 +103,8 @@ The lines are in `scripts/creative-assets.mjs` (`TEXT`); a line that is too long
 
 **Actions → iOS setup → Run workflow** ([`ios-setup.yml`](../.github/workflows/ios-setup.yml), `fastlane ios setup`) does on the own Mac everything the App Store Connect API key allows. Re-running it is safe: what exists is kept.
 
-1. Registers the App IDs `app.flowplan.mobile` (*App Groups*, *Push Notifications*), `app.flowplan.mobile.widgets` and `app.flowplan.mobile.share` (*App Groups*). The app uses no Associated Domains, iCloud or Sign in with Apple.
-2. Creates or reuses the *Apple Distribution* certificate and the App Store profiles of both App IDs with **fastlane match**. They are stored encrypted in the private repository `yannicschuller/flowplan-certificates`. Only this workflow writes there; builds (`build.yml`, `release.yml`) read them when the match secrets exist. If a profile lacks the App Group or push, the setup renews it once.
+1. Registers the App IDs `app.flowplan.mobile` (*App Groups*, *Push Notifications*), `app.flowplan.mobile.widgets`, `app.flowplan.mobile.share` and `app.flowplan.mobile.notifications` (*App Groups*). The app uses no Associated Domains, iCloud or Sign in with Apple.
+2. Creates or reuses the *Apple Distribution* certificate and the App Store profiles of all App IDs with **fastlane match**. They are stored encrypted in the private repository `yannicschuller/flowplan-certificates`. Only this workflow writes there; builds (`build.yml`, `release.yml`) read them when the match secrets exist. If a profile lacks the App Group or push, the setup renews it once.
 3. Checks that the app exists in App Store Connect.
 4. Uploads texts, categories, copyright, age rating, review information and screenshots for iPhone 6.9″, iPhone 6.5″ and iPad 13″, for the version in `package.json`. It does **not** submit for review unless *submit* is on.
 5. With *creative* on: the product page header and search results image of every language ([Creative assets](#creative-assets)).
@@ -165,7 +165,7 @@ Actions → **iOS setup** → Run workflow, from `main`, with the default inputs
 3. **App Group**, if the run asks for it: developer.apple.com → Certificates, Identifiers & Profiles.
    - Identifiers → **+** → *App Groups*. Description `Flowplan`, identifier **`group.app.flowplan.mobile`** → Register.
    - Identifiers → `app.flowplan.mobile` → App Groups → *Configure* → tick `group.app.flowplan.mobile` → Save.
-   - Do the same for `app.flowplan.mobile.widgets` and `app.flowplan.mobile.share`.
+   - Do the same for `app.flowplan.mobile.widgets`, `app.flowplan.mobile.share` and `app.flowplan.mobile.notifications`.
    - The next run renews the profiles by itself.
 4. **App Privacy** (App Store Connect → the app → App Privacy). The API key cannot set it. Answers, as above:
    - Privacy policy URL: `https://flowplan.org/datenschutz`.
@@ -209,9 +209,9 @@ The app itself collects nothing. It has:
 - for the configurable widgets: each widget's settings (ids of pages, views and properties) and the last answers they show (task titles, appointments, names of favorites …), per profile – iOS in the App Group the app shares with its widget extension (the device token in the App Group's keychain), Android in the app's own files. Pages behind a journal PIN or end-to-end encrypted show only their state; switching or leaving a profile removes its answers;
 - voice memos and photos from the capture screen, what is shared through the share extension and scanned documents (with the text recognised on the device) go straight to the user's instance (a scan's PDF is deleted from the phone once it is saved);
 - iOS Spotlight: titles, places and short excerpts of the active profile's pages and open tasks, in the phone's own search index (never sent anywhere); emptied when signing out or switching profiles;
-- push notifications through Expo's push service: the instance sends the app's push token, a general text ("something new in the inbox") and the number of unread notifications to Expo, which hands them to Apple or Google.
+- push notifications through the Flowplan push relay (push.flowplan.org, run by the developer): the app registers its APNs / FCM token there for the instance's address and gets an opaque relay token, which it hands the instance together with a public key made on the phone (the private key never leaves the device). The instance sends the notification end-to-end encrypted to that key through the relay to Apple or Google; the relay sees the device token (stored encrypted), the instance's address, the badge number and the category, never the content. The app decrypts on the device. Live Activities' push tokens are registered the same way; what an instance sends to a Live Activity is not encrypted (the system renders it). Older instances without the relay send through Expo's push service as before (push token, a general text, the badge).
 
-Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing – also when it is one of several profiles in the app: the app sends nothing of one profile to another instance or to the developer. Check that the privacy policy at flowplan.org/datenschutz names the app.
+Apple and Google, however, count the data that the developer's own service receives through the app. For an account on **app.flowplan.org**, run by the developer, the answers below apply. A self-hosted instance is run by its operator and is not part of this listing – also when it is one of several profiles in the app: the app sends nothing of one profile to another instance or to the developer – except, for push, the device's push token and the instance's address to the developer's push relay (also for self-hosted instances; no content). Check that the privacy policy at flowplan.org/datenschutz names the app and the push relay.
 
 ### App Store: App Privacy ("nutrition label")
 

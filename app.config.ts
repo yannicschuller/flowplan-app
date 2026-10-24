@@ -15,11 +15,22 @@ const nativeStrings = require("./plugins/widget-suite/strings") as {
 };
 // Siri, Shortcuts, Focus filter and the controls of plugins/intents.
 const intentStrings = require("./plugins/intents/strings") as { localizable: (lang: string) => Record<string, string> };
+// The push relay's placeholder (PROTOCOL.md §6.8 of flowplan-push): iOS
+// shows it from the app's Localizable.strings when the Notification Service
+// Extension cannot replace it (the extension says the same).
+const PUSH_PLACEHOLDER = {
+  de: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Neue Mitteilung" },
+  en: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "New notification" },
+  fr: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Nouvelle notification" },
+} as const;
 const locale = (lang: "de" | "en" | "fr") => {
   const json = JSON.parse(readFileSync(`./locales/${lang}.json`, "utf8")) as { ios: Record<string, string>; android: Record<string, string> };
   return {
     ...json,
-    ios: { ...json.ios, "Localizable.strings": { ...nativeStrings.localizable(nativeStrings.strings, lang), ...intentStrings.localizable(lang) } },
+    ios: {
+      ...json.ios,
+      "Localizable.strings": { ...nativeStrings.localizable(nativeStrings.strings, lang), ...intentStrings.localizable(lang), ...PUSH_PLACEHOLDER[lang] },
+    },
     // The widget gallery (labels and descriptions) in the person's language.
     android: { ...json.android, ...nativeStrings.galleryStrings(lang) },
   };
@@ -61,6 +72,21 @@ const BRAND = "#4146e6";
 // Android push needs a Firebase project (README → Push notifications); the
 // release workflow writes the file from a secret.
 const googleServices = process.env.GOOGLE_SERVICES_JSON || "./google-services.json";
+// The push relay every instance sends through (README → Push notifications):
+// push.flowplan.org unless the build names another (PUSH_RELAY_URL, an
+// origin over HTTPS).
+// The app checks it again (src/push-relay.ts → relayOrigin).
+const PUSH_RELAY = (() => {
+  const value = (process.env.PUSH_RELAY_URL || "https://push.flowplan.org").trim();
+  const url = new URL(value);
+  const local = ["localhost", "127.0.0.1", "[::1]", "10.0.2.2"].includes(url.hostname);
+  if ((url.protocol !== "https:" && !(url.protocol === "http:" && local)) || url.username || url.password || url.search || url.hash || url.pathname !== "/")
+    throw new Error(`PUSH_RELAY_URL must be an https origin: ${value}`);
+  return url.origin;
+})();
+// The APNs environment the build is signed for (expo-notifications' mode
+// below); the app reads the provisioning profile first (modules/flowplan-push).
+const APS_ENVIRONMENT = process.env.APS_ENVIRONMENT === "development" ? "development" : "production";
 
 const config: ExpoConfig = {
   name: PERSONAL ? "Flowplan Test" : "Flowplan",
@@ -112,7 +138,12 @@ const config: ExpoConfig = {
         { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults", NSPrivacyAccessedAPITypeReasons: ["CA92.1", "1C8F.1"] },
       ],
     },
-    ...(WIDGETS ? { entitlements: { "com.apple.security.application-groups": [APP_GROUP] } } : {}),
+    // aps-environment set here: expo-widgets (Live Activity push tokens)
+    // would otherwise write "development" before expo-notifications' mode.
+    entitlements: {
+      ...(WIDGETS ? { "com.apple.security.application-groups": [APP_GROUP] } : {}),
+      ...(!PERSONAL ? { "aps-environment": APS_ENVIRONMENT } : {}),
+    },
   },
   android: {
     package: BUNDLE_ID,
@@ -185,7 +216,7 @@ const config: ExpoConfig = {
         icon: "./assets/notification-icon.png",
         color: BRAND,
         defaultChannel: "inbox",
-        mode: process.env.APS_ENVIRONMENT === "development" ? "development" : "production",
+        mode: APS_ENVIRONMENT,
         enableRemoteNotifications: !PERSONAL,
         enableBackgroundRemoteNotifications: !PERSONAL,
       },
@@ -229,6 +260,11 @@ const config: ExpoConfig = {
     // into the inbox, a page or a database), in the App Group like the
     // widgets, whose session it reads (plugins/with-capture.js).
     WIDGETS && ["./plugins/with-capture", { appGroup: APP_GROUP, bundleIdentifier: `${IOS_BUNDLE_ID}.share`, deploymentTarget: "17.0" }],
+    // iOS: the Notification Service Extension that decrypts the push relay's
+    // notifications on the device (plugins/with-notification-service.js), in
+    // the App Group, whose keychain holds the keys. Not in personal builds
+    // (no push).
+    !PERSONAL && ["./plugins/with-notification-service", { appGroup: APP_GROUP, bundleIdentifier: `${IOS_BUNDLE_ID}.notifications` }],
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).
     WIDGETS && [
@@ -236,7 +272,9 @@ const config: ExpoConfig = {
       {
         bundleIdentifier: `${IOS_BUNDLE_ID}.widgets`,
         groupIdentifier: APP_GROUP,
-        enablePushNotifications: false,
+        // Live Activities get a push token (registered with the push relay,
+        // src/native/live-push.ts); not in personal builds.
+        enablePushNotifications: !PERSONAL,
         widgets: [
           {
             name: "FlowplanTasks",
@@ -375,13 +413,20 @@ const config: ExpoConfig = {
     // iPad: several windows and Handoff of the open page (modules/flowplan-ipad).
     "./plugins/with-ipad",
     "./plugins/with-android-signing",
+    // Android: the push relay's messages are decrypted by modules/flowplan-push
+    // (the only FCM service).
+    "./plugins/with-push-android",
   ].filter((plugin) => plugin !== false) as ExpoConfig["plugins"],
   extra: {
     appGroup: APP_GROUP,
     // Without the widget extension (personal test build) the app leaves
     // widgets and Live Activity out.
     widgets: WIDGETS,
-    // Expo's push service needs the project of the app (README → Push).
+    // Push through the relay (src/native/push.ts).
+    pushRelay: PUSH_RELAY,
+    apsEnvironment: APS_ENVIRONMENT,
+    // Expo's push service – only for instances without the relay (README →
+    // Push) – needs the project of the app.
     ...(process.env.EXPO_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PROJECT_ID } } : {}),
   },
 };

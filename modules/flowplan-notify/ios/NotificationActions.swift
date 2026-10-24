@@ -111,12 +111,16 @@ final class FPNotificationActions: NotificationDelegate {
       if text.isEmpty { return true }
       body["text"] = text
     }
-    Self.send(body, link: link)
+    // Through the push relay the notification names its instance
+    // (PushShared.swift): its id goes to that instance only.
+    Self.send(body, link: link, origin: data["origin"] as? String)
     return true
   }
 
   /// What the instance put into `data`: under "body" for pushes through
-  /// Expo's service, the whole userInfo for notifications of the app itself.
+  /// Expo's service and the push relay (decrypted by the Notification
+  /// Service Extension), the whole userInfo for notifications of the app
+  /// itself.
   static func data(of request: UNNotificationRequest) -> [String: Any] {
     let info = request.content.userInfo
     if let body = info["body"] as? [String: Any] { return body }
@@ -138,10 +142,15 @@ final class FPNotificationActions: NotificationDelegate {
     return String(format: "%04d-%02d-%02d", year, month, day)
   }
 
-  static func send(_ body: [String: Any], link: String?) {
+  static func send(_ body: [String: Any], link: String?, origin: String? = nil) {
     guard let session = FPNotifyKeychain.load() else {
       os_log("No session for the notification's button", log: log, type: .error)
       failed(link: link, message: nil)
+      return
+    }
+    if let origin = origin, origin != session.server {
+      os_log("Notification of another instance than the active profile's", log: log, type: .error)
+      failed(link: nil, message: nil)
       return
     }
     let lang = session.lang.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "en"

@@ -36,7 +36,10 @@ import { VoiceNote } from "./screens/VoiceNote";
 import { PageWindow } from "./screens/PageWindow";
 import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
-import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
+import { askForPush, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
+import { cleanUpPushKeys, leavePush, onDeviceTokenChanged, pushFields, RELAY, relayRefusedBy } from "./native/push";
+import { relayMismatch } from "./push-relay";
+import { onLiveTokensChanged } from "./native/live-push";
 import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
 import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
@@ -94,6 +97,11 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
   // A window that became the main window keeps its page.
   const pendingPath = useRef<string | null>(pathOn(initialUrl, server));
   const registered = useRef<string | null>(null);
+  // The registration last sent to the page, and whether the push relay
+  // waits for its answer (push.ts → pushFields: pending).
+  const sent = useRef<string | null>(null);
+  const relayPending = useRef(false);
+  const sentRelay = useRef(false);
   const backgroundSince = useRef(0);
 
   useEffect(() => {
@@ -106,6 +114,8 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
     void updateWidgets();
     // The configurable widgets get the session at once, also offline.
     syncWidgetSession();
+    // Push relay keys of profiles left while the app was not running.
+    cleanUpPushKeys();
   }, []);
 
   const open = useCallback(
@@ -268,6 +278,10 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
   // finds out, widgets and badge are cleared.
   const signedOut = useCallback(() => {
     registered.current = null;
+    // Push through the relay ends with the session: relay tokens and key go
+    // (a new sign-in makes new ones).
+    const id = store.profiles().active;
+    if (id) void leavePush(id);
     store.setDeviceToken(null);
     syncButtonSession();
     setSignedIn(false);
@@ -276,26 +290,49 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
   }, []);
 
   // Registers this installation for the page's session: device token for the
-  // widgets, Expo push token for notifications. Again when the push token or
-  // the session changes.
+  // widgets, and for notifications the push relay's token and this
+  // profile's public key (native/push.ts) – or, for instances without the
+  // relay, an Expo push token. Again when any of them or the session changes.
   const register = useCallback(async () => {
-    const pushToken = await expoPushToken();
-    const key = `${server}|${pushToken}`;
+    const profile = activeProfile(store.profiles());
+    if (!server || profile?.server !== server) return;
+    const { pending, ...push } = await pushFields(profile, { create: !!store.deviceToken() });
+    relayPending.current = pending;
+    sentRelay.current = !!push.relayToken;
+    // Live Activity tokens reach the instance on their own (live-push.ts):
+    // not a reason to register again.
+    const { liveActivityRelayTokens: _live, ...lasting } = push;
+    const key = `${server}|${JSON.stringify(lasting)}`;
     if (registered.current === key) return;
+    sent.current = key;
     shell.current?.register({
       installationId: store.installationId(),
       platform: Platform.OS === "ios" ? "ios" : "android",
       name: deviceName([Device.deviceName, Device.modelName], Platform.OS === "ios" ? (Platform.isPad ? "iPad" : "iPhone") : "Android"),
       appVersion: `${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`,
-      pushToken,
+      ...push,
     });
   }, [server]);
+
+  // A new APNs / FCM token, or new Live Activity tokens: registered again.
+  useEffect(() => {
+    const again = () => {
+      registered.current = null;
+      void register();
+    };
+    const tokens = onDeviceTokenChanged(again);
+    onLiveTokensChanged(again);
+    return () => {
+      tokens.remove();
+      onLiveTokensChanged(null);
+    };
+  }, [register]);
 
   const onMessage = useCallback(
     async (message: PageMessage) => {
       switch (message.type) {
         case "registered": {
-          const body = message.body as { deviceToken?: string; push?: boolean; pushAvailable?: boolean } | null;
+          const body = message.body as { deviceToken?: string; push?: boolean; pushAvailable?: boolean; pushRelay?: unknown } | null;
           if (message.status === 200 && body?.deviceToken) {
             store.setDeviceToken(body.deviceToken);
             syncButtonSession();
@@ -304,8 +341,24 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
             setLocalRemindersWanted(body.push !== true);
             setSignedIn(true);
             setPushAvailable(body.pushAvailable !== false);
-            registered.current = `${server}|${(await expoPushToken()) ?? null}`;
+            registered.current = sent.current;
             void refresh();
+            // Signed in for sure now: the push relay registration that
+            // waited for it, and the instance gets its token.
+            // The instance sends through another relay or signs as another
+            // origin: the relay registration goes, register without it.
+            if (sentRelay.current && server && relayMismatch(body.pushRelay, RELAY, server)) {
+              sentRelay.current = false;
+              relayRefusedBy(server);
+              const id = store.profiles().active;
+              if (id) void leavePush(id);
+              registered.current = null;
+              void register();
+            } else if (relayPending.current) {
+              relayPending.current = false;
+              registered.current = null;
+              void register();
+            }
             // Asked once, right after the first sign-in.
             if (body.pushAvailable !== false && !store.pushAsked() && (await pushPermission()) === "undetermined") {
               store.setPushAsked();

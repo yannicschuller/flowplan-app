@@ -1,0 +1,26 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.flowplan'
+version = '1.0.0'
+
+android {
+  namespace "app.flowplan.push"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // FlowplanMessagingService hands decrypted messages on to expo-notifications'
+  // service (channels, categories and their buttons, taps, badge).
+  implementation project(':expo-notifications')
+  // The version expo-notifications 58.1 uses.
+  implementation 'com.google.firebase:firebase-messaging:25.0.1'
+  // X25519 and HKDF-SHA256 on every Android version the app supports (26+);
+  // AES-GCM and the Keystore are the platform's.
+  implementation 'com.google.crypto.tink:tink-android:1.13.0'
+}

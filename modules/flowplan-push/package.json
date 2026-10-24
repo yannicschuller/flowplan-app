@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-push",
+  "version": "1.0.0",
+  "description": "End-to-end encrypted push through the Flowplan push relay: device keys and decryption",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}

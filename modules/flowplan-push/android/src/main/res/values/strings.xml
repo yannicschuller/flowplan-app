@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- A notification of the push relay that could not be decrypted. -->
+  <string name="flowplan_push_placeholder">New notification</string>
+</resources>

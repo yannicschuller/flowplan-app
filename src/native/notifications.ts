@@ -1,14 +1,16 @@
-// Push notifications through Expo's push service: the app asks once after the
-// first sign-in, hands its Expo push token to the instance (registration in
-// device.ts) and opens the right page when a notification is tapped. The
-// instance only says that something new is in the inbox (like Web Push) and
-// sets the badge to the number of unread notifications.
+// Push notifications: the app asks once after the first sign-in, registers
+// with the instance (App.tsx → register; through the push relay, push.ts,
+// or – for older instances – with an Expo push token) and opens the right
+// page when a notification is tapped. expo-notifications shows them,
+// keeps the permission, the categories and their buttons, the badge and
+// the app's own reminders.
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { t } from "../i18n";
 import { safePath } from "../navigation";
 import { isButton } from "../notification-buttons";
+import { store } from "../store";
 
 export function setUpNotifications() {
   // In the app, a new notification shows as banner without a sound: the
@@ -55,16 +57,17 @@ export async function askForPush(): Promise<PushState> {
   }
 }
 
-// The Expo push token, when push is allowed and the build knows its Expo
-// project (EXPO_PROJECT_ID, README → Push notifications); otherwise null.
+// The Expo push token – only for instances without the push relay – when
+// push is allowed and the build knows its Expo project (EXPO_PROJECT_ID,
+// README → Push notifications); otherwise null.
 let warnedAboutProject = false;
 export async function expoPushToken(): Promise<string | null> {
   const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
   if (!projectId) {
-    // A local build without EXPO_PROJECT_ID: everything works except push.
+    // A build without EXPO_PROJECT_ID: instances with the relay still push.
     if (__DEV__ && !warnedAboutProject) {
       warnedAboutProject = true;
-      console.warn("Flowplan: no Expo project in this build (set EXPO_PROJECT_ID, README → Push notifications) – push notifications are unavailable.");
+      console.warn("Flowplan: no Expo project in this build (EXPO_PROJECT_ID) – instances without the push relay cannot push.");
     }
     return null;
   }
@@ -79,11 +82,13 @@ export async function expoPushToken(): Promise<string | null> {
 
 // The path a notification wants to open (data.url, e.g. "/#page=…"); none
 // for its buttons, which do their work without opening anything
-// (notification-actions.ts).
-export function notificationPath(response: Notifications.NotificationResponse | null): string | null {
+// (notification-actions.ts), and none for a notification of another
+// instance than the active profile's (data.origin, push relay).
+export function notificationPath(response: Notifications.NotificationResponse | null, server: string | null = store.server()): string | null {
   if (isButton(response?.actionIdentifier)) return null;
-  const url = (response?.notification.request.content.data as { url?: unknown } | undefined)?.url;
-  return typeof url === "string" ? safePath(url) : null;
+  const data = response?.notification.request.content.data as { url?: unknown; origin?: unknown } | undefined;
+  if (data?.origin !== undefined && data.origin !== server) return null;
+  return typeof data?.url === "string" ? safePath(data.url) : null;
 }
 
 export function onNotificationOpened(listener: (path: string) => void) {

@@ -19,7 +19,7 @@ import { getLocales } from "expo-localization";
 import { setActionSession, setActionTexts } from "../../modules/flowplan-notify/src";
 import { locale, pickLocale, setLocale } from "../i18n";
 import { tn } from "../i18n-notify";
-import { buttonRequest, categoryButtons, type ButtonRequest } from "../notification-buttons";
+import { buttonRequest, categoryButtons, notificationData, type ButtonRequest } from "../notification-buttons";
 import { timeoutSignal } from "../server";
 import { store } from "../store";
 import { localDay } from "../summary";
@@ -81,10 +81,13 @@ export async function answerButton(response: Notifications.NotificationResponse)
   const request = buttonRequest(response, localDay());
   const identifier = response.notification.request.identifier;
   if (!request) return;
+  // Through the push relay a notification names its instance: its id goes
+  // to that instance only (the active profile's).
+  const origin = notificationData(response).origin;
   const key = `${identifier}|${request.action}`;
   if (answered.has(key)) return;
   answered.add(key);
-  const result = await ask(request);
+  const result = origin !== undefined && origin !== store.server() ? { ok: false as const, error: "" } : await ask(request);
   // The notification has been dealt with either way (Android keeps it,
   // with a spinner after a reply, until it is replaced or dismissed).
   await Notifications.dismissNotificationAsync(identifier).catch(() => {});

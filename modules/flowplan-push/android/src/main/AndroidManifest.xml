@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- FCM messages: the push relay's encrypted ones are decrypted here,
+         everything else goes on to expo-notifications (whose own service the
+         app's manifest removes, plugins/with-push-android.js, so that only
+         one service gets MESSAGING_EVENT). -->
+    <service
+      android:name="app.flowplan.push.FlowplanMessagingService"
+      android:exported="false">
+      <intent-filter android:priority="10">
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>

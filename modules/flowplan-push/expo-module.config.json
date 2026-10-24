@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["FlowplanPushModule"]
+  },
+  "android": {
+    "modules": ["app.flowplan.push.FlowplanPushModule"]
+  }
+}

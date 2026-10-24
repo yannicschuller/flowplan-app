@@ -5,8 +5,9 @@
 // asks the instance while it is in front (every minute, every few seconds
 // while a job runs), in the background task and after its own actions.
 // iOS starts Live Activities only while the app is in front; updates and
-// ends also work in the background. The instance sends no Live Activity
-// pushes, so none are asked for.
+// ends also work in the background. Each activity's push token goes to the
+// push relay and the instance (live-push.ts), so instances that support it
+// can update and end them while the app sleeps.
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
@@ -20,6 +21,7 @@ import { localDay } from "../summary";
 import { widgetAction, widgetData, type ActionName } from "../widgets/api";
 import type * as IosWidgets from "../widgets/ios";
 import { connection, timeZone } from "./suite";
+import { endLiveActivity, stopWatchingLiveActivities, watchLiveActivity, type PushTokenActivity } from "./live-push";
 
 const withWidgets = (Constants.expoConfig?.extra as { widgets?: boolean } | undefined)?.widgets !== false;
 const ios: typeof IosWidgets | null = Platform.OS === "ios" && withWidgets ? require("../widgets/ios") : null;
@@ -99,25 +101,28 @@ async function show(next: Activities, foreground: boolean) {
 async function showIos(kind: ActivityKind, next: Activities, foreground: boolean) {
   if (!ios) return;
   const factory = ios.liveActivities[kind] as unknown as {
-    getInstances(): { update(props: object): Promise<void>; end(policy?: unknown, props?: object): Promise<void> }[];
-    start(props: object, url?: string): unknown;
+    getInstances(): ({ update(props: object): Promise<void>; end(policy?: unknown, props?: object): Promise<void> } & PushTokenActivity)[];
+    start(props: object, url?: string): PushTokenActivity;
   };
   const props = next[kind] as (object & { url?: string }) | undefined;
   const running = factory.getInstances();
   if (!props) {
     // A finished job ends showing its state; everything else at once.
+    endLiveActivity(kind);
     await Promise.allSettled(running.map((activity) => activity.end(kind === "jobs" ? "default" : "immediate")));
     return;
   }
   if (kind === "jobs" && (props as { status?: string }).status !== "running") {
+    endLiveActivity(kind);
     await Promise.allSettled(running.map((activity) => activity.end("default", props)));
     return;
   }
   if (running.length) {
     await running[0].update(props);
+    watchLiveActivity(kind, running[0]);
     await Promise.allSettled(running.slice(1).map((activity) => activity.end("immediate")));
   } else if (foreground) {
-    factory.start(props, props.url);
+    watchLiveActivity(kind, factory.start(props, props.url));
   } else {
     // Not started in the background (iOS refuses): the next time in front.
     throw new Error("background");
@@ -191,6 +196,7 @@ export function listenToActivityButtons() {
 export async function endAllActivities() {
   answers = {};
   lastKeys = {};
+  stopWatchingLiveActivities();
   await show({ recording: last.recording }, false);
   if (Platform.OS === "android") for (const kind of ACTIVITY_KINDS) if (kind !== "recording") hideOngoing(`activity-${kind}`);
   if (ios)

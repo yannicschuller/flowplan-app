@@ -17,6 +17,7 @@ import {
 } from "./profiles";
 import type { Summary } from "./summary";
 import { parseAdminState, type AdminState } from "./admin";
+import { parseLiveRecords, parseRecord, type LiveRecords, type PushRecord } from "./push-relay";
 
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 const KEYS = {
@@ -105,6 +106,13 @@ export const store = {
 
   pushAsked: () => read(KEYS.pushAsked) === "1",
   setPushAsked: () => write(KEYS.pushAsked, "1"),
+
+  // A profile's registration with the push relay (by id: also read while
+  // leaving it). The device token itself is not kept, only its hash.
+  pushRecord: (id: string): PushRecord | null => parseRecord(read(profileKey(id, "push"))),
+  setPushRecord: (id: string, record: PushRecord | null) => write(profileKey(id, "push"), record ? JSON.stringify(record) : null),
+  liveRecords: (id: string): LiveRecords => parseLiveRecords(read(profileKey(id, "livePush"))),
+  setLiveRecords: (id: string, records: LiveRecords) => write(profileKey(id, "livePush"), Object.keys(records).length ? JSON.stringify(records) : null),
 
   // Leaving an instance (another profile, signing out, removing it): nothing
   // of it stays on the phone.

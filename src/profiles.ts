@@ -30,7 +30,9 @@ export class ProfileError extends Error {
 
 // The keys that belong to one profile; everything else (installation id, app
 // lock, push asked) is the app's.
-export const PROFILE_KEYS = ["deviceToken", "summary", "adminSummary"] as const;
+// push / livePush: the profile's registration with the push relay and its
+// Live Activities' (push-relay.ts).
+export const PROFILE_KEYS = ["deviceToken", "summary", "adminSummary", "push", "livePush"] as const;
 export type ProfileKey = (typeof PROFILE_KEYS)[number];
 export function profileKey(id: string, key: ProfileKey) {
   if (!ID.test(id)) throw new ProfileError("invalid");

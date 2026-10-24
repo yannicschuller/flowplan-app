@@ -15,9 +15,11 @@
 #   fastlane android metadata texts and images from store/google-play
 #
 # Without credentials the build workflow builds unsigned instead (no fastlane).
-# The iOS app has three targets: the app (app.flowplan.mobile), its widgets
-# and Live Activity (app.flowplan.mobile.widgets) and the share extension
-# (app.flowplan.mobile.share), all in the App Group group.app.flowplan.mobile.
+# The iOS app has four targets: the app (app.flowplan.mobile), its widgets
+# and Live Activity (app.flowplan.mobile.widgets), the share extension
+# (app.flowplan.mobile.share) and the Notification Service Extension of the
+# push relay (app.flowplan.mobile.notifications), all in the App Group
+# group.app.flowplan.mobile.
 
 require "digest"
 require "json"
@@ -27,20 +29,24 @@ ROOT = File.expand_path("..", __dir__)
 BUNDLE_ID = "app.flowplan.mobile"
 WIDGETS_ID = "#{BUNDLE_ID}.widgets"
 SHARE_ID = "#{BUNDLE_ID}.share"
+NOTIFICATIONS_ID = "#{BUNDLE_ID}.notifications"
 APP_GROUP = "group.#{BUNDLE_ID}"
 # Every target of the Xcode project that app.config.ts generates, with what
 # its App ID needs in the developer portal: the app (push, App Group) and the
-# widgets and Live Activity extension (App Group; expo-widgets with
-# enablePushNotifications: false) – which also holds the configurable widgets,
+# widgets and Live Activity extension (App Group; the Live Activities' push
+# tokens are the app's, under its push capability) – which also holds the configurable widgets,
 # controls and their App Intents (plugins/with-widget-suite.js), and whose
 # keychain items use the App Group as access group – and the share extension
-# (plugins/with-capture.js: App Group, reads that keychain item). The
-# document scanner and Spotlight need no capability. No Associated Domains, iCloud or Sign in with Apple. A new
+# (plugins/with-capture.js: App Group, reads that keychain item) and the
+# Notification Service Extension (plugins/with-notification-service.js: App
+# Group, whose keychain holds the push relay's keys; no push capability of
+# its own). The document scanner and Spotlight need no capability. No Associated Domains, iCloud or Sign in with Apple. A new
 # target or capability in app.config.ts belongs here too.
 IOS_TARGETS = [
   { target: "Flowplan", bundle_id: BUNDLE_ID, name: "Flowplan", capabilities: %w[APP_GROUPS PUSH_NOTIFICATIONS] },
   { target: "ExpoWidgetsTarget", bundle_id: WIDGETS_ID, name: "Flowplan Widgets", capabilities: %w[APP_GROUPS] },
   { target: "FlowplanShare", bundle_id: SHARE_ID, name: "Flowplan Share", capabilities: %w[APP_GROUPS] },
+  { target: "FlowplanNotifications", bundle_id: NOTIFICATIONS_ID, name: "Flowplan Notifications", capabilities: %w[APP_GROUPS] },
 ].freeze
 # Certificate and profiles of fastlane match: a private repository, encrypted
 # with MATCH_PASSWORD (store/README.md → One-click setup).
@@ -186,6 +192,7 @@ platform :ios do
         "Flowplan" => [BUNDLE_ID, "IOS_PROVISIONING_PROFILE", ENV.fetch("IOS_PROVISIONING_PROFILE_NAME", "Flowplan App Store")],
         "ExpoWidgetsTarget" => [WIDGETS_ID, "IOS_WIDGETS_PROVISIONING_PROFILE", ENV.fetch("IOS_WIDGETS_PROVISIONING_PROFILE_NAME", "Flowplan Widgets App Store")],
         "FlowplanShare" => [SHARE_ID, "IOS_SHARE_PROVISIONING_PROFILE", ENV.fetch("IOS_SHARE_PROVISIONING_PROFILE_NAME", "Flowplan Share App Store")],
+        "FlowplanNotifications" => [NOTIFICATIONS_ID, "IOS_NOTIFICATIONS_PROVISIONING_PROFILE", ENV.fetch("IOS_NOTIFICATIONS_PROVISIONING_PROFILE_NAME", "Flowplan Notifications App Store")],
       }
       profiles.each do |target, (bundle_id, secret, name)|
         profile = File.join(Dir.tmpdir, "#{target}.mobileprovision")
@@ -550,6 +557,7 @@ platform :ios do
       "Identifiers → #{BUNDLE_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
       "Identifiers → #{WIDGETS_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
       "Identifiers → #{SHARE_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
+      "Identifiers → #{NOTIFICATIONS_ID} → App Groups → Configure → tick #{APP_GROUP} → Continue → Save → Confirm",
       "Then run Actions → iOS setup again: it renews the profiles by itself.",
     ])
   end
