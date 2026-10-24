@@ -286,9 +286,9 @@ struct FPViewEntity: AppEntity {
     }
 
     func suggestedEntities() async throws -> [FPViewEntity] {
-      if let id = tasks?.database?.id { return await FPViewEntity.views(kind: "tasks", pageId: id) }
-      if let id = pinned?.page?.id { return await FPViewEntity.views(kind: "pinned", pageId: id) }
-      if let id = counter?.database?.id { return await FPViewEntity.views(kind: "counter", pageId: id) }
+      if let id = tasks?.database.id { return await FPViewEntity.views(kind: "tasks", pageId: id) }
+      if let id = pinned?.page.id { return await FPViewEntity.views(kind: "pinned", pageId: id) }
+      if let id = counter?.database.id { return await FPViewEntity.views(kind: "counter", pageId: id) }
       return []
     }
   }
@@ -331,8 +331,8 @@ struct FPFieldEntity: AppEntity {
     }
 
     func suggestedEntities() async throws -> [FPFieldEntity] {
-      if let id = pinned?.page?.id { return await FPFieldEntity.fields(kind: "pinned", pageId: id) }
-      if let id = counter?.database?.id { return await FPFieldEntity.fields(kind: "counter", pageId: id) }
+      if let id = pinned?.page.id { return await FPFieldEntity.fields(kind: "pinned", pageId: id) }
+      if let id = counter?.database.id { return await FPFieldEntity.fields(kind: "counter", pageId: id) }
       return []
     }
   }
@@ -344,7 +344,7 @@ struct FPGroupValues: DynamicOptionsProvider {
   @IntentParameterDependency<FPCounterConfiguration>(\.$database, \.$groupField) var counter
 
   func results() async throws -> [String] {
-    guard let pageId = counter?.database?.id, let field = counter?.groupField,
+    guard let pageId = counter?.database.id, let field = counter?.groupField,
           let database = await FPOptions.database("counter", pageId: pageId) else { return [] }
     let fieldId: String = field.fieldId
     let properties: [FPJSON] = database["properties"].array
