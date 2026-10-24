@@ -13,6 +13,12 @@ const { strings, phrases, gallery, galleryStrings, localizable } = require("../p
   galleryStrings: (lang: string) => Record<string, string>;
   localizable: (table: Record<string, { de: string; fr: string }>, lang: string) => Record<string, string>;
 };
+// The App Shortcuts provider also lists plugins/intents' shortcuts, whose
+// texts and phrases are in its own table.
+const intents = require("../plugins/intents/strings") as {
+  phrases: Record<string, { de: string; fr: string }>;
+  localizable: (lang: string) => Record<string, string>;
+};
 const { swiftKeys, shortcutPhrases } = require("../plugins/widget-suite/swift-keys") as {
   swiftKeys: (source: string) => Set<string>;
   shortcutPhrases: (source: string) => Set<string>;
@@ -30,7 +36,7 @@ test("every text of the Swift sources is translated, with the same placeholders"
   for (const file of swiftFiles)
     for (const key of swiftKeys(readFileSync(file, "utf8"))) {
       for (const lang of ["de", "en", "fr"]) {
-        const table = localizable(strings, lang);
+        const table = { ...localizable(strings, lang), ...intents.localizable(lang) };
         if (!table[key]) missing.push(`${lang}: ${key} (${file.split("/").pop()})`);
         else assert.deepEqual(placeholders(table[key]), placeholders(key), `${lang}: ${key}`);
       }
@@ -47,11 +53,12 @@ test("Siri phrases exist in German, English and French and name the app", () => 
   const source = readFileSync(join(root, "plugins/widget-suite/app/FlowplanAppIntents.swift"), "utf8");
   const used = shortcutPhrases(source);
   assert.ok(used.size >= 6);
+  const all = { ...phrases, ...intents.phrases };
   for (const phrase of used) {
-    assert.ok(phrases[phrase], `phrase without translation: ${phrase}`);
-    for (const lang of ["de", "fr"] as const) assert.ok(phrases[phrase][lang].includes("${applicationName}"), `${lang}: ${phrase}`);
+    assert.ok(all[phrase], `phrase without translation: ${phrase}`);
+    for (const lang of ["de", "fr"] as const) assert.ok(all[phrase][lang].includes("${applicationName}"), `${lang}: ${phrase}`);
   }
-  assert.deepEqual(Object.keys(phrases).sort(), [...used].sort());
+  assert.deepEqual(Object.keys(all).sort(), [...used].sort());
 });
 
 test("every widget has a gallery name and description in three languages", () => {
