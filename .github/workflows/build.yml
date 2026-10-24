@@ -97,6 +97,8 @@ jobs:
           IOS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_PROVISIONING_PROFILE_NAME }}
           IOS_WIDGETS_PROVISIONING_PROFILE: ${{ secrets.IOS_WIDGETS_PROVISIONING_PROFILE }}
           IOS_WIDGETS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_WIDGETS_PROVISIONING_PROFILE_NAME }}
+          IOS_SHARE_PROVISIONING_PROFILE: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE }}
+          IOS_SHARE_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_SHARE_PROVISIONING_PROFILE_NAME }}
         run: bundle exec fastlane ios ${{ inputs.upload && 'beta' || 'build' }}
       - name: Unsigned build
         if: env.SIGNED != 'true'

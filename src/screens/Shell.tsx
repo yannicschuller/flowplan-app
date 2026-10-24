@@ -15,6 +15,7 @@ import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
+import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { afterAnswer, backAction } from "../back";
 import {
   backScript,
@@ -357,7 +358,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           // The instance shows the app's sign-in (passkeys and SSO through the
           // system) when it sees this.
           applicationNameForUserAgent={`FlowplanMobile/${version}`}
-          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version })}
+          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable() })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}

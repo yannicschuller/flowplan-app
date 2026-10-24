@@ -86,10 +86,11 @@ const config: ExpoConfig = {
       // whiteboard), for which the web view offers "Take Photo or Video";
       // the app's own capture screen (widgets, Siri) records voice memos
       // (expo-audio) and takes photos (expo-image-picker, which on Android
-      // brings the CAMERA permission). That is the camera and microphone use
+      // brings the CAMERA permission); the document scanner (VisionKit,
+      // modules/flowplan-capture) uses the camera too. That is the camera and microphone use
       // these texts describe (also in locales/*.json). Photos are chosen with
       // the system picker, which needs no photo library permission.
-      NSCameraUsageDescription: "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
+      NSCameraUsageDescription: "Flowplan uses the camera when you take a photo for a page or a whiteboard, or scan a document.",
       NSMicrophoneUsageDescription: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       NSPhotoLibraryAddUsageDescription: "Flowplan saves images to your photos when you ask it to.",
       NSFaceIDUsageDescription: "Flowplan uses Face ID to unlock the app when the app lock is on.",
@@ -191,7 +192,7 @@ const config: ExpoConfig = {
       "expo-image-picker",
       {
         photosPermission: false,
-        cameraPermission: "Flowplan uses the camera when you take a photo for a page or a whiteboard.",
+        cameraPermission: "Flowplan uses the camera when you take a photo for a page or a whiteboard, or scan a document.",
         microphonePermission: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       },
     ],
@@ -199,6 +200,10 @@ const config: ExpoConfig = {
     // added to expo-widgets' extension and the app. Before expo-widgets:
     // mods run last-added first (plugins/with-widget-suite.js).
     WIDGETS && "./plugins/with-widget-suite",
+    // iOS: the share extension (links, text, images and PDFs from other apps
+    // into the inbox, a page or a database), in the App Group like the
+    // widgets, whose session it reads (plugins/with-capture.js).
+    WIDGETS && ["./plugins/with-capture", { appGroup: APP_GROUP, bundleIdentifier: `${IOS_BUNDLE_ID}.share`, deploymentTarget: "17.0" }],
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).
     WIDGETS && [

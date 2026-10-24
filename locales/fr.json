@@ -1,7 +1,7 @@
 {
   "ios": {
     "CFBundleDisplayName": "Flowplan",
-    "NSCameraUsageDescription": "Flowplan utilise l’appareil photo quand tu prends une photo pour une page ou un tableau blanc.",
+    "NSCameraUsageDescription": "Flowplan utilise l’appareil photo quand tu prends une photo pour une page ou un tableau blanc, ou que tu numérises un document.",
     "NSMicrophoneUsageDescription": "Flowplan utilise le micro quand tu enregistres une note vocale ou une vidéo pour une page.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan enregistre des images dans tes photos quand tu le demandes.",
     "NSFaceIDUsageDescription": "Flowplan utilise Face ID pour déverrouiller l’app quand le verrouillage est activé."
