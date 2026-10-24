@@ -1,7 +1,8 @@
 # Every push and pull request: quick checks, no native build – tests,
 # TypeScript, the JavaScript bundle for iOS and Android, and the generated
-# native projects (all config plugins). Builds run only by hand on the own
-# Mac (build.yml, release.yml).
+# native projects (all config plugins). Runs on the own Mac runner like the
+# builds (build.yml, release.yml), so it uses no paid Actions minutes; while
+# the Mac sleeps, the run waits in the queue.
 name: CI
 
 on:
@@ -18,8 +19,8 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
