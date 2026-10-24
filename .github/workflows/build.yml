@@ -76,6 +76,16 @@ jobs:
         run: |
           bundle config set --local path vendor/bundle
           bundle install --jobs 4
+      # iPhone Duo runs apps built with an SDK before iOS 27.1 in a
+      # compatibility mode (not under its status bar and camera, a black
+      # frame on the open display); Xcode 27.1 or newer builds edge to edge.
+      - name: Xcode version
+        run: |
+          xcodebuild -version
+          sdk="$(xcrun --sdk iphoneos --show-sdk-version)"
+          if awk -v v="$sdk" 'BEGIN { split(v, p, "."); exit !((p[1] * 100 + p[2]) < 2701) }'; then
+            echo "::warning title=iOS SDK $sdk::On iPhone Duo this build runs in compatibility mode (not edge to edge). Build with Xcode 27.1 or newer."
+          fi
       - name: Xcode project
         run: |
           npx expo prebuild --clean --platform ios --no-install

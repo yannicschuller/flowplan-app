@@ -22,7 +22,7 @@ export function Offline({ server, onRetry, onProfiles }: { server: string; onRet
   }, [onRetry]);
   return (
     <View style={{ flex: 1, backgroundColor: p.background }}>
-      <ScrollView contentContainerStyle={[styles.center, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }]}>
+      <ScrollView contentContainerStyle={[styles.center, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28, paddingLeft: insets.left + 24, paddingRight: insets.right + 24 }]}>
         <Logo />
         <Text accessibilityRole="header" style={[styles.title, { color: p.text }]}>
           {t("offlineTitle")}

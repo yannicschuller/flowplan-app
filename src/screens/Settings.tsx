@@ -12,7 +12,7 @@ import { formatWhen } from "../admin";
 import { activeProfile, type ProfileState } from "../profiles";
 import { shortServer } from "../server";
 import { store } from "../store";
-import { Button, styles, usePalette } from "../ui";
+import { Button, SheetBody, styles, usePalette } from "../ui";
 import { askForPush, pushPermission, type PushState } from "../native/notifications";
 import { ProfileList } from "./Profiles";
 import { activityChoices, setActivityChoices } from "../native/activities";
@@ -97,7 +97,9 @@ export function Settings({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: p.background }}>
+      {/* The sides clear of the camera and the side status bar (landscape,
+          the closed iPhone Duo); the list runs under the home indicator. */}
+      <SheetBody style={{ backgroundColor: p.background }} edges={["left", "right"]}>
         <View style={[settingsStyles.bar, { paddingTop: Platform.OS === "android" ? insets.top + 8 : 14, borderColor: p.line }]}>
           <Text accessibilityRole="header" style={[settingsStyles.barTitle, { color: p.text }]}>
             {t("settingsTitle")}
@@ -189,7 +191,7 @@ export function Settings({
             {t("version", { version: `${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})` })}
           </Text>
         </ScrollView>
-      </View>
+      </SheetBody>
     </Modal>
   );
 }

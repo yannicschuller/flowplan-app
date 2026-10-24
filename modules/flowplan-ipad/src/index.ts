@@ -19,22 +19,38 @@ export type WindowPage = { url: string; title?: string; restore?: boolean };
 
 type NativeModule = {
   multipleScenes?(): boolean;
+  windowsAvailable?(scene: string | null): Promise<boolean>;
   consumeContinuedPage?(): string | null;
   openWindow?(url: string, scene: string | null): void;
   setPage?(scene: string | null, page: WindowPage | null): void;
   setKeyCommands?(scene: string | null, commands: KeyCommand[]): void;
   addListener(event: "onKeyCommand", listener: (event: { scene: string; action: string }) => void): EventSubscription;
   addListener(event: "onContinuePage", listener: () => void): EventSubscription;
+  addListener(event: "onWindowRefused", listener: (event: { scene: string; url: string }) => void): EventSubscription;
 };
 
 const native = Platform.OS === "ios" ? requireOptionalNativeModule<NativeModule>("FlowplanIPad") : null;
 const none = { remove() {} };
 
-// Whether the app can open more windows (iPad with multiple scenes).
+// Whether the app may open more windows at all (multiple scenes in its
+// Info.plist; no idiom check: iPhone Duo has them too). Whether a window can
+// open one right now: windowsAvailable.
 export function supportsWindows(): boolean {
-  if (Platform.OS !== "ios" || !Platform.isPad) return false;
+  if (Platform.OS !== "ios") return false;
   try {
     return native?.multipleScenes?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+// Whether this window can open another one now: an iPad, or an iPhone with
+// several windows whose window is wide (the inner display of iPhone Duo).
+// Changes when the window does (asked again after every resize).
+export async function windowsAvailable(scene: string | null): Promise<boolean> {
+  if (Platform.OS !== "ios" || !native?.windowsAvailable) return false;
+  try {
+    return (await native.windowsAvailable(scene)) === true;
   } catch {
     return false;
   }
@@ -57,6 +73,13 @@ export function setKeyCommands(scene: string | null, commands: KeyCommand[]) {
   try {
     native?.setKeyCommands?.(scene, commands);
   } catch {}
+}
+
+// UIKit opened no window for the address (none possible right now): the
+// window that asked shows it itself.
+export function addWindowRefusedListener(listener: (scene: string, url: string) => void) {
+  if (!native) return none;
+  return native.addListener("onWindowRefused", ({ scene, url }) => listener(scene, url));
 }
 
 export function addKeyCommandListener(listener: (scene: string, action: string) => void) {

@@ -2,6 +2,7 @@
 // colours and type of the Flowplan web app.
 import React from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useColorScheme, View, type ViewStyle } from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets, type Edge } from "react-native-safe-area-context";
 
 export const BACKGROUND = { light: "#fcfbf8", dark: "#16151b" };
 const palettes = {
@@ -63,6 +64,27 @@ export function Button({
 export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const p = usePalette();
   return <View style={[styles.screen, { backgroundColor: p.background }, style]}>{children}</View>;
+}
+
+// The content of a page sheet (settings, capture, scan, voice note), clear
+// of the system's areas on every side: a sheet measures its own (its own
+// provider) – it is not the window. On an iPad and an open iPhone Duo it
+// floats in the middle without them; in landscape and on the closed iPhone
+// Duo its sides have them (the camera, the status bar along the side).
+export function SheetBody({ children, style, edges = ["bottom", "left", "right"] }: { children: React.ReactNode; style?: ViewStyle; edges?: Edge[] }) {
+  return (
+    <SafeAreaProvider>
+      <SheetInsets style={style} edges={edges}>
+        {children}
+      </SheetInsets>
+    </SafeAreaProvider>
+  );
+}
+
+function SheetInsets({ children, style, edges }: { children: React.ReactNode; style?: ViewStyle; edges: Edge[] }) {
+  const insets = useSafeAreaInsets();
+  const side = (edge: Edge) => (edges.includes(edge) ? insets[edge] : 0);
+  return <View style={[{ flex: 1, paddingBottom: side("bottom"), paddingLeft: side("left"), paddingRight: side("right") }, style]}>{children}</View>;
 }
 
 export const styles = StyleSheet.create({

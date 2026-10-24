@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { handoffPage, handoffTarget, keyCommandsFrom, pathOn, shortcutScript } from "../src/ipad";
 import { windowRegistry } from "../src/windows";
-import { bridgeScript, parsePageMessage } from "../src/bridge-script";
+import { bridgeScript, parsePageMessage, windowsScript } from "../src/bridge-script";
 
 const require = createRequire(import.meta.url);
 const { patchSceneDelegate } = require("../plugins/with-ipad.js") as { patchSceneDelegate: (contents: string) => string };
@@ -97,10 +98,62 @@ test("the first window is the main window; the next takes over when it closes", 
 test("the bridge offers new windows only where the app has them, and the shortcuts everywhere", () => {
   const ipad = bridgeScript({ server, platform: "ios", version: "1.0.0", windows: true });
   const phone = bridgeScript({ server, platform: "ios", version: "1.0.0" });
-  assert.match(ipad, /openWindow: \(url\) => post\(\{ type: "openWindow"/);
+  assert.match(ipad, /get openWindow\(\)/);
   assert.doesNotMatch(phone, /openWindow/);
   assert.match(phone, /shortcuts: \(list\) => post\(\{ type: "shortcuts"/);
   assert.deepEqual(parsePageMessage(JSON.stringify({ type: "openWindow", url: `${server}/#inbox` })), { type: "openWindow", url: `${server}/#inbox` });
+});
+
+// The bridge in a minimal page: FlowplanApp and what the page posts.
+function runBridge(script: string) {
+  const listeners = new Map<string, ((event: unknown) => void)[]>();
+  const posted: unknown[] = [];
+  const page: Record<string, unknown> = {
+    location: { origin: server },
+    ReactNativeWebView: { postMessage: (data: string) => posted.push(JSON.parse(data)) },
+    addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, [...(listeners.get(type) || []), listener]),
+    dispatchEvent: (event: { type: string }) => (listeners.get(event.type) || []).forEach((listener) => listener(event)),
+    CustomEvent: class {
+      constructor(
+        public type: string,
+        init: { detail: unknown },
+        public detail = init.detail,
+      ) {}
+    },
+    navigator: {},
+    document: { documentElement: {}, head: { append() {} }, body: null, createElement: () => ({}), querySelector: () => null },
+    getComputedStyle: () => ({ backgroundColor: "" }),
+    matchMedia: () => ({ addEventListener() {} }),
+    requestAnimationFrame: () => 1,
+    MutationObserver: class {
+      observe() {}
+    },
+    innerWidth: 400,
+    innerHeight: 800,
+  };
+  page.window = page;
+  page.top = page;
+  vm.runInNewContext(script, page);
+  return { app: page.FlowplanApp as Record<string, unknown>, posted, run: (code: string) => vm.runInNewContext(code, page) };
+}
+
+test("new windows: offered while the window can open one (iPad, the open iPhone Duo), not on the closed one", () => {
+  const { app, posted, run } = runBridge(bridgeScript({ server, platform: "ios", version: "1.0.0", windows: true }));
+  // Until the app says so (after loading), the page has no "Open in new window".
+  assert.equal(app.openWindow, undefined);
+  run(windowsScript(true));
+  assert.equal(typeof app.openWindow, "function");
+  (app.openWindow as unknown as (url: string) => void)(`${server}/#inbox`);
+  assert.deepEqual(posted.at(-1), { type: "openWindow", url: `${server}/#inbox` });
+  // Closed: the menu item goes away again.
+  run(windowsScript(false));
+  assert.equal(app.openWindow, undefined);
+  assert.ok(Object.isFrozen(app));
+  // Without windows (Android, a build without scenes) there is none at all.
+  const phone = runBridge(bridgeScript({ server, platform: "ios", version: "1.0.0" }));
+  phone.run(windowsScript(true));
+  assert.equal(phone.app.openWindow, undefined);
+  assert.equal(typeof phone.app.shortcuts, "function");
 });
 
 test("the scene delegate gives every window its id and page", () => {

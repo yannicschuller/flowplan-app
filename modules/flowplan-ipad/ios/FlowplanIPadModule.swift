@@ -2,9 +2,10 @@ import ExpoModulesCore
 import UIKit
 
 /// The iPad's side of the Flowplan app (src/windows.ts, src/ipad.ts):
-/// - several windows (Split View, Slide Over, Stage Manager): "Open in new
-///   window" asks UIKit for a new scene, which the app's SceneDelegate
-///   (plugins/with-ipad.js) starts with the page as initial properties;
+/// - several windows (Split View, Slide Over, Stage Manager; on iPhone Duo
+///   the inner display): "Open in new window" asks UIKit for a new scene,
+///   which the app's SceneDelegate (plugins/with-ipad.js) starts with the
+///   page as initial properties;
 /// - the web app's keyboard shortcuts as UIKeyCommands: holding ⌘ lists them
 ///   (the discoverability overlay), pressing one runs it in the page of the
 ///   window it was pressed in;
@@ -19,10 +20,17 @@ public class FlowplanIPadModule: Module {
   public func definition() -> ModuleDefinition {
     Name("FlowplanIPad")
 
-    Events("onKeyCommand", "onContinuePage")
+    Events("onKeyCommand", "onContinuePage", "onWindowRefused")
 
     OnCreate {
       let center = NotificationCenter.default
+      // UIKit opened no window for the page (none possible right now, e.g.
+      // on the outer display of iPhone Duo): the window that asked shows it.
+      self.observers.append(center.addObserver(forName: FlowplanWindows.refused, object: nil, queue: .main) { [weak self] note in
+        let scene = note.userInfo?["scene"] as? String ?? ""
+        let url = note.userInfo?["url"] as? String ?? ""
+        self?.sendEvent("onWindowRefused", ["scene": scene, "url": url])
+      })
       // The page stays waiting until the app takes it (consumeContinuedPage):
       // on a cold start nobody listens yet.
       self.observers.append(center.addObserver(forName: FlowplanHandoff.continued, object: nil, queue: .main) { [weak self] _ in
@@ -35,11 +43,21 @@ public class FlowplanIPadModule: Module {
       })
     }
 
-    // Whether the app may have more than one window (Info.plist; UIKit
-    // offers it on the iPad only).
+    // Whether the app may have more than one window at all (Info.plist; it
+    // asks for them on every device, UIKit gives them where it can).
     Function("multipleScenes") { () -> Bool in
       let manifest = Bundle.main.object(forInfoDictionaryKey: "UIApplicationSceneManifest") as? [String: Any]
       return manifest?["UIApplicationSupportsMultipleScenes"] as? Bool ?? false
+    }
+
+    // Whether "Open in new window" makes sense in this window now: the device
+    // has several windows (iPad, the inner display of iPhone Duo – not an
+    // ordinary iPhone) and – on an iPhone – the window is wide (regular
+    // width). Asked again whenever the window changes size.
+    AsyncFunction("windowsAvailable") { (scene: String?, promise: Promise) in
+      Task { @MainActor in
+        promise.resolve(FlowplanWindows.available(in: scene))
+      }
     }
 
     // A page handed over from another device (Handoff), at most once.
@@ -106,14 +124,38 @@ enum FlowplanWindows {
     (scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first)?.rootViewController
   }
 
+  /// Posted when no new window opened: userInfo ["scene", "url"].
+  nonisolated static let refused = Notification.Name("FlowplanWindowRefused")
+
+  /// Size-based, not by device model: the iPad always (also in a narrow
+  /// Split View), an iPhone only where UIKit supports several scenes
+  /// (iPhone Duo) and the window is regular width (the inner display;
+  /// the outer one can open no new windows).
+  static func available(in sceneId: String?) -> Bool {
+    guard UIApplication.shared.supportsMultipleScenes else { return false }
+    if UIDevice.current.userInterfaceIdiom == .pad { return true }
+    guard let windowScene = scene(sceneId) else { return false }
+    return windowScene.traitCollection.horizontalSizeClass == .regular
+  }
+
+  /// No window opened for the page: the window that asked shows it
+  /// (onWindowRefused). Callable from UIKit's error handler on any thread.
+  nonisolated static func refuse(url: String, from sceneId: String?, reason: String) {
+    NSLog("Flowplan: no new window (%@)", reason)
+    NotificationCenter.default.post(name: refused, object: nil, userInfo: ["scene": sceneId ?? "", "url": url])
+  }
+
   static func open(url: String, from sceneId: String?) {
-    guard UIApplication.shared.supportsMultipleScenes else { return }
+    guard UIApplication.shared.supportsMultipleScenes else {
+      refuse(url: url, from: sceneId, reason: "one window only")
+      return
+    }
     let activity = NSUserActivity(activityType: windowType)
     activity.userInfo = ["url": url]
     let options = UIScene.ActivationRequestOptions()
     options.requestingScene = scene(sceneId)
     UIApplication.shared.requestSceneSessionActivation(nil, userActivity: activity, options: options) { error in
-      NSLog("Flowplan: no new window (%@)", error.localizedDescription)
+      FlowplanWindows.refuse(url: url, from: sceneId, reason: error.localizedDescription)
     }
   }
 

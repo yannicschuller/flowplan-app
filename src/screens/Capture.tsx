@@ -7,7 +7,6 @@
 // instance can.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, ScrollView, Switch, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { donateShortcut } from "../../modules/flowplan-native/src";
@@ -17,13 +16,12 @@ import { uploadCapture, widgetAction, widgetData } from "../widgets/api";
 import type { CaptureRequest } from "../navigation";
 import { connection, refreshSuite, timeZone } from "../native/suite";
 import { onStopRecording, setRecording } from "../native/activities";
-import { Button, styles, usePalette } from "../ui";
+import { Button, SheetBody, styles, usePalette } from "../ui";
 
 type Target = { id: string; name: string };
 
 export function Capture({ request, onClose, onOpen }: { request: CaptureRequest | null; onClose: () => void; onOpen: (path: string) => void }) {
   const p = usePalette();
-  const insets = useSafeAreaInsets();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [target, setTarget] = useState<Target | null>(null);
   const [title, setTitle] = useState("");
@@ -147,7 +145,7 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
   const input = [styles.input, { color: p.text, borderColor: p.line, backgroundColor: p.card }];
   return (
     <Modal visible={!!request} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: p.background, paddingBottom: insets.bottom }}>
+      <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={[styles.title, { color: p.text, textAlign: "left", flex: 1, marginTop: 4 }]} accessibilityRole="header">
@@ -223,7 +221,7 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
             />
           ) : null}
         </ScrollView>
-      </View>
+      </SheetBody>
     </Modal>
   );
 }

@@ -8,20 +8,18 @@
 // then shows the new PDF; only a failure is reported.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { File } from "expo-file-system";
 import { scanDocument, scannerAvailable } from "../../modules/flowplan-capture/src";
 import { captureTargets, matchesTarget, saveScan, scanLanguages, scanTitle, targetChoices, type CaptureTarget, type ScanRequest } from "../capture";
 import { locale, t } from "../i18n";
 import { haptic } from "../native/actions";
 import { connection } from "../native/suite";
-import { Button, styles, usePalette } from "../ui";
+import { Button, SheetBody, styles, usePalette } from "../ui";
 
 type Choice = CaptureTarget & { inbox?: boolean };
 
 export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null; onClose: () => void; onOpen: (path: string) => void }) {
   const p = usePalette();
-  const insets = useSafeAreaInsets();
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [target, setTarget] = useState<Choice | null>(null);
   const [query, setQuery] = useState("");
@@ -114,7 +112,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
   const input = [styles.input, { color: p.text, borderColor: p.line, backgroundColor: p.card }];
   return (
     <Modal visible={!!request && !direct} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: p.background, paddingBottom: insets.bottom }}>
+      <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={[styles.title, { color: p.text, textAlign: "left", flex: 1, marginTop: 4 }]} accessibilityRole="header">
@@ -193,7 +191,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
             />
           ) : null}
         </ScrollView>
-      </View>
+      </SheetBody>
     </Modal>
   );
 }

@@ -28,7 +28,7 @@ The app shows a Flowplan instance in the system web view and adds what only a na
 - on iPhone and iPad, images and PDFs are saved straight from the **share sheet** into the inbox, a page or a database;
 - **scans documents** with the camera into a searchable PDF (text recognised on the device) at the end of a page (iOS);
 - puts the pages and open tasks into **Spotlight** (iOS);
-- works on iPad and Android tablets in every orientation, in Split View, Slide Over and Stage Manager, with keyboard, trackpad and **Apple Pencil**: pen-only drawing with pressure, the eraser, hover, Scribble and Pencil double-tap and squeeze;
+- works on iPad, **iPhone Duo** (closed and open, also in Split View) and Android tablets and foldables in every orientation, in Split View, Slide Over and Stage Manager, with keyboard, trackpad and **Apple Pencil**: pen-only drawing with pressure, the eraser, hover, Scribble and Pencil double-tap and squeeze;
 - paints the system bars in the page's colours, opens other sites in the system browser and shows its own page without a connection.
 
 ## How it works
@@ -55,7 +55,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | Quick actions, haptics, share sheet | [`src/native/actions.ts`](src/native/actions.ts) | `expo-quick-actions`, `expo-haptics`, `expo-sharing`, `expo-file-system` |
 | Managed configuration, Apple Pencil double-tap and squeeze | [`modules/flowplan-native`](modules/flowplan-native) | a local Expo module in Swift (`UIPencilInteraction`) and Kotlin |
 | Android: share target, app shortcuts, "Quick capture" tile, Material You for widgets | [`modules/flowplan-android`](modules/flowplan-android), [`src/android/`](src/android), [`plugins/with-android-extras.js`](plugins/with-android-extras.js) | a local Expo module in Kotlin (`ShortcutManager`, `TileService`, system colours) |
-| iPad windows, key commands, Handoff | [`modules/flowplan-ipad`](modules/flowplan-ipad), [`src/windows.ts`](src/windows.ts), [`src/window-features.ts`](src/window-features.ts), [`src/ipad.ts`](src/ipad.ts), [`plugins/with-ipad.js`](plugins/with-ipad.js) | a local Expo module in Swift (scenes, `UIKeyCommand`, `NSUserActivity` "app.flowplan.page") |
+| iPad and iPhone Duo windows, key commands, Handoff | [`modules/flowplan-ipad`](modules/flowplan-ipad), [`src/windows.ts`](src/windows.ts), [`src/window-features.ts`](src/window-features.ts), [`src/ipad.ts`](src/ipad.ts), [`plugins/with-ipad.js`](plugins/with-ipad.js) | a local Expo module in Swift (scenes, `UIKeyCommand`, `NSUserActivity` "app.flowplan.page") |
 
 | | |
 | --- | --- |
@@ -71,7 +71,8 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 ### iPad, tablets and Apple Pencil
 
 - **Layout:** one app for iPhone and iPad (and Android phones and tablets), all orientations, resizable windows (Split View, Slide Over, Stage Manager, Android multi-window). On iPad the web view gets the desktop-class page, which Flowplan lays out for touch (`pointer: coarse`); the app's own screens stay a comfortable width. Keyboard shortcuts (⌘K, ⌘N …) and the trackpad pointer work as in Safari. The *Overview* widget also comes in the iPad's extra-large size.
-- **Several windows** (iPad): *Open in new window* in a page's menu (and links that open a new tab) give the page a window of its own – side by side in Split View, in Slide Over or in Stage Manager; the app's icon → *Show All Windows* lists them. The first window is the main window (setup, app settings, push, widgets); the others show a page of the active profile and come back with it after a restart. Profile and app lock are the same in every window; when the main window is closed, the next one takes over ([`src/windows.ts`](src/windows.ts), [`plugins/with-ipad.js`](plugins/with-ipad.js)).
+- **iPhone Duo:** the app follows the device as it opens and closes – the same window, only resized: the page is not reloaded and stays where it is (scroll position, the text being typed and its cursor) and lays itself out for the new width: phone layout with the tab bar on the closed display (about 466 points wide) and the open one in portrait (about 626), the sidebar from 768 points (the open display in landscape, about 890). Nothing in the app asks for the device model: layout follows the window's size and the safe areas on every side (the closed display's status bar and camera sit along its side, the app's own screens and sheets keep clear of them). The open display has several windows like the iPad (below; *Open in new window* appears there, not on the closed display). Edge to edge only in builds with Xcode 27.1 or newer – earlier SDKs run in Apple's compatibility mode there (not under the status bar and camera, a black frame on the open display); the build warns about it.
+- **Several windows** (iPad, the open iPhone Duo): *Open in new window* in a page's menu (and links that open a new tab) give the page a window of its own – side by side in Split View, in Slide Over or in Stage Manager; the app's icon → *Show All Windows* lists them. The first window is the main window (setup, app settings, push, widgets); the others show a page of the active profile and come back with it after a restart. Profile and app lock are the same in every window; when the main window is closed, the next one takes over ([`src/windows.ts`](src/windows.ts), [`plugins/with-ipad.js`](plugins/with-ipad.js)).
 - **Hardware keyboard:** the page's shortcuts (⌘K search, ⌘N new page, ⌘⌥N capture, ⌘/ overview …, including your own from *Keyboard shortcuts*) are key commands of the window: holding ⌘ lists them in the system overlay, and pressing one runs it in that window's page. Shortcuts of the editor (⌘B, ⌘Z …) go to the page directly.
 - **Handoff:** every window offers its page to your Mac and other devices (same Apple Account, Handoff on): the Flowplan desktop app opens it in its window, without it the Mac's browser opens the page. A page handed over from the Mac opens in the app on the profile of its instance (others open in Safari).
 - **Drawing** on whiteboards and in the image markup (Flowplan's `lib/stylus.ts`): the pen's pressure sets the line width, fast strokes keep every measured point, a hovering Pencil (iPad Pro, iPad Air M2 and newer) shows where the stroke starts. Once the Pencil has drawn, fingers move and zoom the board instead of drawing, so a resting hand leaves no marks (*Draw with the pen only* in the pen menu). The eraser end of styluses that have one erases.
@@ -155,7 +156,7 @@ No capability beyond the App Group is needed: App Intents, App Shortcuts, Focus 
 
 ## Development
 
-Node.js 22 or newer; for native builds Xcode 26 (iOS 16.4+) with CocoaPods, or JDK 21 and the Android SDK (API 36).
+Node.js 22 or newer; for native builds Xcode 27.1 or newer (iOS 16.4+; Xcode 26 still builds, but on iPhone Duo such a build runs in compatibility mode) with CocoaPods, or JDK 21 and the Android SDK (API 36).
 
 ```sh
 npm ci

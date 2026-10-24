@@ -26,6 +26,7 @@ import {
   registerScript,
   signOutScript,
   unregisterScript,
+  windowsScript,
   type PageMessage,
 } from "../bridge-script";
 import { t } from "../i18n";
@@ -105,8 +106,17 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const onServer = () => originOf(pageUrl.current) === server;
 
   const run = useCallback((script: string) => web.current?.injectJavaScript(script), []);
-  // iPad: key commands, Handoff and further windows (window-features.ts).
-  const features = useWindowFeatures({ run, server, active });
+  // The window's size (it changes when iPhone Duo opens or closes, in Split
+  // View and Stage Manager): whether it can open windows depends on it.
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // iPad and iPhone Duo: key commands, Handoff and further windows
+  // (window-features.ts). A page UIKit opened no window for opens here.
+  const features = useWindowFeatures({ run, server, active, size, refused: (url) => void route(url, true, true) });
+  const windowsAvailable = useRef(features.windowsAvailable);
+  windowsAvailable.current = features.windowsAvailable;
+  useEffect(() => {
+    if (features.windows) run(windowsScript(features.windowsAvailable));
+  }, [features.windows, features.windowsAvailable, run]);
 
   const navigate = useCallback(
     (path: string) => {
@@ -361,7 +371,13 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   if (offline) return <Offline server={server} onRetry={retry} onProfiles={onProfiles} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: bars.top }}>
+    <View
+      style={{ flex: 1, backgroundColor: bars.top }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setSize((current) => (current.width === width && current.height === height ? current : { width, height }));
+      }}
+    >
       <StatusBar style={statusStyle} animated />
       {Platform.OS === "android" ? <NavigationBar style={navigationStyle} /> : null}
       <View style={{ height: bars.cover ? 0 : insets.top, backgroundColor: bars.top }} />
@@ -380,7 +396,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}
           onShouldStartLoadWithRequest={(request) => route(request.url, request.isTopFrame !== false)}
-          // Links with target=_blank; on the iPad those to the instance in a
+          // Links with target=_blank; on the iPad (and iPhone Duo) those to the instance in a
           // window of their own.
           onOpenWindow={(event) => {
             const url = event.nativeEvent.targetUrl;
@@ -401,6 +417,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
             pageUrl.current = url;
             pageRendered(navigation.current);
             if (originOf(url) !== server) return;
+            if (features.windows) run(windowsScript(windowsAvailable.current));
             if (redeemWhenLoaded.current) {
               run(redeemWhenLoaded.current);
               redeemWhenLoaded.current = null;

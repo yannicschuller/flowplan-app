@@ -4,7 +4,8 @@
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
 //   tap or the app settings, lists its keyboard shortcuts and – on an iPad
-//   with several windows – opens a page in a new window; on iPhone and
+//   or the inner display of iPhone Duo – opens a page in a new window
+//   (openWindow is there only while the window can open one); on iPhone and
 //   iPad it opens the document scanner for the page (screens/Scan.tsx),
 //   opens an address of the instance in the browser (a configuration
 //   profile installs only from Safari) and has the app record a voice
@@ -32,7 +33,7 @@ export type PageMessage =
   | { type: "openInBrowser"; url: string }
   | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean }
   // The page's keyboard shortcuts for the key commands (ipad.ts checks the
-  // list), and a page of the instance for a new window (iPad).
+  // list), and a page of the instance for a new window (iPad, iPhone Duo).
   | { type: "shortcuts"; list: unknown }
   | { type: "openWindow"; url: string };
 
@@ -50,7 +51,18 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
     try { window.ReactNativeWebView.postMessage(JSON.stringify(message)); } catch (e) {}
-  };
+  };${
+    options.windows
+      ? `
+  // Whether this window can open another one now (windowsScript: the app
+  // tells after loading and after every resize – iPhone Duo can on the inner
+  // display only). The page asks for FlowplanApp.openWindow when it shows
+  // its menu, and finds it only then.
+  let windowsOpen = false;
+  addEventListener("flowplan:windows", (event) => { windowsOpen = event.detail === true; });
+  const openWindow = (url) => post({ type: "openWindow", url: String(url) });`
+      : ""
+  }
   window.FlowplanApp = Object.freeze({
     platform: ${JSON.stringify(options.platform)},
     version: ${JSON.stringify(options.version)},
@@ -67,7 +79,7 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
-      options.windows ? `\n    openWindow: (url) => post({ type: "openWindow", url: String(url) }),` : ""
+      options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""
     }
   });
   // Vibrations of the page become haptic taps.
@@ -159,6 +171,11 @@ export function registerScript(body: Record<string, unknown>) {
   }
 })();
 true;`;
+}
+
+// Whether the window can open another one now (bridgeScript's openWindow).
+export function windowsScript(available: boolean) {
+  return `window.dispatchEvent(new CustomEvent("flowplan:windows", { detail: ${available === true} })); true;`;
 }
 
 // Apple Pencil double-tap or squeeze (iPad) for the whiteboard and the image

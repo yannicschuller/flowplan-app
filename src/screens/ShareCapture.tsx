@@ -6,7 +6,6 @@
 // (android/share.ts). After a share, "Done" goes back to the app that shared.
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { clearShare, leaveApp, type SharedContent, type SharedFile } from "../../modules/flowplan-android/src";
 import { t } from "../i18n";
@@ -14,7 +13,7 @@ import { localDay } from "../summary";
 import { widgetData, widgetOptions } from "../widgets/api";
 import { connection, refreshSuite, timeZone } from "../native/suite";
 import { fileSize, hasContent, MAX_SHARE_FILES, saveShare, shareDraft, shareTargetPath, type ShareDraft } from "../android/share";
-import { Button, styles, usePalette } from "../ui";
+import { Button, SheetBody, styles, usePalette } from "../ui";
 
 export type ShareRequest = { kind: "share"; content: SharedContent } | { kind: "quick" };
 type Target = { id: string; name: string; detail: string; kind: string };
@@ -34,7 +33,6 @@ export function ShareCapture({
   onOpen: (path: string) => void;
 }) {
   const p = usePalette();
-  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ShareDraft>(EMPTY);
   const [inbox, setInbox] = useState<Target | null>(null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -145,7 +143,7 @@ export function ShareCapture({
   const done = saved !== null;
   return (
     <Modal visible={!!request} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: p.background, paddingBottom: insets.bottom }}>
+      <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={[styles.title, { color: p.text, textAlign: "left", flex: 1, marginTop: 4 }]} accessibilityRole="header">
@@ -304,7 +302,7 @@ export function ShareCapture({
             </View>
           ) : null}
         </ScrollView>
-      </View>
+      </SheetBody>
     </Modal>
   );
 }
