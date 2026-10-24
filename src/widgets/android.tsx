@@ -126,7 +126,7 @@ function Meter({ share, color, theme }: { share: number; color: string; theme: T
 }
 
 function StatusView({ props, theme }: { props: AdminStatusProps; theme: Theme }) {
-  if (props.state === "signedOut" || props.state === "notAdmin") return <Closed {...props} theme={theme} />;
+  if (props.state === "signedOut" || props.state === "notAdmin" || props.state === "pending") return <Closed {...props} theme={theme} />;
   const tone = props.state === "problem" ? theme.late : props.state === "notice" ? theme.warn : theme.ok;
   return (
     <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)}>

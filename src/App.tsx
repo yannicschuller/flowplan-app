@@ -37,7 +37,7 @@ import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actio
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
 import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
-import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite } from "./native/suite";
+import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
 
@@ -78,6 +78,8 @@ function Root() {
     setUpNotifications();
     void SplashScreen.hideAsync().catch(() => {});
     void updateWidgets();
+    // The configurable widgets get the session at once, also offline.
+    syncWidgetSession();
   }, []);
 
   const open = useCallback(
@@ -172,6 +174,9 @@ function Root() {
         backgroundSince.current = 0;
         const pending = consumePendingLink();
         if (pending) appLink(pending);
+        // A missing or outdated session of the configurable widgets is
+        // written again (and the widgets reload), also offline.
+        syncWidgetSession();
         if (store.deviceToken()) void refresh().then((result) => "signedOut" in result && setSignedIn(false));
       }
     });

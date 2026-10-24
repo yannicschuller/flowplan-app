@@ -67,6 +67,14 @@ export type TasksWidgetProps = {
 };
 export type InboxWidgetProps = { signedIn: boolean; title: string; count: number; label: string; url: string };
 
+// What the list below shows: the due ones and how many are open, so "Nothing
+// due" above a list of open tasks does not read as a contradiction.
+export function tasksHeadline(tasks: Summary["tasks"], locale: Locale) {
+  const open = typeof tasks.open === "number" ? tasks.open : tasks.items.length;
+  const due = tasks.due ? t("widgetDue", { count: tasks.due }, locale) : t("widgetNothingDue", {}, locale);
+  return open > tasks.due ? `${due} · ${t("widgetOpenCount", { count: open }, locale)}` : due;
+}
+
 export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidgetProps {
   const tasksUrl = appLink("/#tasks"),
     inboxUrl = appLink("/#inbox");
@@ -88,7 +96,7 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
   return {
     signedIn: true,
     title: t("widgetTasks", {}, locale),
-    headline: tasks.due ? t("widgetDue", { count: tasks.due }, locale) : t("widgetNothingDue", {}, locale),
+    headline: tasksHeadline(tasks, locale),
     detail: tasks.overdue ? t("widgetOverdue", { count: tasks.overdue }, locale) : "",
     empty: t("widgetNoTasks", {}, locale),
     late: tasks.overdue > 0,

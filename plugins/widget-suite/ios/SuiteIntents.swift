@@ -447,6 +447,7 @@ struct FPCompleteTaskIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPCompleteTaskIntent")
     var fields: [String: Any] = ["source": source, "pageId": pageId, "done": true]
     if !rowId.isEmpty { fields["rowId"] = rowId }
     if index >= 0 { fields["index"] = index }
@@ -477,6 +478,7 @@ struct FPCheckHabitIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPCheckHabitIntent")
     let fields: [String: Any] = ["pageId": pageId, "fieldId": fieldId, "done": done, "today": FPAPI.today()]
     let item: String = FPActions.habitID(pageId: pageId, fieldId: fieldId)
     await FPWidgets.run("habit.check", fields, item: item, kind: FPWidgetKind.journal)
@@ -498,6 +500,7 @@ struct FPMarkReadIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPMarkReadIntent")
     if notificationId.isEmpty {
       await FPWidgets.run("mention.readAll", [:], item: FPActions.readID(nil), kind: FPWidgetKind.mentions)
     } else {
@@ -525,6 +528,7 @@ struct FPStartTimerIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPStartTimerIntent")
     let fields: [String: Any] = ["pageId": pageId, "rowId": rowId, "fieldId": fieldId]
     await FPWidgets.run("timer.start", fields, item: FPActions.timerStartID, kind: FPWidgetKind.time)
     return .result()
@@ -537,6 +541,7 @@ struct FPStopTimerIntent: AppIntent {
   static var isDiscoverable = false
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPStopTimerIntent")
     await FPWidgets.run("timer.stop", [:], item: FPActions.timerStopID, kind: FPWidgetKind.time)
     return .result()
   }
@@ -575,6 +580,7 @@ struct FPToggleTimerIntent: SetValueIntent {
   init() {}
 
   func perform() async throws -> some IntentResult {
+    FPLog.intent("FPToggleTimerIntent")
     if value {
       let time = try await FPWidgets.fresh("time")
       guard let recent = time["recent"].array.first,

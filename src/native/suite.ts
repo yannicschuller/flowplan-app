@@ -18,7 +18,7 @@ import { localDay } from "../summary";
 import { widgetAction, widgetData, type ActionName, type Connection, type WidgetResult } from "../widgets/api";
 import { renderSuite, SUITE_CLICKS } from "../widgets/android-suite";
 import { suiteView } from "../widgets/present";
-import { needsSetup, serverConfig, SUITE_KINDS, SUITE_WIDGETS, kindOfWidget, widgetSessionFor, type SuiteKind } from "../widgets/suite";
+import { needsSetup, serverConfig, sessionReloaded, SUITE_KINDS, SUITE_WIDGETS, kindOfWidget, widgetSessionFor, type SuiteKind } from "../widgets/suite";
 import { configFor, forgetProfile, parseConfigState, removeWidget, setConfig, type ConfigState } from "../widgets/widget-config";
 import { actionMarks, answered, parseActions, settled, tapItem, tapped, type ActionError, type ActionState } from "../widgets/actions";
 
@@ -40,7 +40,6 @@ export const timeZone = () => {
 
 // ---- iOS ----
 
-let lastSession = "";
 let lastReload = 0;
 
 // What the widget extension needs; null without a profile. A missing token
@@ -49,14 +48,17 @@ export function widgetSession(): WidgetSession | null {
   return widgetSessionFor(store.profiles(), store.deviceToken(), locale());
 }
 
+// Handed over on every start, every return to the foreground and after every
+// summary, not only when it changed in this run of the app: the shared
+// keychain item may be missing (an installation registered before the
+// widgets existed), older than the app's token (renewed at each start) or
+// marked as refused by the extension. The module compares with what the
+// keychain holds and writes (and reloads the widgets) only when needed.
 export function syncWidgetSession() {
   if (Platform.OS !== "ios" || !withWidgets) return false;
-  const session = widgetSession();
-  const key = JSON.stringify(session);
-  if (key === lastSession) return false;
-  lastSession = key;
-  // The module reloads the widgets when the session changed.
-  setWidgetSession(session);
+  const result = setWidgetSession(widgetSession());
+  if (result === "failed") console.warn("Flowplan: the widgets' session was not saved");
+  if (!sessionReloaded(result)) return false;
   lastReload = Date.now();
   return true;
 }

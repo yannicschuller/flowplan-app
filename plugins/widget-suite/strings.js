@@ -212,7 +212,7 @@ const phrases = {
 // The widget gallery on Android (labels and descriptions; iOS takes them
 // from Localizable.strings above, keyed by the English text).
 const gallery = {
-  FlowplanTasks: { label: ["Flowplan", "Flowplan", "Flowplan"], description: ["Fällige Aufgaben auf einen Blick.", "Tasks due at a glance.", "Les tâches à faire en un coup d’œil."] },
+  FlowplanTasks: { label: ["Flowplan", "Flowplan", "Flowplan"], description: ["Fällige und offene Aufgaben auf einen Blick. Abhaken: Widget „Aufgaben“.", "Due and open tasks at a glance. To check off: the “Tasks” widget.", "Tâches à faire et ouvertes en un coup d’œil. Pour cocher : widget « Tâches »."] },
   FlowplanInbox: { label: ["Flowplan Posteingang", "Flowplan Inbox", "Flowplan Boîte de réception"], description: ["Ungelesene Mitteilungen.", "Unread notifications.", "Notifications non lues."] },
   FlowplanInstance: { label: ["Flowplan Instanz", "Flowplan Instance", "Flowplan Instance"], description: ["Für Administratoren: Zustand, Version und letzte Sicherung.", "For administrators: state, version and last backup.", "Pour les administrateurs : état, version et dernière sauvegarde."] },
   FlowplanLive: { label: ["Flowplan Live", "Flowplan Live", "Flowplan Live"], description: ["Für Administratoren: eine Live-Zahl der Instanz.", "For administrators: one live number of the instance.", "Pour les administrateurs : un chiffre en direct de l’instance."] },

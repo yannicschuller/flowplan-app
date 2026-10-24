@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 import Security
@@ -54,22 +55,51 @@ enum FPKeychain {
   }
 
   static func load() -> FPSession? {
-    guard var query = query() else { return nil }
+    guard var query = query() else {
+      os_log("No App Group in Info.plist: no widget session", log: FPLog.widgets, type: .error)
+      return nil
+    }
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
     var item: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+    let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecItemNotFound { return nil }
+    guard status == errSecSuccess, let data = item as? Data else {
+      // -34018: the access group is not in the entitlements; -25308: locked
+      // before the first unlock.
+      os_log("Widget session not readable: %ld", log: FPLog.widgets, type: .error, Int(status))
+      return nil
+    }
     return try? JSONDecoder().decode(FPSession.self, from: data)
   }
 
-  static func save(_ session: FPSession?) {
-    guard let query = query() else { return }
-    SecItemDelete(query as CFDictionary)
-    guard let session, let data = try? JSONEncoder().encode(session) else { return }
-    var item = query
-    item[kSecValueData as String] = data
-    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-    SecItemAdd(item as CFDictionary, nil)
+  /// Writes (or with nil removes) the session; false when the keychain
+  /// refused (logged with its status).
+  @discardableResult
+  static func save(_ session: FPSession?) -> Bool {
+    guard let query = query() else {
+      os_log("No App Group in Info.plist: widget session not saved", log: FPLog.widgets, type: .error)
+      return false
+    }
+    guard let session = session, let data = try? JSONEncoder().encode(session) else {
+      let status: OSStatus = SecItemDelete(query as CFDictionary)
+      return status == errSecSuccess || status == errSecItemNotFound
+    }
+    var changes: [String: Any] = [:]
+    changes[kSecValueData as String] = data
+    changes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+    var status: OSStatus = SecItemUpdate(query as CFDictionary, changes as CFDictionary)
+    if status == errSecItemNotFound {
+      var item: [String: Any] = query
+      item[kSecValueData as String] = data
+      item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      status = SecItemAdd(item as CFDictionary, nil)
+    }
+    if status != errSecSuccess {
+      os_log("Widget session not saved: %ld", log: FPLog.widgets, type: .error, Int(status))
+      return false
+    }
+    return true
   }
 }
 
@@ -218,7 +248,12 @@ enum FPStore {
   private static let registryKey = "flowplan.suite.registry"
   private static let invalidKey = "flowplan.suite.invalidated"
   private static func cacheKey(_ profile: String) -> String { "flowplan.suite.cache.\(profile)" }
-  private static func signedOutKey(_ profile: String) -> String { "flowplan.suite.signedOut.\(profile)" }
+  // The token the instance refused (its fingerprint), per profile. It used
+  // to be a flag per profile ("signedOut"): a late 401 for the token the app
+  // had just replaced kept the new one "signed out" – that flag is ignored
+  // and removed now.
+  private static func refusedKey(_ profile: String) -> String { "flowplan.suite.refused.\(profile)" }
+  private static func legacySignedOutKey(_ profile: String) -> String { "flowplan.suite.signedOut.\(profile)" }
   // Settings a widget has not asked for in three days are no longer shown.
   private static let keep: TimeInterval = 3 * 86_400
   private static let lock = NSLock()
@@ -292,15 +327,34 @@ enum FPStore {
     FPShared.defaults?.removeObject(forKey: cacheKey(profile))
   }
 
+  /// A short, one-way fingerprint of a device token (the token itself stays
+  /// in the keychain).
+  static func fingerprint(_ token: String) -> String {
+    let digest = SHA256.hash(data: Data(token.utf8))
+    let hex: [String] = digest.prefix(12).map { String(format: "%02x", $0) }
+    return hex.joined()
+  }
+
+  /// The instance refused this session's token (401). Only that token counts
+  /// as signed out: the app may have written a newer one meanwhile.
   static func markSignedOut(_ session: FPSession) {
-    FPShared.defaults?.set(true, forKey: signedOutKey(session.profile))
-    clear(profile: session.profile)
+    guard let token = session.token else { return }
+    FPShared.defaults?.set(fingerprint(token), forKey: refusedKey(session.profile))
+    FPShared.defaults?.removeObject(forKey: legacySignedOutKey(session.profile))
+    let current: FPSession? = FPKeychain.load()
+    if current?.token == token {
+      clear(profile: session.profile)
+    }
+    os_log("Widget session refused (401) for profile %{public}@", log: FPLog.widgets, type: .error, session.profile)
   }
   static func signedOut(_ session: FPSession) -> Bool {
-    session.token == nil || FPShared.defaults?.bool(forKey: signedOutKey(session.profile)) == true
+    guard let token = session.token else { return true }
+    guard let refused = FPShared.defaults?.string(forKey: refusedKey(session.profile)) else { return false }
+    return refused == fingerprint(token)
   }
   static func signedIn(_ session: FPSession) {
-    FPShared.defaults?.removeObject(forKey: signedOutKey(session.profile))
+    FPShared.defaults?.removeObject(forKey: refusedKey(session.profile))
+    FPShared.defaults?.removeObject(forKey: legacySignedOutKey(session.profile))
   }
 }
 
@@ -315,9 +369,15 @@ enum FPLoad: @unchecked Sendable {
 actor FPRefresher {
   static let shared = FPRefresher()
   private var running: Task<Void, Never>?
+  // The token the running request uses: a reload after the app wrote a new
+  // session does not wait for a request with the old one.
+  private var runningToken: String?
 
   func load(_ request: FPRequest, maxAge: TimeInterval) async -> FPLoad {
-    guard let session = FPKeychain.load() else { return .signedOut }
+    guard let session = FPKeychain.load() else {
+      os_log("No widget session in the keychain: signed out", log: FPLog.widgets, type: .default)
+      return .signedOut
+    }
     if FPStore.signedOut(session) { return .signedOut }
     FPStore.register(request)
     let key = request.key
@@ -325,13 +385,18 @@ actor FPRefresher {
       return .answer(cached, stale: false)
     }
     // Several widgets ask at once (after a reload): one request for all.
-    if let running {
+    let sameToken: Bool = runningToken == session.token
+    if let running = running, sameToken {
       await running.value
     } else {
       let task = Task { await Self.fetchAll(first: request, session: session) }
       running = task
+      runningToken = session.token
       await task.value
-      running = nil
+      if runningToken == session.token {
+        running = nil
+        runningToken = nil
+      }
     }
     guard let current = FPKeychain.load(), !FPStore.signedOut(current) else { return .signedOut }
     if let cached = FPStore.cached(key, profile: session.profile) {
@@ -361,6 +426,13 @@ actor FPRefresher {
 
 enum FPLog {
   static let widgets = OSLog(subsystem: "app.flowplan.mobile", category: "widgets")
+
+  /// First line of every button's perform(): Console.app (subsystem
+  /// app.flowplan.mobile, category widgets) shows whether a tap reached
+  /// the extension at all.
+  static func intent(_ name: String) {
+    os_log("Widget intent %{public}@ runs", log: widgets, type: .default, name)
+  }
 }
 
 /// What a widget shows of its buttons until the instance's fresh answer
@@ -517,6 +589,9 @@ enum FPWidgets {
   /// timeout; a refusal brings it back with a hint. Everything shown is
   /// asked again afterwards.
   static func run(_ name: String, _ fields: [String: Any], item: String, kind: String) async {
+    let hasSession: Bool = FPKeychain.load()?.token != nil
+    let sessionLabel: String = hasSession ? "yes" : "no"
+    os_log("Widget action %{public}@ starts (session: %{public}@)", log: FPLog.widgets, type: .default, name, sessionLabel)
     FPActions.begin(item)
     WidgetCenter.shared.reloadTimelines(ofKind: kind)
     do {

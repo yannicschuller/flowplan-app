@@ -25,6 +25,12 @@ export type PencilAction = {
 // The configurable widgets' session (iOS: the widget extension reads it
 // from the App Group's keychain). token null: signed out.
 export type WidgetSession = { server: string; token: string | null; profile: string; lang: string };
+// What handing the session over did: "written" (new or changed), "recovered"
+// (the same token had been marked as refused: cleared), "cleared" (signed
+// out), "unchanged", or "failed" (the keychain refused – Console.app,
+// subsystem app.flowplan.mobile). The module reloads the widgets for the
+// first three.
+export type WidgetSessionResult = "written" | "recovered" | "cleared" | "unchanged" | "failed";
 
 // The last action of a widget's button that went wrong (iOS: kept by the
 // widget extension in the App Group). status 0: not reached.
@@ -52,7 +58,7 @@ export type OngoingOptions = {
 
 type NativeModule = {
   getManagedServer(): string | null;
-  setWidgetSession?(session: WidgetSession | null): void;
+  setWidgetSession?(session: WidgetSession | null): WidgetSessionResult | null | void;
   reloadWidgets?(): void;
   widgetActionError?(): WidgetActionError | null;
   consumePendingLink?(): string | null;
@@ -120,11 +126,13 @@ export function addEdgeSwipeListener(listener: () => void) {
 
 // iOS: the session of the configurable widgets; their settings stay when it
 // is cleared (signed out), their answers go.
-export function setWidgetSession(session: WidgetSession | null) {
-  if (Platform.OS !== "ios") return;
+export function setWidgetSession(session: WidgetSession | null): WidgetSessionResult | null {
+  if (Platform.OS !== "ios") return null;
   try {
-    native?.setWidgetSession?.(session);
-  } catch {}
+    return native?.setWidgetSession?.(session) || null;
+  } catch {
+    return "failed";
+  }
 }
 export function reloadWidgets() {
   if (Platform.OS !== "ios") return;

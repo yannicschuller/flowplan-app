@@ -11,6 +11,7 @@ import {
   formatBytes,
   formatWhen,
   isAdminSummary,
+  nextAdminState,
   parseAdminState,
   sampleAdminSummary,
   type AdminState,
@@ -152,4 +153,27 @@ test("each administrators' widget has one value per setting", () => {
   assert.equal(status.backupShort, "Last backup");
   assert.equal(adminStatusWidget(data({ backup: { enabled: false, lastAt: null, failed: false } }), "en", now).backupTime, "–");
   for (const props of [live, storage, status, adminLiveWidget(null, "fr"), adminStorageWidget({ kind: "notAdmin" }, "fr")]) assert.deepEqual(nulls(props), []);
+});
+
+test("an administrator's widgets never say \"sign in\" while the summary answers", () => {
+  const known = data();
+  // Fresh answers win.
+  assert.deepEqual(nextAdminState(known, null), known);
+  assert.deepEqual(nextAdminState({ kind: "notAdmin" }, known), { kind: "notAdmin" });
+  // Unreachable (undefined) or refused because the device token was renewed
+  // meanwhile (null): the last numbers stay, or "no data yet" without any.
+  assert.deepEqual(nextAdminState(undefined, known), known);
+  assert.deepEqual(nextAdminState(null, known), known);
+  assert.deepEqual(nextAdminState(null, null), { kind: "pending" });
+  assert.deepEqual(nextAdminState(undefined, { kind: "notAdmin" }), { kind: "pending" });
+  for (const lang of ["de", "en", "fr"] as const) {
+    const live = adminLiveWidget({ kind: "pending" }, lang);
+    assert.equal(live.state, "pending");
+    assert.notEqual(live.message, adminLiveWidget(null, lang).message);
+    assert.equal(adminStatusWidget({ kind: "pending" }, lang).state, "pending");
+    assert.equal(adminStorageWidget({ kind: "pending" }, lang).state, "pending");
+    assert.deepEqual(nulls(adminStatusWidget({ kind: "pending" }, lang)), []);
+  }
+  assert.equal(adminLiveWidget({ kind: "pending" }, "de").message, "Noch keine Daten – Flowplan öffnen");
+  assert.deepEqual(parseAdminState(JSON.stringify({ kind: "pending" })), { kind: "pending" });
 });

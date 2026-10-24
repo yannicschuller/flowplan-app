@@ -143,3 +143,42 @@ test("the settings of the expo-widgets widgets are translated", () => {
   const layouts = readFileSync(join(root, "src/widgets/ios.tsx"), "utf8");
   for (const name of ["show", "timer", "metric"]) assert.ok(layouts.includes(`configuration?.${name}`), name);
 });
+
+test("iOS: the widgets' session heals itself; a refusal counts for the refused token only", async () => {
+  const { sessionReloaded } = await import("../src/widgets/suite");
+  assert.ok(sessionReloaded("written") && sessionReloaded("recovered") && sessionReloaded("cleared"));
+  assert.ok(!sessionReloaded("unchanged") && !sessionReloaded("failed") && !sessionReloaded(null));
+  const shared = readFileSync(join(root, "modules/flowplan-native/ios/WidgetShared.swift"), "utf8");
+  // A late 401 for a replaced token must not sign out the new one: the
+  // refusal is the refused token's fingerprint, compared on every load.
+  assert.match(shared, /return refused == fingerprint\(token\)/);
+  assert.doesNotMatch(shared, /bool\(forKey: signedOutKey/);
+  const module = readFileSync(join(root, "modules/flowplan-native/ios/FlowplanNativeModule.swift"), "utf8");
+  // The same session handed over again clears a refusal (and reloads).
+  assert.match(module, /if previous == next \{\s*if !refused \{ return "unchanged" \}\s*FPStore\.signedIn\(next\)/);
+  // The app hands it over on start and on every return to the foreground,
+  // not only after a sign-in.
+  const app = readFileSync(join(root, "src/App.tsx"), "utf8");
+  assert.ok((app.match(/syncWidgetSession\(\);/g) ?? []).length >= 2);
+  const suite = readFileSync(join(root, "src/native/suite.ts"), "utf8");
+  assert.doesNotMatch(suite, /lastSession/);
+});
+
+test("iOS: every widget button's intent logs first, and intent types have unique names", () => {
+  const intents = readFileSync(join(root, "plugins/widget-suite/ios/SuiteIntents.swift"), "utf8");
+  const names: string[] = [];
+  for (const file of swiftFiles) {
+    for (const match of readFileSync(file, "utf8").matchAll(/struct (\w+): (?:AppIntent|SetValueIntent|WidgetConfigurationIntent|AppEntity|EntityQuery)\b/g)) names.push(match[1]);
+  }
+  assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), []);
+  // Each struct on its own; the buttons' intents call FPWidgets.run or .act.
+  const buttons = intents
+    .split(/\n(?=@available|struct )/)
+    .map((block) => ({ name: block.match(/struct (\w+): (?:AppIntent|SetValueIntent) \{/)?.[1], block }))
+    .filter(({ name, block }) => name && /FPWidgets\.(run|act)\(/.test(block));
+  assert.ok(buttons.length >= 6, String(buttons.length));
+  for (const { name, block } of buttons) {
+    const first = block.match(/func perform\(\) async throws -> some IntentResult \{\n(.*)\n/)?.[1]?.trim();
+    assert.equal(first, `FPLog.intent("${name}")`, String(name));
+  }
+});

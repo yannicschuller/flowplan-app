@@ -41,25 +41,12 @@ public class FlowplanNativeModule: Module {
 
     // Instance, device token (nil: signed out – the widgets ask to sign in
     // and keep their settings), profile and language for the widgets.
-    // Another profile: the previous one's answers go.
-    Function("setWidgetSession") { (session: [String: Any]?) in
-      let previous = FPKeychain.load()
-      guard let session,
-            let server = session["server"] as? String,
-            let profile = session["profile"] as? String else {
-        if let previous { FPStore.clear(profile: previous.profile) }
-        FPKeychain.save(nil)
-        Self.reloadWidgets()
-        return
-      }
-      let next = FPSession(server: server, token: session["token"] as? String, profile: profile, lang: (session["lang"] as? String) ?? "en")
-      if previous == next { return }
-      if let previous, previous.profile != next.profile || previous.server != next.server || next.token == nil {
-        FPStore.clear(profile: previous.profile)
-      }
-      FPKeychain.save(next)
-      if next.token != nil { FPStore.signedIn(next) }
-      Self.reloadWidgets()
+    // Another profile: the previous one's answers go. Called on every start,
+    // foreground and summary: compares with the keychain and writes (and
+    // reloads the widgets) only when something is missing or different.
+    // Answers "written", "recovered", "cleared", "unchanged" or "failed".
+    Function("setWidgetSession") { (session: [String: Any]?) -> String in
+      Self.handOver(session)
     }
 
     // After a change in the page or the app: widgets and controls ask again.
@@ -145,6 +132,41 @@ public class FlowplanNativeModule: Module {
 }
 
 extension FlowplanNativeModule {
+  static func handOver(_ session: [String: Any]?) -> String {
+    let previous: FPSession? = FPKeychain.load()
+    guard let session = session,
+          let server = session["server"] as? String,
+          let profile = session["profile"] as? String else {
+      guard let previous = previous else { return "unchanged" }
+      FPStore.clear(profile: previous.profile)
+      let removed: Bool = FPKeychain.save(nil)
+      reloadWidgets()
+      return removed ? "cleared" : "failed"
+    }
+    let token: String? = session["token"] as? String
+    let lang: String = (session["lang"] as? String) ?? "en"
+    let next = FPSession(server: server, token: token, profile: profile, lang: lang)
+    // The app hands over the token it uses: a refusal the extension noted
+    // for it (a 401 that raced a renewal) no longer counts.
+    let refused: Bool = token != nil && FPStore.signedOut(next)
+    if previous == next {
+      if !refused { return "unchanged" }
+      FPStore.signedIn(next)
+      reloadWidgets()
+      return "recovered"
+    }
+    if let previous = previous {
+      let otherProfile: Bool = previous.profile != next.profile || previous.server != next.server
+      if otherProfile || next.token == nil {
+        FPStore.clear(profile: previous.profile)
+      }
+    }
+    guard FPKeychain.save(next) else { return "failed" }
+    if token != nil { FPStore.signedIn(next) }
+    reloadWidgets()
+    return "written"
+  }
+
   static func reloadWidgets() {
     FPWidgets.reloadAll()
     if #available(iOS 18.0, *) {

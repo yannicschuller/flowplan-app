@@ -87,6 +87,8 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
         <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(secondary), lineLimit(3)]}>{props.headline}</Text>
       </VStack>
     );
+  // Each row starts with a dot, not a circle: the rows open the app, they do
+  // not check off (the suite's "Tasks" widget does).
   const rows = family === "systemExtraLarge" ? 8 : family === "systemLarge" ? 7 : family === "systemMedium" ? 3 : 2;
   const items = props.items.slice(0, rows);
   const small = family === "systemSmall";
@@ -108,7 +110,7 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
       {!items.length ? <Text modifiers={[font({ size: 13 }), foregroundStyle(secondary)]}>{props.empty}</Text> : null}
       {items.map((item, index) => (
         <HStack key={index} spacing={6}>
-          <Image systemName="circle" modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]} />
+          <Image systemName="circle.fill" modifiers={[font({ size: 5 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]} />
           <Text modifiers={[font({ size: 13 }), lineLimit(1)]}>{item.text}</Text>
           <Spacer />
           {item.due && !small ? (
@@ -191,7 +193,7 @@ function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironmen
         <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
       </VStack>
     );
-  const closed = props.state === "signedOut" || props.state === "notAdmin";
+  const closed = props.state === "signedOut" || props.state === "notAdmin" || props.state === "pending";
   const tone = accented
     ? brand
     : props.state === "problem"
@@ -210,7 +212,9 @@ function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironmen
           ? "checkmark.seal.fill"
           : props.state === "notAdmin"
             ? "lock.fill"
-            : "person.crop.circle.badge.exclamationmark";
+            : props.state === "pending"
+              ? "arrow.clockwise"
+              : "person.crop.circle.badge.exclamationmark";
   if (family === "accessoryInline")
     return <Text modifiers={[widgetURL(props.url)]}>{closed ? props.message : props.detail ? `${props.headline} · ${props.detail}` : props.headline}</Text>;
   if (family === "accessoryRectangular")
@@ -302,7 +306,7 @@ function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment<Live
       </Gauge>
     ) : (
       <VStack spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget"), accessibilityLabel(main ? `${main.label}: ${main.value}` : props.message)]}>
-        <Image systemName={main ? icon : "lock.fill"} modifiers={[font({ size: 12 })]} />
+        <Image systemName={main ? icon : props.state === "pending" ? "arrow.clockwise" : "lock.fill"} modifiers={[font({ size: 12 })]} />
         {main ? <Text modifiers={[font({ size: 18, weight: "bold" }), monospacedDigit(), minimumScaleFactor(0.5), lineLimit(1)]}>{main.value}</Text> : null}
       </VStack>
     );
@@ -324,7 +328,7 @@ function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment<Live
         <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(brand), lineLimit(1)]}>{props.title}</Text>
       </HStack>
       {!main ? <Spacer /> : null}
-      {!main ? <Image systemName={props.state === "off" ? "chart.line.downtrend.xyaxis" : "lock.fill"} modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} /> : null}
+      {!main ? <Image systemName={props.state === "off" ? "chart.line.downtrend.xyaxis" : props.state === "pending" ? "arrow.clockwise" : "lock.fill"} modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} /> : null}
       {!main ? <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(secondary), lineLimit(3)]}>{props.message}</Text> : null}
       {main && small ? <Spacer /> : null}
       {main ? (
@@ -409,7 +413,7 @@ function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironmen
       </Gauge>
     ) : (
       <VStack spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
-        <Image systemName={open ? "internaldrive" : "lock.fill"} modifiers={[font({ size: 18 })]} />
+        <Image systemName={open ? "internaldrive" : props.state === "pending" ? "arrow.clockwise" : "lock.fill"} modifiers={[font({ size: 18 })]} />
       </VStack>
     );
   if (family === "accessoryRectangular")
@@ -428,7 +432,7 @@ function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironmen
         <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(brand), lineLimit(1)]}>{props.title}</Text>
       </HStack>
       <Spacer />
-      {!open ? <Image systemName="lock.fill" modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} /> : null}
+      {!open ? <Image systemName={props.state === "pending" ? "arrow.clockwise" : "lock.fill"} modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} /> : null}
       {!open ? <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(secondary), lineLimit(3)]}>{props.message}</Text> : null}
       {open ? <Text modifiers={[font({ size: 34, weight: "bold", design: "rounded" }), monospacedDigit(), lineLimit(1), minimumScaleFactor(0.5)]}>{value}</Text> : null}
       {open ? (

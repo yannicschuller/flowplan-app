@@ -31,7 +31,9 @@ export type AdminSummary = {
 
 // What the widgets know: nothing (signed out), that the person does not
 // administer the instance, or the summary.
-export type AdminState = { kind: "data"; data: AdminSummary } | { kind: "notAdmin" } | null;
+// null: signed out. pending: an administrator whose numbers did not arrive
+// yet (not reachable, or the device token was renewed during the request).
+export type AdminState = { kind: "data"; data: AdminSummary } | { kind: "notAdmin" } | { kind: "pending" } | null;
 
 export function isAdminSummary(value: unknown): value is AdminSummary {
   const s = value as AdminSummary;
@@ -52,10 +54,19 @@ export function isAdminSummary(value: unknown): value is AdminSummary {
 export function parseAdminState(text: string | null): AdminState {
   try {
     const value = JSON.parse(text || "null") as AdminState;
-    if (value?.kind === "notAdmin") return value;
+    if (value?.kind === "notAdmin" || value?.kind === "pending") return { kind: value.kind };
     if (value?.kind === "data" && isAdminSummary(value.data)) return value;
   } catch {}
   return null;
+}
+
+// The state after a summary that says "administrator": the fresh answer, or
+// – unreachable (undefined) or refused (null: the device token was renewed
+// between the two requests, the summary just answered) – the last numbers.
+// Never "signed out" while the summary answers.
+export function nextAdminState(fetched: AdminState | undefined, stored: AdminState): AdminState {
+  if (fetched && fetched.kind !== "pending") return fetched;
+  return stored?.kind === "data" ? stored : { kind: "pending" };
 }
 
 const ADMIN_URL = "/#admin",
@@ -117,7 +128,7 @@ export function adminIssueText(code: string, s: AdminSummary, locale: Locale) {
 // ---- Widget props ----
 
 type Common = {
-  // "signedOut", "notAdmin" or what the widget shows.
+  // "signedOut", "notAdmin", "pending" or what the widget shows.
   state: string;
   title: string;
   // The line instead of data (sign in, administrators only, statistics off).
@@ -126,7 +137,7 @@ type Common = {
 };
 
 export type AdminStatusProps = Common & {
-  state: "signedOut" | "notAdmin" | "ok" | "notice" | "problem";
+  state: "signedOut" | "notAdmin" | "pending" | "ok" | "notice" | "problem";
   // The last backup as one value ("14:05", "21 Oct", "–") and its label.
   backupTime: string;
   backupShort: string;
@@ -144,7 +155,7 @@ export type AdminStatusProps = Common & {
 // (active, requests, errors, signins) big, the others small.
 export const LIVE_METRICS = ["active", "requests", "errors", "signins"] as const;
 export type AdminLiveProps = Common & {
-  state: "signedOut" | "notAdmin" | "data" | "off";
+  state: "signedOut" | "notAdmin" | "pending" | "data" | "off";
   tiles: { id: (typeof LIVE_METRICS)[number]; label: string; value: string; alert: boolean }[];
   // The error rate of the last hour, 0–1 (the lock screen's gauge).
   errorRate: number;
@@ -155,7 +166,7 @@ export type AdminLiveProps = Common & {
 };
 
 export type AdminStorageProps = Common & {
-  state: "signedOut" | "notAdmin" | "data";
+  state: "signedOut" | "notAdmin" | "pending" | "data";
   used: string;
   usedLabel: string;
   // Shares from 0 to 1; -1 when unknown.
@@ -174,6 +185,7 @@ export type AdminStorageProps = Common & {
 function gate(admin: AdminState, locale: Locale, title: string) {
   if (!admin) return { state: "signedOut" as const, title, message: t("widgetSignIn", {}, locale), url: appLink("/") };
   if (admin.kind === "notAdmin") return { state: "notAdmin" as const, title, message: t("adminOnly", {}, locale), url: appLink("/") };
+  if (admin.kind === "pending") return { state: "pending" as const, title, message: t("adminPending", {}, locale), url: appLink("/") };
   return null;
 }
 

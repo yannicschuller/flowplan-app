@@ -218,5 +218,11 @@ export function widgetSessionFor(state: ProfileState, token: string | null, lang
   return profile ? { server: profile.server, token: token || null, profile: profile.id, lang } : null;
 }
 
+// The module reloaded the widgets after handing the session over (iOS,
+// modules/flowplan-native: setWidgetSession).
+export function sessionReloaded(result: string | null | undefined) {
+  return result === "written" || result === "recovered" || result === "cleared";
+}
+
 // The instance answers at most 16 widgets per data request.
 export const MAX_WIDGETS_PER_REQUEST = 16;

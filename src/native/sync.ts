@@ -11,7 +11,7 @@ import { locale, t } from "../i18n";
 import { timeoutSignal } from "../server";
 import { store } from "../store";
 import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, widgetProps, type Summary } from "../summary";
-import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary, type AdminState } from "../admin";
+import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary, nextAdminState, type AdminState } from "../admin";
 import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
 import type * as IosWidgets from "../widgets/ios";
 import { refreshSuite } from "./suite";
@@ -60,11 +60,12 @@ export async function fetchAdminState(server: string | null = store.server(), to
 
 // What the administrators' widgets show after a summary: asked only when
 // the summary says the person administers the instance.
-export async function adminStateFor(summary: Summary | null): Promise<AdminState> {
+// Unreachable or refused while the summary answered: the last numbers stay
+// (never "sign in" next to a summary that just answered).
+export async function adminStateFor(summary: Summary | null, server: string | null = store.server(), token: string | null = store.deviceToken()): Promise<AdminState> {
   if (!summary) return null;
   if (!summary.admin) return { kind: "notAdmin" };
-  const state = await fetchAdminState();
-  return state === undefined ? store.adminState() : state;
+  return nextAdminState(await fetchAdminState(server, token), store.adminState());
 }
 
 // The app leaves the instance: its entry there (device token, push) goes.
@@ -80,10 +81,22 @@ export async function leaveInstance(server: string, token: string | null) {
 }
 
 // Fetches and shows; offline the last summary stays.
-export async function refresh(): Promise<FetchResult> {
-  const result = await fetchSummary();
-  if ("summary" in result) await apply(result.summary, await adminStateFor(result.summary));
-  else if ("signedOut" in result) {
+// Every registration (each start of the app) renews the device token and
+// ends the previous one. A refresh still underway with the previous token
+// would otherwise show its 401 as "signed out" – and clear the new token –
+// or overwrite what the newer refresh showed: it starts over with the
+// current token instead.
+export async function refresh(attempt = 0): Promise<FetchResult> {
+  const server = store.server(),
+    token = store.deviceToken();
+  const renewed = () => attempt < 2 && !!token && (store.server() !== server || store.deviceToken() !== token);
+  const result = await fetchSummary(server, token);
+  if (renewed()) return refresh(attempt + 1);
+  if ("summary" in result) {
+    const admin = await adminStateFor(result.summary, server, token);
+    if (renewed()) return refresh(attempt + 1);
+    await apply(result.summary, admin);
+  } else if ("signedOut" in result) {
     store.setDeviceToken(null);
     await apply(null);
   }

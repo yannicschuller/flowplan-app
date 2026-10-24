@@ -38,7 +38,8 @@ test("due dates read like in Flowplan", () => {
 
 test("widgets get finished texts and links into the app", () => {
   const tasks = tasksWidget(summary, "en");
-  assert.equal(tasks.headline, "2 due");
+  // The list shows open tasks too: the headline says how many.
+  assert.equal(tasks.headline, "2 due · 4 open");
   assert.equal(tasks.detail, "1 overdue");
   assert.ok(tasks.late);
   assert.deepEqual(
@@ -61,6 +62,19 @@ test("widgets get finished texts and links into the app", () => {
   const quiet = tasksWidget({ ...summary, tasks: { due: 0, overdue: 0, open: 0, items: [] } }, "de");
   assert.equal(quiet.headline, "Nichts fällig");
   assert.equal(quiet.detail, "");
+});
+
+test("the tasks widget's headline matches the open tasks it lists", () => {
+  const items = summary.tasks.items;
+  const nothingDue = { ...summary, tasks: { due: 0, overdue: 0, open: 7, items } };
+  assert.equal(tasksWidget(nothingDue, "de").headline, "Nichts fällig · 7 offen");
+  assert.equal(tasksWidget(nothingDue, "en").headline, "Nothing due · 7 open");
+  assert.equal(tasksWidget(nothingDue, "fr").headline, "Rien à faire · 7 ouvertes");
+  // Everything open is due: no second number.
+  assert.equal(tasksWidget({ ...summary, tasks: { due: 3, overdue: 0, open: 3, items } }, "en").headline, "3 due");
+  // Older instances without "open": the listed ones count.
+  const old = { ...summary, tasks: { due: 0, overdue: 0, items } } as unknown as Summary;
+  assert.equal(tasksWidget(old, "en").headline, "Nothing due · 3 open");
 });
 
 test("the running timer becomes the Live Activity", () => {
@@ -107,7 +121,7 @@ test("the gallery sample reads like a real day in every language", () => {
   const sample = sampleSummary("de", now);
   assert.ok(isSummary(sample));
   const tasks = tasksWidget(sample, "de");
-  assert.equal(tasks.headline, "2 fällig");
+  assert.equal(tasks.headline, "2 fällig · 4 offen");
   assert.deepEqual(tasks.items.map((i) => i.due), ["Gestern", "Heute", "Morgen", ""]);
   assert.equal(inboxWidget(sample, "fr").label, "3 non lues");
   assert.notEqual(sampleSummary("en", now).tasks.items[0].text, sample.tasks.items[0].text);
