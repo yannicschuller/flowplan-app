@@ -91,9 +91,12 @@ const config: ExpoConfig = {
       // brings the CAMERA permission); the document scanner (VisionKit,
       // modules/flowplan-capture) uses the camera too. That is the camera and microphone use
       // these texts describe (also in locales/*.json). Photos are chosen with
-      // the system picker, which needs no photo library permission.
+      // the system picker, which needs no photo library permission – but the
+      // picker library references the photo library API, so App Store
+      // Connect requires its purpose string anyway (ITMS-90683).
       NSCameraUsageDescription: "Flowplan uses the camera when you take a photo for a page or a whiteboard, or scan a document.",
       NSMicrophoneUsageDescription: "Flowplan uses the microphone when you record a voice note or a video for a page.",
+      NSPhotoLibraryUsageDescription: "Flowplan opens your photos when you choose pictures to add to a page.",
       NSPhotoLibraryAddUsageDescription: "Flowplan saves images to your photos when you ask it to.",
       NSFaceIDUsageDescription: "Flowplan uses Face ID to unlock the app when the app lock is on.",
       // Voice notes of the page become text on the phone itself
@@ -209,7 +212,7 @@ const config: ExpoConfig = {
     [
       "expo-image-picker",
       {
-        photosPermission: false,
+        photosPermission: "Flowplan opens your photos when you choose pictures to add to a page.",
         cameraPermission: "Flowplan uses the camera when you take a photo for a page or a whiteboard, or scan a document.",
         microphonePermission: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       },
