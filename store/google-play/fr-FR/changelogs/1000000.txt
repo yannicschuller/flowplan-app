@@ -1,0 +1,6 @@
+La première version de Flowplan pour Android :
+• Se connecte à app.flowplan.org ou à tes propres instances Flowplan, plusieurs à la fois sous forme de profils
+• Widgets avec leurs propres réglages, tâches à cocher
+• Chrono, concentration, réunion, imports en notification en cours
+• Connexion avec une clé d’accès ou par SSO, verrouillage de l’app par empreinte
+• Partage depuis d’autres apps, note et mémo vocal en un geste

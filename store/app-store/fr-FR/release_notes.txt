@@ -1,0 +1,9 @@
+La première version de Flowplan pour iPhone et iPad :
+• Se connecte à app.flowplan.org ou à tes propres instances Flowplan, plusieurs à la fois sous forme de profils
+• Notifications, avec le nombre de non lues sur l’icône de l’app
+• Widgets avec leurs propres réglages : tâches à cocher, aujourd’hui, favoris, compteurs, journal et habitudes, temps, mentions, formulaires, saisie rapide – pour les administrateurs état, chiffres en direct et stockage
+• Activités en direct : chrono, concentration, réunion en cours, imports, mémo vocal
+• Siri, Raccourcis, centre de contrôle et bouton Action : note, chrono, mémo vocal, concentration, « Qu’est-ce qui est prévu aujourd’hui ? »
+• Connexion avec une clé d’accès ou par SSO, verrouillage de l’app avec Face ID
+• Actions rapides : boîte de réception, mes tâches, recherche, nouvelle note, mémo vocal
+• Apple Pencil sur les tableaux blancs : pression, gomme, double toucher et pression latérale ; les doigts déplacent le tableau

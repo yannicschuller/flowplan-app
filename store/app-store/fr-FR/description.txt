@@ -1,0 +1,29 @@
+Flowplan est ton espace de travail pour les notes, les projets et ton équipe – désormais aussi en app pour iPhone et iPad.
+
+DES DOCUMENTS QUI ÉVOLUENT AVEC TOI
+Rédige notes, briefs et wikis dans un éditeur rapide : titres, listes, tâches, tableaux, images, code, mentions et liens entre les pages. Plusieurs personnes peuvent modifier une page en même temps.
+
+DES BASES DE DONNÉES POUR TOUT
+Projets, feuilles de route, listes de lecture ou contacts : une base, de nombreuses vues – tableau, kanban, calendrier, chronologie, galerie, liste et formulaire. Filtre, trie, regroupe et calcule avec des formules.
+
+TABLEAUX BLANCS
+Rassemble des idées, esquisse des processus et relie des cartes sur une surface infinie – du bout du doigt ou avec l’Apple Pencil.
+
+JOURNAL
+Une entrée par jour, avec bilan, séries et « À pareille date ». Pour un journal intime, un journal de bord ou le point quotidien.
+
+POUR LES ÉQUIPES
+Espaces d’équipe, droits d’accès, commentaires, mentions, notifications, modèles et une recherche dans tout l’espace.
+
+WIDGETS, SIRI ET CENTRE DE CONTRÔLE
+Coche tes tâches directement sur l’écran d’accueil, consulte les rendez-vous du jour, tes favoris, des chiffres de tes bases, ton journal et tes habitudes, le temps de la semaine, tes mentions et les réponses aux formulaires – chaque widget montre une seule chose et a ses propres réglages. Capture notes, mémos vocaux et photos en un geste, aussi avec Siri, dans le centre de contrôle ou avec le bouton Action. La concentration, la réunion en cours, les imports et le chrono apparaissent en activité en direct.
+
+TES DONNÉES, TON SERVEUR
+Flowplan est open source (AGPL) et peut être auto-hébergé. L’app se connecte à app.flowplan.org ou à l’instance Flowplan de ton entreprise – il suffit d’en saisir l’adresse au premier lancement. Plusieurs instances, par exemple travail et perso, sont enregistrées comme profils et se changent d’un geste. Ton contenu reste sur ce serveur, pas dans l’app. L’app elle-même ne collecte aucune donnée et ne contient aucun pistage.
+
+CONNEXION À TA FAÇON
+E-mail et mot de passe, clés d’accès ou authentification unique (SSO) de ton organisation – les clés d’accès et le SSO passent en toute sécurité par la fenêtre de connexion du système.
+
+Le même Flowplan partout : dans le navigateur, en app de bureau pour macOS, Windows et Linux, et maintenant sur iPhone et iPad. Les nouvelles fonctions arrivent avec le serveur, sans mise à jour de l’app.
+
+Questions et guides : docs.flowplan.org

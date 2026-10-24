@@ -1,0 +1,102 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+// The store listings (store/README.md): the limits App Store Connect and
+// Play Console enforce, and screenshots in the sizes and format fastlane
+// uploads (scripts/store-images.mjs).
+const STORE = join(__dirname, "..", "store");
+const LOCALES = ["de-DE", "en-US", "fr-FR"];
+const read = (...path: string[]) => readFileSync(join(STORE, ...path), "utf8").trim();
+const bytes = (text: string) => Buffer.byteLength(text, "utf8");
+// Apple rejects other apps' names in the metadata (guideline 2.3.7).
+const COMPETITORS = /\b(notion|evernote|obsidian|onenote|trello|asana|confluence|miro|todoist|coda)\b/i;
+
+// Width, height, colour type and whether a PNG has transparency.
+function png(file: string) {
+  const data = readFileSync(file);
+  assert.equal(data.toString("latin1", 1, 4), "PNG", `${file} is not a PNG`);
+  let alpha = false;
+  for (let at = 8; at < data.length; ) {
+    const length = data.readUInt32BE(at);
+    const type = data.toString("latin1", at + 4, at + 8);
+    if (type === "tRNS") alpha = true;
+    if (type === "IDAT") break;
+    at += length + 12;
+  }
+  const colourType = data[25];
+  return { width: data.readUInt32BE(16), height: data.readUInt32BE(20), depth: data[24], alpha: alpha || colourType === 4 || colourType === 6 };
+}
+
+test("App Store texts of every language stay within App Store Connect's limits", () => {
+  const files = ["name", "subtitle", "keywords", "promotional_text", "description", "release_notes", "support_url", "marketing_url", "privacy_url"];
+  for (const locale of LOCALES) {
+    for (const file of files) assert.ok(read("app-store", locale, `${file}.txt`), `${locale}/${file}.txt is empty`);
+    const at = (file: string) => read("app-store", locale, `${file}.txt`);
+    assert.ok(at("name").length <= 30, `${locale} name: ${at("name").length} > 30`);
+    assert.ok(at("subtitle").length <= 30, `${locale} subtitle: ${at("subtitle").length} > 30`);
+    assert.ok(bytes(at("keywords")) <= 100, `${locale} keywords: ${bytes(at("keywords"))} bytes > 100`);
+    const keywords = at("keywords").split(",");
+    assert.ok(keywords.every((word) => word && word === word.trim()), `${locale} keywords: no empty entries, no spaces around commas`);
+    assert.equal(new Set(keywords).size, keywords.length, `${locale} keywords repeat`);
+    assert.ok(at("promotional_text").length <= 170, `${locale} promotional text: ${at("promotional_text").length} > 170`);
+    assert.ok(at("description").length <= 4000, `${locale} description: ${at("description").length} > 4000`);
+    assert.ok(at("release_notes").length <= 4000, `${locale} release notes: ${at("release_notes").length} > 4000`);
+    for (const file of ["support_url", "marketing_url", "privacy_url"]) assert.match(at(file), /^https:\/\/\S+$/, `${locale}/${file}.txt`);
+    for (const file of ["name", "subtitle", "keywords", "promotional_text", "description", "release_notes"])
+      assert.doesNotMatch(at(file), COMPETITORS, `${locale}/${file}.txt names another app`);
+  }
+});
+
+test("Google Play texts of every language stay within Play Console's limits", () => {
+  for (const locale of LOCALES) {
+    const at = (file: string) => read("google-play", locale, `${file}.txt`);
+    assert.ok(at("title") && at("title").length <= 30, `${locale} title`);
+    assert.ok(at("short_description") && at("short_description").length <= 80, `${locale} short description: ${at("short_description").length} > 80`);
+    assert.ok(at("full_description") && at("full_description").length <= 4000, `${locale} full description`);
+    for (const file of readdirSync(join(STORE, "google-play", locale, "changelogs")))
+      assert.ok(read("google-play", locale, "changelogs", file).length <= 500, `${locale} changelog ${file} > 500`);
+    for (const file of ["title", "short_description", "full_description"]) assert.doesNotMatch(at(file), COMPETITORS, `${locale}/${file}.txt names another app`);
+  }
+});
+
+test("App Store screenshots: every device and language, exact sizes, PNG without alpha, at most 10", () => {
+  const SIZES: Record<string, [number, number]> = { "iphone-69": [1320, 2868], "iphone-65": [1284, 2778], "ipad-13": [2064, 2752] };
+  const frames = (locale: string) => readdirSync(join(STORE, "app-store", "screenshots", locale)).filter((f) => !f.startsWith(".")).sort();
+  const reference = frames(LOCALES[0]);
+  for (const locale of LOCALES) {
+    const files = frames(locale);
+    assert.deepEqual(files, reference, `${locale} has other screenshots than ${LOCALES[0]}`);
+    for (const [device, [width, height]] of Object.entries(SIZES)) {
+      const shots = files.filter((f) => f.endsWith(`-${device}.png`));
+      assert.ok(shots.length >= 3 && shots.length <= 10, `${locale} ${device}: ${shots.length} screenshots`);
+      for (const file of shots) {
+        const image = png(join(STORE, "app-store", "screenshots", locale, file));
+        assert.deepEqual([image.width, image.height], [width, height], `${locale}/${file} size`);
+        assert.equal(image.alpha, false, `${locale}/${file} has an alpha channel`);
+        assert.equal(image.depth, 8, `${locale}/${file} bit depth`);
+      }
+    }
+    assert.equal(files.filter((f) => !Object.keys(SIZES).some((d) => f.endsWith(`-${d}.png`))).length, 0, `${locale}: files of no known device`);
+  }
+});
+
+test("Google Play images: sizes, no alpha, two to eight screenshots per device", () => {
+  const SIZES: Record<string, [number, number]> = { phoneScreenshots: [1080, 1920], sevenInchScreenshots: [1200, 1920], tenInchScreenshots: [1600, 2560] };
+  for (const locale of LOCALES) {
+    const images = join(STORE, "google-play", locale, "images");
+    for (const [folder, [width, height]] of Object.entries(SIZES)) {
+      const shots = readdirSync(join(images, folder)).filter((f) => f.endsWith(".png"));
+      assert.ok(shots.length >= 2 && shots.length <= 8, `${locale} ${folder}: ${shots.length}`);
+      for (const file of shots) {
+        const image = png(join(images, folder, file));
+        assert.deepEqual([image.width, image.height], [width, height], `${locale}/${folder}/${file} size`);
+        assert.equal(image.alpha, false, `${locale}/${folder}/${file} has an alpha channel`);
+      }
+    }
+    const feature = png(join(images, "featureGraphic.png"));
+    assert.deepEqual([feature.width, feature.height, feature.alpha], [1024, 500, false], `${locale} feature graphic`);
+    assert.ok(existsSync(join(images, "icon.png")), `${locale} icon`);
+  }
+});

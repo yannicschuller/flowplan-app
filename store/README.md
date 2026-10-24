@@ -1,6 +1,6 @@
 # Store material
 
-Everything for the App Store and Google Play listings, in German (`de-DE`) and English (`en-US`). The folders follow the layout fastlane reads:
+Everything for the App Store and Google Play listings, in German (`de-DE`), English (`en-US`) and French (`fr-FR`). The folders follow the layout fastlane reads:
 
 - `app-store/` for `deliver` (`fastlane ios metadata`);
 - `google-play/` for `supply` (`fastlane android metadata`).
@@ -13,15 +13,45 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | Support, marketing and privacy URLs | `app-store/<locale>/{support,marketing,privacy}_url.txt` |
 | Categories, copyright, age rating | `app-store/{primary,secondary}_category.txt`, `copyright.txt`, `app_rating_config.json` |
 | Notes and name for App Review | `app-store/review_information/` (demo account and contact: environment, see below) |
-| iPhone 6.9" (1320×2868), iPhone 6.5" (1284×2778), iPad 13" (2064×2752) | `app-store/screenshots/<locale>/` (7 each) |
-| App preview video, 886×1920, 27 s, H.264 | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` |
+| iPhone 6.9" (1320×2868), iPhone 6.5" (1284×2778), iPad 13" (2064×2752) | `app-store/screenshots/<locale>/NN-name-<device>.png` (8 each, see [Screenshots](#screenshots)) |
+| App preview video, 886×1920, 27 s, H.264 | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` (German and English) |
 | Play title, short and full description, release notes | `google-play/<locale>/*.txt`, `changelogs/<versionCode>.txt` |
-| Phone (1080×1920), 7" tablet (1200×1920), 10" tablet (1600×2560) | `google-play/<locale>/images/{phone,sevenInch,tenInch}Screenshots/` |
+| Phone (1080×1920), 7" tablet (1200×1920), 10" tablet (1600×2560) | `google-play/<locale>/images/{phone,sevenInch,tenInch}Screenshots/N.png` |
 | Feature graphic 1024×500, icon 512×512 | `google-play/<locale>/images/featureGraphic.png`, `icon.png` |
 | App icon 1024×1024 (App Store, no transparency) and 512×512 (Play) | `icons/` |
 | Preview GIFs (README, website) | `preview/flowplan-{de,en}.gif` |
 
-All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too; see the main README.
+All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too (below and the main README).
+
+`npm test` (part of `npm run check`) checks the listing: App Store and Play limits for every language (name and subtitle 30 characters, keywords 100 bytes without spaces after commas, promotional text 170, descriptions 4000, Play short description 80, changelogs 500), no other apps' names, and every screenshot's size, PNG without alpha and count ([`test/store.test.ts`](../test/store.test.ts)).
+
+## Screenshots
+
+Eight frames per device and language, the same order everywhere: a headline of a few words (Instrument Serif, ending in Flowplan's orange dot) and one line below it on the warm paper background, with the screen in a device frame.
+
+| Frame | Shows |
+| --- | --- |
+| `01-home` | Start page: greeting, recently edited pages |
+| `02-widgets` | Home screen with the widgets (tasks to check off, today, time this week with a running timer, journal and habits, quick capture; on iPad also counter and favorites) and the timer as Live Activity |
+| `03-board` | The projects database as board |
+| `04-document` | A kick-off document with a callout, tasks with mentions and a table |
+| `05-plan` | Phones: the journal (streaks, "On this day"); wide screens: the projects as timeline |
+| `06-inbox` | Inbox with mentions, a comment and an assigned task |
+| `07-whiteboard` | Whiteboard with notes, a flow and a mind map |
+| `08-profiles` | App settings: two profiles (app.flowplan.org and a self-hosted instance), app lock, Live Activities |
+
+The app's screens are the real Flowplan web app (its demo workspace, in the listing's language, plus a few made-up pages, people and notifications – no real persons or companies). The widgets and the settings are native and cannot be driven by Playwright; [`scripts/store-mockups.mjs`](../scripts/store-mockups.mjs) draws them after `plugins/widget-suite/ios/SuiteViews.swift` (with the widget gallery's sample data and texts) and `src/screens/Settings.tsx`.
+
+To make them again, with the Flowplan repository next to this one and its dependencies installed:
+
+```sh
+npm run screenshots          # starts a Flowplan dev server per language, writes store/.cache/raw/
+npm run store:images         # frames, captions, PNG for both stores and the feature graphic
+npm run store:images -- --contact /tmp/review   # also contact-<locale>.png, all frames side by side
+npm test                     # sizes, alpha, counts
+```
+
+`npm run screenshots -- --locales fr --only iphone-69,ipad-13 --shots 02-widgets` redoes a part (then run `store:images` again). Captions are in `scripts/store-images.mjs` (`CAPTIONS`), the made-up content in `scripts/screenshots.mjs` (`seed`). Dates on the screens are relative to the day they are made. `CHROMIUM_PATH` (or `--chromium`) points Playwright to another Chromium. The PNGs are written with a 256-colour palette (sharp), about 150–250 KB each.
 
 ## One-click setup
 
@@ -247,11 +277,11 @@ Apple and Google, however, count the data that the developer's own service recei
 
 ### Screenshots of the widgets
 
-The store screenshots (`npm run screenshots`) show the web app. For widget screenshots (optional, they help with guideline 4.2):
+The store set has a drawn home screen with the widgets (`02-widgets`, above). Screenshots from a simulator or device are optional; they help with guideline 4.2:
 
 1. Sign in on a simulator (iPhone 6.9″, iPad 13″) or the Pixel emulator with an account that has tasks with due dates, a journal with a habits database, a recent timer and a form with responses (seed them by hand; the screenshot script does not create them).
 2. Add from the gallery, from top left: *Tasks* (medium, filter *Due today*), *Today* (small), *Database counter* (small, the roadmap database), *Journal and habits* (medium), *Time this week* (small) and on the lock screen *Tasks* (rectangular) and *Database counter* (circular). Start focus from Control Center for the Dynamic Island.
-3. Light and dark, German and English; frame them with `npm run store:images` like the others (name them `08-widgets-*.png`).
+3. Light and dark, German, English and French. To use one instead of the drawn frame, save it (the whole screen, at the device's size in points times its scale) as `store/.cache/raw/<de|en|fr>/<device>/02-widgets.png` with `{"full": true}` in `02-widgets.json`, then run `npm run store:images`.
 
 ### What the review notes say
 

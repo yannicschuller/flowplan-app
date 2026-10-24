@@ -55,6 +55,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "~19.3.0",
     "playwright": "^1.64.1",
+    "sharp": "^0.35.5",
     "tsx": "^4.21.0",
     "typescript": "~6.0.3"
   },
@@ -62,7 +63,7 @@
     "start": "expo start --dev-client",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && node --import tsx --test test/*.test.ts && node --check scripts/icons.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --check scripts/devices.mjs && node --check scripts/frame.mjs && node --check scripts/preview-video.mjs",
+    "check": "tsc --noEmit && node --import tsx --test test/*.test.ts && node --check scripts/icons.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --check scripts/devices.mjs && node --check scripts/frame.mjs && node --check scripts/preview-video.mjs && node --check scripts/store-mockups.mjs && node --check scripts/store-style.mjs && node --check scripts/store-flowplan.mjs",
     "prebuild": "expo prebuild --clean --no-install",
     "ios": "expo run:ios",
     "android": "expo run:android",

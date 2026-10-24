@@ -1,1 +1,1 @@
-notizen,wiki,projekte,aufgaben,kanban,whiteboard,journal,datenbank,team,selbst gehostet,notion
+wiki,aufgaben,kanban,whiteboard,journal,datenbank,team,selbst gehostet,docs,planer,widgets,todo

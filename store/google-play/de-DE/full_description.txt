@@ -24,6 +24,6 @@ Flowplan ist Open Source (AGPL) und lässt sich selbst betreiben. Die App verbin
 ANMELDEN, WIE DU WILLST
 E-Mail und Passwort, Passkeys oder Single Sign-on (SSO) deiner Organisation – Passkeys und SSO laufen sicher über das Anmeldefenster des Systems.
 
-Gleiches Flowplan überall: im Browser, als Desktop-App für macOS, Windows und Linux und jetzt auf dem Android. Neue Funktionen kommen mit dem Server und brauchen kein App-Update.
+Dasselbe Flowplan überall: im Browser, als Desktop-App für macOS, Windows und Linux und jetzt auf Android. Neue Funktionen kommen mit dem Server und brauchen kein App-Update.
 
 Fragen und Anleitung: docs.flowplan.org

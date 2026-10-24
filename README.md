@@ -235,17 +235,17 @@ Promoting a build to the public is done in App Store Connect and Play Console. T
 
 Everything for the store listings is in [`store/`](store), in the layout fastlane reads. See [`store/README.md`](store/README.md):
 
-- texts in German and English;
+- texts in German, English and French;
 - screenshots for every required device;
 - the feature graphic, icons and preview video;
 - privacy answers and the submission checklist.
 
-The screenshots and the video are made from the real Flowplan UI with Playwright against a local test server:
+The screenshots and the video are made from the real Flowplan UI with Playwright against a local Flowplan server (store/README.md → Screenshots):
 
 ```sh
-npm run screenshots -- --locale de     # needs a fresh Flowplan dev server, see the script
-npm run store:images                   # device frames and captions
-npm run preview -- --locale de         # App Store preview video and GIF
+npm run screenshots                    # all languages; starts a Flowplan dev server from ../flowplan
+npm run store:images                   # device frames and captions, PNG for both stores
+npm run preview -- --locale de         # App Store preview video and GIF; see the script
 ```
 
 ## Why Expo

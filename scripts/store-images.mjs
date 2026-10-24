@@ -1,21 +1,32 @@
-// Store images from the raw screenshots (scripts/screenshots.mjs): every
-// screenshot in a device frame with a caption on the Flowplan gradient, in
-// the exact sizes of the stores, plus Google Play's feature graphic.
+// Store images from the raw screenshots (scripts/screenshots.mjs): each
+// screen in a device frame under a short headline, on Flowplan's warm paper
+// with its ultramarine accent, in the exact sizes of the stores – PNG, sRGB,
+// no alpha, compressed to a palette. Plus Google Play's feature graphic.
 //
 //   npm run store:images
+//   npm run store:images -- --contact <folder>   (also one contact sheet per language)
 //
 // Writes the layout fastlane reads:
-//   store/app-store/screenshots/<de-DE|en-US>/NN-name-<device>.jpg
-//   store/google-play/<de-DE|en-US>/images/{phoneScreenshots,sevenInchScreenshots,tenInchScreenshots}/N.jpg
-//   store/google-play/<de-DE|en-US>/images/{featureGraphic.png,icon.png}
+//   store/app-store/screenshots/<de-DE|en-US|fr-FR>/NN-name-<device>.png
+//   store/google-play/<de-DE|en-US|fr-FR>/images/{phoneScreenshots,sevenInchScreenshots,tenInchScreenshots}/N.png
+//   store/google-play/<de-DE|en-US|fr-FR>/images/{featureGraphic.png,icon.png}
 import { chromium } from "playwright";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import sharp from "sharp";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { parseArgs } from "node:util";
 import { DEVICES } from "./devices.mjs";
-import { dataUrl, frame, screen } from "./frame.mjs";
+import { dataUrl, screen } from "./frame.mjs";
+import { CAPTIONS, FONTS, PAPER, esc, headline } from "./store-style.mjs";
 
+const { values: args } = parseArgs({
+  options: {
+    contact: { type: "string", default: "" },
+    chromium: { type: "string", default: process.env.CHROMIUM_PATH || "" },
+  },
+});
 const root = new URL("..", import.meta.url).pathname;
 const raw = `${root}store/.cache/raw`;
-const LOCALES = { de: "de-DE", en: "en-US" };
+const LOCALES = { de: "de-DE", en: "en-US", fr: "fr-FR" };
 
 // Output size per device (the stores' required pixel sizes).
 const OUTPUT = {
@@ -28,57 +39,82 @@ const OUTPUT = {
 };
 const PLAY_FOLDER = { "android-phone": "phoneScreenshots", "android-7": "sevenInchScreenshots", "android-10": "tenInchScreenshots" };
 
-const CAPTIONS = {
-  "01-home": [["Alles an einem Ort", "Notizen, Projekte und dein Team"], ["Everything in one place", "Notes, projects and your team"]],
-  "02-board": [["Projekte im Blick", "Boards, Tabellen, Kalender und Zeitleisten"], ["Projects at a glance", "Boards, tables, calendars and timelines"]],
-  "03-document": [["Schreiben, das fließt", "Dokumente und Wikis – gemeinsam in Echtzeit"], ["Writing that flows", "Docs and wikis – together in real time"]],
-  "04-whiteboard": [["Raum für Ideen", "Unendliche Whiteboards für dein Team"], ["Room for ideas", "Infinite whiteboards for your team"]],
-  "05-journal": [["Jeden Tag ein Journal", "Mit Rückblick, Serien und „An diesem Tag“"], ["A journal for every day", "With review, streaks and “On this day”"]],
-  "06-overview": [["Alles schnell gefunden", "Teamspaces, Seiten und Suche"], ["Find everything fast", "Teamspaces, pages and search"]],
-  "06-overview-tablet": [["Termine im Kalender", "Jede Datenbank auch als Kalender"], ["Never miss a deadline", "Every database as a calendar too"]],
-  "07-server": [["Dein Server, deine Daten", "app.flowplan.org oder selbst gehostet"], ["Your server, your data", "app.flowplan.org or self-hosted"]],
+const FEATURE = {
+  de: "Notizen, Projekte und dein Team – auf deinem Server.",
+  en: "Notes, projects and your team – on your own server.",
+  fr: "Notes, projets et ton équipe – sur ton serveur.",
 };
 
-function poster(width, height, device, shot, meta, [title, subtitle]) {
-  const screenWidth = Math.round(width * (device.tablet ? 0.8 : 0.8));
-  const titleSize = Math.round(width * (device.tablet ? 0.052 : 0.074));
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+// A modern device: thin dark bezel, a light metal edge, a soft shadow.
+function device(dev, meta, shot, screenWidth) {
+  const inner = meta.full
+    ? `<img src="${dataUrl(shot)}" style="display:block;width:${screenWidth}px;height:${(screenWidth * dev.height) / dev.width}px">`
+    : screen(dev, shot, meta, screenWidth);
+  const bezel = Math.round(screenWidth * (dev.tablet ? 0.024 : 0.032));
+  const radius = Math.round(screenWidth * (dev.tablet ? 0.04 : dev.platform === "ios" ? 0.125 : 0.085));
+  const edge = Math.max(2, Math.round(screenWidth * 0.004));
+  return `<div style="padding:${bezel}px;background:#141318;border-radius:${radius + bezel}px;box-shadow:0 0 0 ${edge}px #c9c6cf,0 ${bezel * 3}px ${bezel * 7}px rgba(44,40,92,.20),0 ${bezel}px ${bezel * 2}px rgba(44,40,92,.10)">
+    <div style="border-radius:${radius}px;overflow:hidden;transform:translateZ(0)">${inner}</div></div>`;
+}
+
+function poster(width, height, dev, shot, meta, [title, subtitle]) {
+  const tablet = dev.tablet;
+  const title1 = Math.round(width * (tablet ? 0.062 : 0.086));
+  const sub = Math.round(width * (tablet ? 0.024 : 0.036));
+  const top = Math.round(height * (tablet ? 0.055 : 0.062));
+  // The same room for the text on every frame (one line of headline, two
+  // below it), so the devices line up across the set.
+  const header = top + title1 * 1.04 + sub * 0.55 + sub * 1.3 * 2;
+  const textHeight = header + height * 0.035;
+  // The device is as large as fits, running a little off the bottom edge.
+  const bleed = height * (tablet ? 0.05 : 0.07);
+  const screenWidth = Math.round(Math.min(width * (tablet ? 0.8 : 0.82), ((height - textHeight + bleed) * dev.width) / dev.height));
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
     *{box-sizing:border-box}html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden}
-    body{background:radial-gradient(120% 60% at 15% 0%,#6c70ff 0%,rgba(108,112,255,0) 60%),radial-gradient(90% 50% at 100% 30%,#8a5cf0 0%,rgba(138,92,240,0) 70%),linear-gradient(160deg,#3e43e0 0%,#5a3fe0 55%,#3a2fa8 100%);
-      font-family:-apple-system,"SF Pro Display",system-ui,"Segoe UI",Roboto,sans-serif;color:#fff;display:flex;flex-direction:column;align-items:center}
-    h1{margin:${Math.round(height * 0.055)}px ${Math.round(width * 0.07)}px 0;font-size:${titleSize}px;line-height:1.08;font-weight:750;letter-spacing:-.02em;text-align:center}
-    p{margin:${Math.round(titleSize * 0.35)}px ${Math.round(width * 0.08)}px 0;font-size:${Math.round(titleSize * 0.46)}px;line-height:1.3;opacity:.86;text-align:center}
-    .device{margin-top:${Math.round(height * 0.04)}px}
-  </style></head><body><h1>${title}</h1><p>${subtitle}</p>
-  <div class="device">${frame(device, screen(device, shot, meta, screenWidth), screenWidth)}</div></body></html>`;
+    body{background:${PAPER};color:#1d1c22;display:flex;flex-direction:column;align-items:center;font-family:"Instrument Sans",system-ui,sans-serif}
+    h1{margin:${top}px ${Math.round(width * 0.07)}px 0;font:400 ${title1}px/1.04 "Instrument Serif",Georgia,serif;letter-spacing:-.012em;text-align:center;text-wrap:balance}
+    .dot{color:#f0663a}
+    p{margin:${Math.round(sub * 0.55)}px ${Math.round(width * 0.09)}px 0;font-size:${sub}px;line-height:1.3;font-weight:500;color:#5e5a66;text-align:center;text-wrap:balance}
+    .device{margin-top:${Math.round(height * 0.035)}px}
+    header{height:${Math.ceil(header)}px;display:flex;flex-direction:column;align-items:center;flex:none}
+  </style></head><body><header><h1>${headline(title)}</h1><p>${esc(subtitle)}</p></header>
+  <div class="device">${device(dev, meta, shot, screenWidth)}</div></body></html>`;
 }
 
 function featureGraphic(shot, meta, tagline) {
-  const device = DEVICES["android-phone"];
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  const dev = DEVICES["android-phone"];
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
     html,body{margin:0;width:1024px;height:500px;overflow:hidden}
-    body{background:radial-gradient(80% 90% at 0% 0%,#6c70ff 0%,rgba(108,112,255,0) 60%),linear-gradient(135deg,#3e43e0 0%,#5a3fe0 60%,#3a2fa8 100%);font-family:-apple-system,system-ui,Roboto,sans-serif;color:#fff;position:relative}
-    .text{position:absolute;left:64px;top:132px;width:520px}
-    .logo{display:flex;align-items:center;gap:18px;font-size:58px;font-weight:750;letter-spacing:-.02em}
-    .logo img{width:76px;height:76px;border-radius:18px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-    p{font-size:30px;line-height:1.3;margin:26px 0 0;opacity:.92}
-    .phone{position:absolute;right:70px;top:40px;transform:rotate(-4deg)}
+    body{background:${PAPER};font-family:"Instrument Sans",system-ui,sans-serif;color:#1d1c22;position:relative}
+    .text{position:absolute;left:64px;top:138px;width:540px}
+    .logo{display:flex;align-items:center;gap:18px;font:400 64px/1 "Instrument Serif",Georgia,serif;letter-spacing:-.01em}
+    .logo img{width:74px;height:74px;border-radius:17px;box-shadow:0 8px 22px rgba(44,40,92,.18)}
+    p{font-size:29px;line-height:1.3;margin:26px 0 0;color:#5e5a66;font-weight:500}
+    .phone{position:absolute;right:84px;top:44px;transform:rotate(-4deg)}
   </style></head><body>
-  <div class="text"><div class="logo"><img src="${dataUrl(`${root}store/icons/google-play-512.png`)}">Flowplan</div><p>${tagline}</p></div>
-  <div class="phone">${frame(device, screen(device, shot, meta, 250), 250)}</div></body></html>`;
+  <div class="text"><div class="logo"><img src="${dataUrl(`${root}store/icons/google-play-512.png`)}">Flowplan<span style="color:#f0663a">.</span></div><p>${esc(tagline)}</p></div>
+  <div class="phone">${device(dev, meta, shot, 240)}</div></body></html>`;
 }
 
-const browser = await chromium.launch();
+// PNG for the stores: sRGB, no alpha, palette with dithering (a fraction of
+// the size of a full-colour PNG; the paper's gradients stay smooth).
+async function writePng(buffer, file) {
+  const png = await sharp(buffer).removeAlpha().toColourspace("srgb").png({ palette: true, colours: 256, quality: 92, dither: 0.8, effort: 10, compressionLevel: 9 }).toBuffer();
+  writeFileSync(file, png);
+}
+
+const browser = await chromium.launch(args.chromium ? { executablePath: args.chromium, args: ["--no-sandbox"] } : {});
 const page = await browser.newPage({ deviceScaleFactor: 1 });
-async function render(html, [width, height], file, type = "jpeg") {
+async function render(html, [width, height], file) {
   await page.setViewportSize({ width, height });
   await page.setContent(html, { waitUntil: "load" });
-  await page.screenshot({ path: file, type, ...(type === "jpeg" ? { quality: 90 } : {}) });
+  await page.evaluate(() => document.fonts.ready);
+  await writePng(await page.screenshot({ type: "png" }), file);
 }
 
 for (const [short, locale] of Object.entries(LOCALES)) {
   if (!existsSync(`${raw}/${short}`)) {
-    console.log(`No screenshots for ${short} – run npm run screenshots -- --locale ${short}`);
+    console.log(`No screenshots for ${short} – run npm run screenshots -- --locales ${short}`);
     continue;
   }
   const appStore = `${root}store/app-store/screenshots/${locale}`;
@@ -89,37 +125,61 @@ for (const [short, locale] of Object.entries(LOCALES)) {
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
   }
+  const sheet = [];
   for (const [key, size] of Object.entries(OUTPUT)) {
-    const device = DEVICES[key];
+    const dev = DEVICES[key];
     const dir = `${raw}/${short}/${key}`;
     if (!existsSync(dir)) continue;
     const shots = readdirSync(dir).filter((f) => f.endsWith(".png")).sort();
+    const row = [];
     let n = 0;
     for (const file of shots) {
       const name = file.replace(/\.png$/, "");
       const meta = JSON.parse(readFileSync(`${dir}/${name}.json`, "utf8"));
-      const caption = CAPTIONS[device.tablet && CAPTIONS[`${name}-tablet`] ? `${name}-tablet` : name][short === "de" ? 0 : 1];
-      const html = poster(size[0], size[1], device, `${dir}/${file}`, meta, caption);
+      const caption = CAPTIONS[dev.width >= 760 && CAPTIONS[`${name}-wide`] ? `${name}-wide` : name][short];
       n++;
-      const out =
-        device.platform === "ios"
-          ? `${appStore}/${name}-${key}.jpg`
-          : `${root}store/google-play/${locale}/images/${PLAY_FOLDER[key]}/${n}.jpg`;
-      await render(html, size, out);
+      const out = dev.platform === "ios" ? `${appStore}/${name}-${key}.png` : `${root}store/google-play/${locale}/images/${PLAY_FOLDER[key]}/${n}.png`;
+      await render(poster(size[0], size[1], dev, `${dir}/${file}`, meta, caption), size, out);
+      row.push(out);
       console.log(out.replace(root, ""));
     }
+    if (["iphone-69", "ipad-13", "android-phone"].includes(key) && row.length) sheet.push(row);
   }
   const home = `${raw}/${short}/android-phone/01-home`;
   if (existsSync(`${home}.png`)) {
     const images = `${root}store/google-play/${locale}/images`;
-    await render(
-      featureGraphic(`${home}.png`, JSON.parse(readFileSync(`${home}.json`, "utf8")), short === "de" ? "Notizen, Projekte und dein Team – auf deinem Server." : "Notes, projects and your team – on your own server."),
-      [1024, 500],
-      `${images}/featureGraphic.png`,
-      "png",
-    );
+    await render(featureGraphic(`${home}.png`, JSON.parse(readFileSync(`${home}.json`, "utf8")), FEATURE[short]), [1024, 500], `${images}/featureGraphic.png`);
     copyFileSync(`${root}store/icons/google-play-512.png`, `${images}/icon.png`);
     console.log(`${images.replace(root, "")}/featureGraphic.png`);
+  }
+  // Contact sheet for review: one row per device class, all frames side by side.
+  if (args.contact && sheet.length) {
+    mkdirSync(args.contact, { recursive: true });
+    const rowHeight = 760, gap = 28;
+    const rows = await Promise.all(
+      sheet.map((files) =>
+        Promise.all(
+          files.map(async (file) => {
+            const { data, info } = await sharp(file).resize({ height: rowHeight }).png().toBuffer({ resolveWithObject: true });
+            return { input: data, width: info.width };
+          }),
+        ),
+      ),
+    );
+    const width = Math.max(...rows.map((r) => r.reduce((sum, item) => sum + item.width + gap, gap)));
+    const composite = [];
+    rows.forEach((r, y) => {
+      let x = gap;
+      for (const item of r) {
+        composite.push({ input: item.input, left: x, top: gap + y * (rowHeight + gap) });
+        x += item.width + gap;
+      }
+    });
+    await sharp({ create: { width, height: gap + rows.length * (rowHeight + gap), channels: 3, background: "#d9d6cf" } })
+      .composite(composite)
+      .png({ compressionLevel: 9 })
+      .toFile(`${args.contact}/contact-${locale}.png`);
+    console.log(`${args.contact}/contact-${locale}.png`);
   }
 }
 await browser.close();
