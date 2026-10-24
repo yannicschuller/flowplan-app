@@ -31,16 +31,26 @@ enum FPOptions {
 
   static func page(_ json: FPJSON) -> FPOption? {
     guard let id = json["id"].string else { return nil }
-    let name = json["encrypted"].bool ? L("Encrypted") : json["locked"].bool ? L("Locked") : json["name"].text
-    let detail = [json["space"].text, json["workspace"].text].filter { !$0.isEmpty }.joined(separator: " · ")
-    return FPOption(id: id, name: name.isEmpty ? L("Untitled") : name, detail: detail)
+    var name: String = json["name"].text
+    if json["locked"].bool { name = L("Locked") }
+    if json["encrypted"].bool { name = L("Encrypted") }
+    if name.isEmpty { name = L("Untitled") }
+    var parts: [String] = []
+    let space: String = json["space"].text
+    let workspace: String = json["workspace"].text
+    if !space.isEmpty { parts.append(space) }
+    if !workspace.isEmpty { parts.append(workspace) }
+    return FPOption(id: id, name: name, detail: parts.joined(separator: " · "))
   }
 
   /// The database of an options answer (with pageId): views and properties.
   static func database(_ kind: String, pageId: String) async -> FPJSON? {
     guard let answer = await cache.answer(kind: kind, pageId: pageId) else { return nil }
-    let database = answer["database"]
-    return database.isNull || database["locked"].bool || database["encrypted"].bool ? nil : database
+    let database: FPJSON = answer["database"]
+    if database.isNull { return nil }
+    if database["locked"].bool { return nil }
+    if database["encrypted"].bool { return nil }
+    return database
   }
 
   static func answer(_ kind: String) async -> FPJSON? {
@@ -336,9 +346,18 @@ struct FPGroupValues: DynamicOptionsProvider {
   func results() async throws -> [String] {
     guard let pageId = counter?.database?.id, let field = counter?.groupField,
           let database = await FPOptions.database("counter", pageId: pageId) else { return [] }
-    let property = database["properties"].array.first { $0["id"].text == field.fieldId }
-    if property?["type"].text == "checkbox" { return ["true", "false"] }
-    return (property?["values"].array ?? []).compactMap { $0.string ?? $0["name"].string ?? $0["value"].string }
+    let fieldId: String = field.fieldId
+    let properties: [FPJSON] = database["properties"].array
+    guard let property = properties.first(where: { (item: FPJSON) -> Bool in item["id"].text == fieldId }) else { return [] }
+    let type: String = property["type"].text
+    if type == "checkbox" { return ["true", "false"] }
+    var values: [String] = []
+    for value in property["values"].array {
+      if let text = value.string { values.append(text) }
+      else if let text = value["name"].string { values.append(text) }
+      else if let text = value["value"].string { values.append(text) }
+    }
+    return values
   }
 }
 
@@ -360,7 +379,8 @@ struct FPCalendarEntity: AppEntity {
       return answer["calendars"].array.compactMap { item in
         guard let page = item["pageId"].string else { return nil }
         let view = item["viewId"].text
-        let detail = item["synced"].string ?? item["database"].text
+        let synced: String? = item["synced"].string
+        let detail: String = synced ?? item["database"].text
         return FPCalendarEntity(id: FPCompositeID.make(page, view), name: item["name"].text, detail: detail)
       }
     }
