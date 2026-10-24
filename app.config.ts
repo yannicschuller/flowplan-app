@@ -340,6 +340,8 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/with-managed-config",
+    // iPad: several windows and Handoff of the open page (modules/flowplan-ipad).
+    "./plugins/with-ipad",
     "./plugins/with-android-signing",
   ].filter((plugin) => plugin !== false) as ExpoConfig["plugins"],
   extra: {

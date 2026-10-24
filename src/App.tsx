@@ -33,6 +33,7 @@ import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
 import { Shell, type ShellHandle } from "./screens/Shell";
 import { Capture } from "./screens/Capture";
+import { PageWindow } from "./screens/PageWindow";
 import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
@@ -40,6 +41,9 @@ import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
 import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
+import { pathOn } from "./ipad";
+import { useHandoff } from "./window-features";
+import { useAppWindow, useSharedState, WindowContext, type WindowProps } from "./windows";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -47,20 +51,26 @@ void SplashScreen.preventAutoHideAsync().catch(() => {});
 // How long the app may be in the background before the app lock asks again.
 const LOCK_AFTER_MS = 60_000;
 
-export default function App() {
+// iPad: every window is its own App; the first is the main window
+// (windows.ts), the others show a page (screens/PageWindow.tsx).
+export default function App(props: WindowProps) {
+  const appWindow = useAppWindow(props.flowplanWindow);
   return (
     <SafeAreaProvider>
-      <Root />
+      <WindowContext.Provider value={appWindow}>
+        {appWindow.main ? <Root initialUrl={appWindow.url} /> : <PageWindow url={appWindow.url} />}
+      </WindowContext.Provider>
     </SafeAreaProvider>
   );
 }
 
-function Root() {
-  const [profiles, setProfiles] = useState<ProfileState>(() => store.profiles());
+function Root({ initialUrl }: { initialUrl: string | null }) {
+  // Shared with the other windows (windows.ts).
+  const [profiles, setProfiles] = useSharedState<ProfileState>("profiles", () => store.profiles());
   const server = activeProfile(profiles)?.server ?? null;
   const [setup, setSetup] = useState(!store.server());
   const [settings, setSettings] = useState(false);
-  const [locked, setLocked] = useState(store.appLock());
+  const [locked, setLocked] = useSharedState("locked", () => store.appLock());
   const [lockOn, setLockOn] = useState(store.appLock());
   const [appState, setAppState] = useState<AppStateStatus>((AppState.currentState as AppStateStatus | null) || "active");
   const [signedIn, setSignedIn] = useState(!!store.deviceToken());
@@ -69,7 +79,8 @@ function Root() {
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
-  const pendingPath = useRef<string | null>(null);
+  // A window that became the main window keeps its page.
+  const pendingPath = useRef<string | null>(pathOn(initialUrl, server));
   const registered = useRef<string | null>(null);
   const backgroundSince = useRef(0);
 
@@ -159,6 +170,16 @@ function Root() {
       shares.remove();
     };
   }, [appLink, open, share]);
+
+  // Handoff: a page from the Mac or another device, on its profile.
+  useHandoff(
+    () => store.profiles(),
+    (target) => {
+      if (target.profileId === store.profiles().active) return open(target.path);
+      switchTo(target.profileId);
+      pendingPath.current = target.path;
+    },
+  );
 
   useEffect(() => setQuickActions(signedIn), [signedIn]);
   useEffect(() => void scheduleBackgroundRefresh(signedIn), [signedIn]);

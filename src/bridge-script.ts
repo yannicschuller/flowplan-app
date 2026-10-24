@@ -3,7 +3,9 @@
 //
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
-//   tap or the app settings (lib/native-app.ts in Flowplan);
+//   tap or the app settings, lists its keyboard shortcuts and – on an iPad
+//   with several windows – opens a page in a new window (lib/native-app.ts
+//   in Flowplan);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -20,7 +22,11 @@ export type PageMessage =
   // Flowplan), and what the page did when asked (null: no answer, an
   // instance from before window.FlowplanNavigation).
   | { type: "backState"; canGoBack: boolean }
-  | { type: "back"; handled: boolean | null };
+  | { type: "back"; handled: boolean | null }
+  // The page's keyboard shortcuts for the key commands (ipad.ts checks the
+  // list), and a page of the instance for a new window (iPad).
+  | { type: "shortcuts"; list: unknown }
+  | { type: "openWindow"; url: string };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -31,7 +37,7 @@ export function parsePageMessage(data: string): PageMessage | null {
   }
 }
 
-export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string }) {
+export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; windows?: boolean }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
@@ -45,6 +51,9 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
     backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
+    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
+      options.windows ? `\n    openWindow: (url) => post({ type: "openWindow", url: String(url) }),` : ""
+    }
   });
   // Vibrations of the page become haptic taps.
   try {
