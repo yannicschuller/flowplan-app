@@ -63,7 +63,7 @@
     "start": "expo start --dev-client",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && node --import tsx --test test/*.test.ts && node --check scripts/icons.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --check scripts/devices.mjs && node --check scripts/frame.mjs && node --check scripts/preview-video.mjs && node --check scripts/store-mockups.mjs && node --check scripts/store-style.mjs && node --check scripts/store-flowplan.mjs",
+    "check": "tsc --noEmit && node --import tsx --test test/*.test.ts && node --check scripts/icons.mjs && node --check scripts/screenshots.mjs && node --check scripts/store-images.mjs && node --check scripts/devices.mjs && node --check scripts/frame.mjs && node --check scripts/preview-video.mjs && node --check scripts/store-mockups.mjs && node --check scripts/store-style.mjs && node --check scripts/store-flowplan.mjs && node --check scripts/creative-assets.mjs",
     "prebuild": "expo prebuild --clean --no-install",
     "ios": "expo run:ios",
     "android": "expo run:android",
@@ -72,6 +72,7 @@
     "icons": "node scripts/icons.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "store:images": "node scripts/store-images.mjs",
+    "store:creative": "node scripts/creative-assets.mjs",
     "preview": "node scripts/preview-video.mjs"
   }
 }

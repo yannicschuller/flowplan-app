@@ -8,6 +8,8 @@
 #   fastlane ios build        signed App Store build (ios/build/Flowplan.ipa)
 #   fastlane ios beta         … and upload it to TestFlight
 #   fastlane ios metadata     texts, screenshots and age rating from store/app-store
+#   fastlane ios creative     product page header and search results image
+#                             (store/app-store/creative) onto the version
 #   fastlane android build    signed bundle and APK (android/app/build/outputs)
 #   fastlane android internal … and upload it to Play's internal testing track
 #   fastlane android metadata texts and images from store/google-play
@@ -17,6 +19,7 @@
 # and Live Activity (app.flowplan.mobile.widgets) and the share extension
 # (app.flowplan.mobile.share), all in the App Group group.app.flowplan.mobile.
 
+require "digest"
 require "json"
 require "securerandom"
 
@@ -288,6 +291,196 @@ platform :ios do
     upload_listing
   end
 
+  # ---- Creative assets (iOS 27: "Header and Search Results") ----
+  #
+  # store/app-store/creative/<locale>/{header,search-results}.png (npm run
+  # store:creative) go into the app's Asset Library and onto the product page
+  # of the version being edited, per language. fastlane has no action for the
+  # Asset Library yet (App Store Connect API 4.5.1), so this talks to the API
+  # directly with the key's token:
+  #
+  #   GET  /v1/apps/{id}/assetLibrary               the library
+  #   GET  /v1/appAssetLibraryRefData               specs, placement groups, limits
+  #   POST /v1/appAssetLibraryImages                reserve (category CREATIVE_ASSETS)
+  #   PUT  uploadOperations[].url                   the bytes
+  #   PATCH /v1/appAssetLibraryImages/{id}          uploaded: true, then wait for processing
+  #   POST /v1/appAssetLibraryPlacements            PRODUCT_PAGE_HEADER_ASSET /
+  #                                                 APP_STORE_SEARCH_RESULTS_ASSET on the
+  #                                                 appStoreVersionLocalization
+  #
+  # Safe to run again: an image is found again by its reference name, which
+  # holds a hash of the file, and a placement that already shows it is kept.
+  # A placement with another image is replaced (the old image stays in the
+  # Asset Library). The assets go to App Review with the version.
+  CREATIVE = {
+    "header" => "PRODUCT_PAGE_HEADER_ASSET",
+    "search-results" => "APP_STORE_SEARCH_RESULTS_ASSET",
+  }.freeze
+  CREATIVE_READY = %w[PREPARE_FOR_SUBMISSION READY_FOR_REVIEW WAITING_FOR_REVIEW IN_REVIEW ACCEPTED APPROVED].freeze
+
+  def asc
+    api_key
+    Spaceship::ConnectAPI.client.tunes_request_client
+  end
+
+  # Error message of a failed request, to tell "not allowed in this state" apart.
+  def asc_error(error)
+    error.message.to_s.lines.first.to_s.strip
+  end
+
+  def creative_ref_data
+    @creative_ref_data ||= asc.get("v1/appAssetLibraryRefData", { fields: { appAssetLibraryRefData: "features,placementTypes,imageSpecs" } }).body["data"].first["attributes"]
+  end
+
+  # The image specification a file fits (Apple matches it again on processing).
+  def creative_spec(placement_type, file)
+    width, height = File.binread(file, 24)[16, 8].unpack("NN")
+    spec = creative_ref_data["imageSpecs"].find do |s|
+      d = s["dimensions"] || {}
+      Array(s["compatiblePlacementTypes"]).include?(placement_type) &&
+        Array(s["fileExtensions"]).include?(File.extname(file).downcase) &&
+        width.between?(d["minWidth"].to_i, d["maxWidth"].to_i) && height.between?(d["minHeight"].to_i, d["maxHeight"].to_i) &&
+        File.size(file) <= s["maxFileSize"].to_i
+    end
+    UI.user_error!("#{file}: #{width}×#{height} fits no #{placement_type} specification of App Store Connect – check npm run store:creative against appAssetLibraryRefData") unless spec
+    spec
+  end
+
+  # The placement groups an image of this specification can go to on an App
+  # Store version (one placement per group, e.g. iPhone and iPad).
+  def creative_groups(placement_type, spec_id)
+    type = creative_ref_data["placementTypes"].find { |t| t["placementTypeId"] == placement_type }
+    UI.user_error!("App Store Connect knows no placement type #{placement_type}") unless type
+    unless Array(type["acceptsAssetCategories"]).include?("CREATIVE_ASSETS")
+      UI.user_error!("#{placement_type} does not accept CREATIVE_ASSETS (accepts #{Array(type["acceptsAssetCategories"]).join(", ")})")
+    end
+    groups = Array(type["specMappings"]).select { |m| Array(m["specs"]).include?(spec_id) }.map { |m| m["placementGroupId"] }
+    feature = Array(creative_ref_data["features"]).find { |f| f["featureId"] == "APP_STORE_VERSIONS" }
+    policy = feature && Array(feature["placementPolicies"]).find { |p| p["placementType"] == placement_type }
+    if policy
+      allowed = Array(policy["groupLimits"]).flat_map { |l| Array(l["groupIds"]) }
+      groups &= allowed unless allowed.empty?
+    end
+    UI.user_error!("No placement group of #{placement_type} on App Store versions takes the specification #{spec_id}") if groups.empty?
+    groups.uniq
+  end
+
+  # The image in the Asset Library, uploaded once per file content.
+  def creative_image(library_id, file, reference)
+    found = asc.get("v1/appAssetLibraries/#{library_id}/images", { filter: { referenceName: reference }, limit: 20 }).body["data"]
+    found.each do |image|
+      state = image.dig("attributes", "state")
+      return image if CREATIVE_READY.include?(state) || state == "UPLOAD_COMPLETE"
+      # An abandoned reservation or a failed processing: start over.
+      UI.message("Removing #{reference} (#{state})")
+      asc.delete("v1/appAssetLibraryImages/#{image["id"]}")
+    end
+    bytes = File.binread(file)
+    UI.message("Uploading #{reference}")
+    image = asc.post("v1/appAssetLibraryImages", {
+      data: {
+        type: "appAssetLibraryImages",
+        attributes: { fileName: File.basename(file), fileSize: bytes.bytesize, category: "CREATIVE_ASSETS", referenceName: reference },
+        relationships: { assetLibrary: { data: { type: "appAssetLibraries", id: library_id } } },
+      },
+    }).body["data"]
+    Spaceship::ConnectAPI::FileUploader.upload(image.dig("attributes", "uploadOperations"), bytes)
+    asc.patch("v1/appAssetLibraryImages/#{image["id"]}", { data: { type: "appAssetLibraryImages", id: image["id"], attributes: { uploaded: true } } })
+    image
+  end
+
+  def creative_wait(image, reference)
+    deadline = Time.now + 900
+    loop do
+      image = asc.get("v1/appAssetLibraryImages/#{image["id"]}").body["data"]
+      state = image.dig("attributes", "state")
+      return image if CREATIVE_READY.include?(state)
+      if state == "FAILED" || state == "REJECTED"
+        details = image.dig("attributes", "stateDetails").to_json
+        asc.delete("v1/appAssetLibraryImages/#{image["id"]}") if state == "FAILED"
+        UI.user_error!("#{reference}: #{state} #{details}")
+      end
+      UI.user_error!("#{reference}: still #{state} after 15 minutes – run again later") if Time.now > deadline
+      UI.message("#{reference}: #{state}, waiting")
+      sleep(10)
+    end
+  end
+
+  # Header and search results image of every language on the version being
+  # edited. Returns rows for the summary.
+  def upload_creative
+    api_key
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("No app #{BUNDLE_ID} in App Store Connect") unless app
+    version = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+    unless version
+      manual_step("Creative assets: no version in preparation", [
+        "Create the version #{package_version} (run iOS setup with listing on), then run it again with creative on –",
+        "or upload store/app-store/creative/<locale>/*.png in App Store Connect → Asset Library (see store/README.md → Creative assets).",
+      ])
+      return []
+    end
+    localizations = version.get_app_store_version_localizations.to_h { |l| [l.locale, l] }
+    library_id = asc.get("v1/apps/#{app.id}/assetLibrary").body.dig("data", "id")
+    rows = []
+    Dir[File.join(ROOT, "store/app-store/creative/*")].sort.each do |dir|
+      locale = File.basename(dir)
+      localization = localizations[locale]
+      unless localization
+        manual_step("Creative assets: version #{version.version_string} has no #{locale} localization", ["Upload the listing first (iOS setup with listing on), then run it again."])
+        next
+      end
+      CREATIVE.each do |kind, placement_type|
+        file = File.join(dir, "#{kind}.png")
+        next unless File.exist?(file)
+        spec = creative_spec(placement_type, file)
+        reference = "Flowplan #{kind} #{locale} #{Digest::SHA256.file(file).hexdigest[0, 12]}"
+        image = creative_wait(creative_image(library_id, file, reference), reference)
+        UI.important("#{reference}: App Store Connect matched spec #{image.dig("attributes", "specId")}, expected #{spec["specId"]}") if image.dig("attributes", "specId") != spec["specId"]
+        groups = creative_groups(placement_type, image.dig("attributes", "specId") || spec["specId"])
+        placements = asc.get("v1/appStoreVersionLocalizations/#{localization.id}/placements", { filter: { placementType: placement_type }, include: "image", limit: 50 }).body["data"]
+        groups.each do |group|
+          existing = placements.select { |p| p.dig("attributes", "placementGroup") == group }
+          if existing.any? { |p| p.dig("relationships", "image", "data", "id") == image["id"] }
+            rows << "| #{locale} | #{kind} | #{group} | kept |"
+            next
+          end
+          begin
+            # One header (and one search results asset) per group: replace.
+            existing.each { |p| asc.delete("v1/appAssetLibraryPlacements/#{p["id"]}") }
+            asc.post("v1/appAssetLibraryPlacements", {
+              data: {
+                type: "appAssetLibraryPlacements",
+                attributes: { placementType: placement_type, placementGroup: group },
+                relationships: {
+                  image: { data: { type: "appAssetLibraryImages", id: image["id"] } },
+                  appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations", id: localization.id } },
+                },
+              },
+            })
+            rows << "| #{locale} | #{kind} | #{group} | #{existing.empty? ? "placed" : "replaced"} |"
+          rescue => e
+            # Typically STATE_ERROR: the version is in review or approved.
+            manual_step("Creative assets: #{locale} #{kind} (#{group}) could not be placed: #{asc_error(e)}", [
+              "The image is in the Asset Library as \"#{reference}\".",
+              "App Store Connect → Flowplan → the version → Header and Search Results → #{kind == "header" ? "Header" : "Search Results"} → Browse Assets → choose it → Save.",
+            ])
+          end
+        end
+      end
+    end
+    step_summary(["### Creative assets (version #{version.version_string})", "", "| Language | Asset | Placement group | |", "| --- | --- | --- | --- |", *rows].join("\n")) unless rows.empty?
+    rows
+  end
+
+  desc "Product page header and search results image (store/app-store/creative) onto the version in preparation"
+  lane :creative do
+    upload_creative
+    unless manual_steps.empty?
+      UI.user_error!("#{manual_steps.size} manual step(s) left: #{manual_steps.map(&:first).join(" · ")}")
+    end
+  end
+
   # ---- iOS setup (Actions → iOS setup, store/README.md → One-click setup) ----
   #
   # Safe to run again: everything that exists is kept. What the API cannot do
@@ -406,7 +599,7 @@ platform :ios do
     false
   end
 
-  desc "One-click App Store setup: App IDs, signing (match), app record check, listing"
+  desc "One-click App Store setup: App IDs, signing (match), app record check, listing, creative assets"
   lane :setup do |options|
     flag = ->(name, default) { options.key?(name) ? options[name].to_s == "true" : default }
     identifiers = flag.call(:identifiers, true)
@@ -415,6 +608,7 @@ platform :ios do
     screenshots = flag.call(:screenshots, true)
     submit = flag.call(:submit, false)
     force = flag.call(:force_profiles, false)
+    creative = flag.call(:creative, false)
 
     register_identifiers if identifiers
     if signing
@@ -435,10 +629,21 @@ platform :ios do
         ])
       end
     end
-    if listing || submit
-      if app_record?
-        upload_listing(screenshots: screenshots, submit: submit)
-        step_summary("### Listing\n\nTexts, age rating, review information#{screenshots ? ", screenshots (iPhone 6.9\", 6.5\", iPad 13\")" : ""} uploaded for #{package_version}#{submit ? " and submitted for review" : " (not submitted)"}.")
+    if (listing || submit || creative) && app_record?
+      # The listing creates the version and its localizations; the creative
+      # assets go onto them before the version is submitted.
+      if listing || submit
+        upload_listing(screenshots: screenshots, submit: submit && !creative)
+        step_summary("### Listing\n\nTexts, age rating, review information#{screenshots ? ", screenshots (iPhone 6.9\", 6.5\", iPad 13\")" : ""} uploaded for #{package_version}#{submit && !creative ? " and submitted for review" : " (not submitted)"}.")
+      end
+      if creative
+        open_steps = manual_steps.size
+        upload_creative
+        # Submitted only when every asset is placed.
+        if submit && manual_steps.size == open_steps
+          upload_listing(screenshots: false, submit: true)
+          step_summary("### Review\n\nVersion #{package_version} with its creative assets submitted for review.")
+        end
       end
     end
 
