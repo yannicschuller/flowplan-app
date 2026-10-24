@@ -11,7 +11,7 @@ import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
 import { getWidgetInfo, requestWidgetUpdateById } from "react-native-android-widget";
-import { reloadWidgets, setWidgetSession, type WidgetSession } from "../../modules/flowplan-native/src";
+import { reloadWidgets, setWidgetSession, widgetActionError, type WidgetSession } from "../../modules/flowplan-native/src";
 import { locale } from "../i18n";
 import { store } from "../store";
 import { localDay } from "../summary";
@@ -20,6 +20,7 @@ import { renderSuite, SUITE_CLICKS } from "../widgets/android-suite";
 import { suiteView } from "../widgets/present";
 import { needsSetup, serverConfig, SUITE_KINDS, SUITE_WIDGETS, kindOfWidget, widgetSessionFor, type SuiteKind } from "../widgets/suite";
 import { configFor, forgetProfile, parseConfigState, removeWidget, setConfig, type ConfigState } from "../widgets/widget-config";
+import { actionMarks, answered, parseActions, settled, tapItem, tapped, type ActionError, type ActionState } from "../widgets/actions";
 
 const withWidgets = (Constants.expoConfig?.extra as { widgets?: boolean } | undefined)?.widgets !== false;
 
@@ -84,6 +85,10 @@ async function writeText(file: File, text: string | null) {
 }
 
 export const readConfigs = (): ConfigState => parseConfigState(readText(configFile()));
+// What the buttons did (widgets/actions.ts).
+const actionsFile = () => new File(Paths.document, "widget-actions.json");
+const readActions = (): ActionState => parseActions(readText(actionsFile()));
+const writeActions = (state: ActionState) => writeText(actionsFile(), JSON.stringify(state));
 const writeConfigs = (state: ConfigState) => writeText(configFile(), JSON.stringify(state));
 
 function readAnswers(profile: string): Record<string, WidgetResult> {
@@ -110,7 +115,7 @@ export function suiteRender(kind: SuiteKind, widgetId: number, size: { width: nu
   const profile = store.profiles().active;
   const config = configFor(readConfigs(), profile, widgetId, kind);
   const answer = profile ? (readAnswers(profile)[String(widgetId)] ?? null) : null;
-  const view = suiteView(kind, config, answer, { locale: locale(), today: localDay(), signedIn: !!connection() });
+  const view = suiteView(kind, config, answer, { locale: locale(), today: localDay(), signedIn: !!connection(), marks: actionMarks(readActions()) });
   return renderSuite(view, size, widgetId);
 }
 
@@ -128,6 +133,7 @@ export async function refreshAndroidSuite(options: { fetch: boolean; force?: boo
   const target = connection();
   if (options.fetch && target && profile && (options.force || Date.now() - lastFetch > 60_000)) {
     lastFetch = Date.now();
+    const started = lastFetch;
     const requests = widgets
       .map((w) => ({ w, config: configFor(configs, profile, w.id, w.kind) }))
       .filter(({ w, config }) => !needsSetup(w.kind, config))
@@ -144,6 +150,8 @@ export async function refreshAndroidSuite(options: { fetch: boolean; force?: boo
         }
         const live = new Set(widgets.map((w) => String(w.id)));
         await writeText(answersFile(profile), JSON.stringify(Object.fromEntries(Object.entries(answers).filter(([id]) => live.has(id)))));
+        // Fresh answers: what was tapped before is shown as the instance says.
+        await writeActions(settled(readActions(), started));
       }
     }
   }
@@ -169,8 +177,27 @@ export async function handleSuiteClick(clickAction: string, data: Record<string,
   };
   const action = actions[clickAction];
   if (!action) return;
-  await widgetAction(target, action, action === "task.complete" ? { ...fields, done: true } : fields);
+  // Drawn done at once, then the action; a refusal brings the item back
+  // with a hint and is kept for the app's settings.
+  const item = tapItem(action, fields);
+  await writeActions(tapped(readActions(), item, Date.now()));
+  await refreshAndroidSuite({ fetch: false });
+  const result = await widgetAction(target, action, action === "task.complete" ? { ...fields, done: true } : fields);
+  const outcome = result.ok
+    ? { ok: true as const }
+    : "signedOut" in result
+      ? { ok: false as const, action, status: 401, message: "signed out" }
+      : { ok: false as const, action, status: result.status, message: result.error || (result.status ? "" : "network") };
+  if (!outcome.ok) console.warn(`Widget action ${action} failed: ${outcome.status} ${outcome.message}`);
+  await writeActions(answered(readActions(), item, Date.now(), outcome));
   await refreshAndroidSuite({ fetch: true, force: true });
+}
+
+// The last action of a widget's button that went wrong (the app's settings).
+export function lastWidgetActionError(): ActionError | null {
+  if (Platform.OS === "ios") return widgetActionError();
+  if (Platform.OS !== "android") return null;
+  return readActions().lastError ?? null;
 }
 
 // The configuration screen saved a widget's settings.

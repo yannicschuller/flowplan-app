@@ -26,6 +26,10 @@ export type PencilAction = {
 // from the App Group's keychain). token null: signed out.
 export type WidgetSession = { server: string; token: string | null; profile: string; lang: string };
 
+// The last action of a widget's button that went wrong (iOS: kept by the
+// widget extension in the App Group). status 0: not reached.
+export type WidgetActionError = { action: string; status: number; message: string; at: number };
+
 // An ongoing notification (Android): Android's counterpart of a Live
 // Activity – focus, meeting, import/export, voice memo, incident.
 export type OngoingOptions = {
@@ -50,6 +54,7 @@ type NativeModule = {
   getManagedServer(): string | null;
   setWidgetSession?(session: WidgetSession | null): void;
   reloadWidgets?(): void;
+  widgetActionError?(): WidgetActionError | null;
   consumePendingLink?(): string | null;
   donateShortcut?(name: string): void;
   showOngoing?(options: OngoingOptions): void;
@@ -126,6 +131,15 @@ export function reloadWidgets() {
   try {
     native?.reloadWidgets?.();
   } catch {}
+}
+
+export function widgetActionError(): WidgetActionError | null {
+  if (Platform.OS !== "ios") return null;
+  try {
+    return native?.widgetActionError?.() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // iOS: links from App Shortcuts and Siri that opened the app.

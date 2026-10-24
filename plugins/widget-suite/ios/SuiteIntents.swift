@@ -411,33 +411,51 @@ struct FPFormsConfiguration: FPSuiteConfiguration {
 }
 
 // MARK: - Buttons in widgets (iOS 17: they run here, in the extension)
+//
+// The tapped item is drawn done at once and comes back with a hint when the
+// instance refuses (FPWidgets.run). Parameters are plain values ("" and -1
+// for none): the system stores them with the widget's view.
+
+/// The widget kinds whose buttons these are (SuiteWidgets.swift).
+enum FPWidgetKind {
+  static let tasks = "FlowplanTaskList"
+  static let journal = "FlowplanJournal"
+  static let time = "FlowplanTime"
+  static let mentions = "FlowplanMentions"
+}
 
 @available(iOS 17.0, *)
 struct FPCompleteTaskIntent: AppIntent {
   static var title: LocalizedStringResource = "Mark as done"
   static var isDiscoverable = false
 
-  @Parameter(title: "Source") var source: String
-  @Parameter(title: "Page") var pageId: String
-  @Parameter(title: "Record") var rowId: String?
-  @Parameter(title: "Position") var index: Int?
-  @Parameter(title: "Text") var text: String
+  @Parameter(title: "Source", default: "doc") var source: String
+  @Parameter(title: "Page", default: "") var pageId: String
+  @Parameter(title: "Record", default: "") var rowId: String
+  @Parameter(title: "Position", default: -1) var index: Int
+  @Parameter(title: "Key", default: "") var key: String
+  @Parameter(title: "Text", default: "") var text: String
 
   init() {}
-  init(source: String, pageId: String, rowId: String?, index: Int?, text: String) {
+  init(source: String, pageId: String, rowId: String, index: Int, key: String, text: String) {
     self.source = source
     self.pageId = pageId
     self.rowId = rowId
     self.index = index
+    self.key = key
     self.text = text
   }
 
   func perform() async throws -> some IntentResult {
-    var fields: [String: Any] = ["source": source, "pageId": pageId, "text": text, "done": true]
-    if let rowId { fields["rowId"] = rowId }
-    if let index { fields["index"] = index }
-    // A to-do that changed meanwhile (409): the widget shows it fresh.
-    if (try? await FPWidgets.act("task.complete", fields)) == nil { FPWidgets.reloadAll() }
+    var fields: [String: Any] = ["source": source, "pageId": pageId, "done": true]
+    if !rowId.isEmpty { fields["rowId"] = rowId }
+    if index >= 0 { fields["index"] = index }
+    // The key identifies a document task; the text (as shown) is for
+    // instances that do not know the key yet.
+    if !key.isEmpty { fields["key"] = key }
+    if !text.isEmpty { fields["text"] = text }
+    let item: String = FPActions.taskID(source: source, pageId: pageId, rowId: rowId, index: index)
+    await FPWidgets.run("task.complete", fields, item: item, kind: FPWidgetKind.tasks)
     return .result()
   }
 }
@@ -447,9 +465,9 @@ struct FPCheckHabitIntent: AppIntent {
   static var title: LocalizedStringResource = "Check off habit"
   static var isDiscoverable = false
 
-  @Parameter(title: "Habits") var pageId: String
-  @Parameter(title: "Habit") var fieldId: String
-  @Parameter(title: "Done") var done: Bool
+  @Parameter(title: "Habits", default: "") var pageId: String
+  @Parameter(title: "Habit", default: "") var fieldId: String
+  @Parameter(title: "Done", default: true) var done: Bool
 
   init() {}
   init(pageId: String, fieldId: String, done: Bool) {
@@ -459,7 +477,9 @@ struct FPCheckHabitIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    _ = try? await FPWidgets.act("habit.check", ["pageId": pageId, "fieldId": fieldId, "done": done, "today": FPAPI.today()])
+    let fields: [String: Any] = ["pageId": pageId, "fieldId": fieldId, "done": done, "today": FPAPI.today()]
+    let item: String = FPActions.habitID(pageId: pageId, fieldId: fieldId)
+    await FPWidgets.run("habit.check", fields, item: item, kind: FPWidgetKind.journal)
     return .result()
   }
 }
@@ -469,18 +489,20 @@ struct FPMarkReadIntent: AppIntent {
   static var title: LocalizedStringResource = "Mark as read"
   static var isDiscoverable = false
 
-  @Parameter(title: "Notification") var notificationId: String?
+  // "": all of them.
+  @Parameter(title: "Notification", default: "") var notificationId: String
 
   init() {}
   init(notificationId: String?) {
-    self.notificationId = notificationId
+    self.notificationId = notificationId ?? ""
   }
 
   func perform() async throws -> some IntentResult {
-    if let notificationId {
-      _ = try? await FPWidgets.act("mention.read", ["notificationId": notificationId, "read": true])
+    if notificationId.isEmpty {
+      await FPWidgets.run("mention.readAll", [:], item: FPActions.readID(nil), kind: FPWidgetKind.mentions)
     } else {
-      _ = try? await FPWidgets.act("mention.readAll")
+      let fields: [String: Any] = ["notificationId": notificationId, "read": true]
+      await FPWidgets.run("mention.read", fields, item: FPActions.readID(notificationId), kind: FPWidgetKind.mentions)
     }
     return .result()
   }
@@ -491,9 +513,9 @@ struct FPStartTimerIntent: AppIntent {
   static var title: LocalizedStringResource = "Start timer"
   static var isDiscoverable = false
 
-  @Parameter(title: "Page") var pageId: String
-  @Parameter(title: "Record") var rowId: String
-  @Parameter(title: "Property") var fieldId: String
+  @Parameter(title: "Page", default: "") var pageId: String
+  @Parameter(title: "Record", default: "") var rowId: String
+  @Parameter(title: "Property", default: "") var fieldId: String
 
   init() {}
   init(pageId: String, rowId: String, fieldId: String) {
@@ -503,7 +525,8 @@ struct FPStartTimerIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    _ = try? await FPWidgets.act("timer.start", ["pageId": pageId, "rowId": rowId, "fieldId": fieldId])
+    let fields: [String: Any] = ["pageId": pageId, "rowId": rowId, "fieldId": fieldId]
+    await FPWidgets.run("timer.start", fields, item: FPActions.timerStartID, kind: FPWidgetKind.time)
     return .result()
   }
 }
@@ -514,7 +537,7 @@ struct FPStopTimerIntent: AppIntent {
   static var isDiscoverable = false
 
   func perform() async throws -> some IntentResult {
-    _ = try? await FPWidgets.act("timer.stop")
+    await FPWidgets.run("timer.stop", [:], item: FPActions.timerStopID, kind: FPWidgetKind.time)
     return .result()
   }
 }

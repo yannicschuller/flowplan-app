@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Security
 import WidgetKit
 
@@ -16,6 +17,9 @@ import WidgetKit
 //   App Group's UserDefaults (as JSON text: the answers contain null, which
 //   a property list cannot hold), with the settings each widget asked for.
 //   One batched request answers every widget the extension has seen.
+// - Buttons in widgets (FPWidgets.run) draw their result at once and keep
+//   what went wrong for the app's settings and Console.app (subsystem
+//   app.flowplan.mobile, category widgets).
 
 enum FPShared {
   static var appGroup: String? {
@@ -143,13 +147,13 @@ enum FPAPI {
     return format.string(from: date)
   }
 
-  static func call(_ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, session: FPSession) async throws -> FPJSON {
+  static func call(_ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, session: FPSession, timeout: TimeInterval = 20) async throws -> FPJSON {
     guard let token = session.token else { throw FPError.signedOut }
     guard var components = URLComponents(string: session.server) else { throw FPError.noSession }
     components.path = path
     components.queryItems = query + [URLQueryItem(name: "lang", value: session.lang)]
     guard let url = components.url else { throw FPError.noSession }
-    var request = URLRequest(url: url, timeoutInterval: 20)
+    var request = URLRequest(url: url, timeoutInterval: timeout)
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let body {
@@ -162,6 +166,7 @@ enum FPAPI {
     do {
       (data, response) = try await URLSession.shared.data(for: request)
     } catch {
+      os_log("Request %{public}@ failed: %{public}@", log: FPLog.widgets, type: .error, path, String(describing: error))
       throw FPError.network
     }
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -183,12 +188,13 @@ enum FPAPI {
     return try await call("/api/mobile/widgets/options", query: query, session: session)
   }
 
+  /// An action: short timeout, a button in a widget has only seconds.
   @discardableResult
-  static func action(_ name: String, _ fields: [String: Any] = [:]) async throws -> FPJSON {
+  static func action(_ name: String, _ fields: [String: Any] = [:], timeout: TimeInterval = 10) async throws -> FPJSON {
     guard let session = FPKeychain.load() else { throw FPError.noSession }
     var body = fields
     body["action"] = name
-    return try await call("/api/mobile/widgets/action", body: body, session: session)
+    return try await call("/api/mobile/widgets/action", body: body, session: session, timeout: timeout)
   }
 
   /// One batched request (at most 16 widgets).
@@ -339,6 +345,7 @@ actor FPRefresher {
   }
 
   private static func fetchAll(first: FPRequest, session: FPSession) async {
+    let started = Date()
     var seen = Set<String>()
     let requests = ([first] + FPStore.registered()).filter { seen.insert($0.key).inserted }
     // Above 16 widgets on screens: the rest follows in a second request.
@@ -347,12 +354,183 @@ actor FPRefresher {
       guard let results = try? await FPAPI.data(batch, session: session) else { return }
       FPStore.save(results, profile: session.profile)
     }
+    // Fresh answers: what was tapped before is shown as the instance says.
+    FPActions.settle(before: started)
+  }
+}
+
+enum FPLog {
+  static let widgets = OSLog(subsystem: "app.flowplan.mobile", category: "widgets")
+}
+
+/// What a widget shows of its buttons until the instance's fresh answer
+/// says it: the tapped item done (pending, then confirmed), or back with a
+/// hint after a refusal (failed).
+struct FPMarks: Sendable {
+  var pending: [String: Date] = [:]
+  var failed: Set<String> = []
+
+  func isPending(_ id: String) -> Bool { pending[id] != nil }
+  func hasFailed(_ id: String) -> Bool { failed.contains(id) }
+  var isEmpty: Bool { pending.isEmpty && failed.isEmpty }
+}
+
+/// The last action that went wrong (the app's settings show it).
+struct FPActionError: Sendable {
+  let action: String
+  let status: Int
+  let message: String
+  let at: Date
+}
+
+/// The state of the widgets' buttons in the App Group, shared by the
+/// extension's intents, its timelines and the app.
+enum FPActions {
+  private static let pendingKey = "flowplan.suite.actions.pending"
+  private static let confirmedKey = "flowplan.suite.actions.confirmed"
+  private static let failedKey = "flowplan.suite.actions.failed"
+  private static let errorKey = "flowplan.suite.actions.lastError"
+  // An action that never answered (the extension was stopped) is forgotten.
+  static let pendingFor: TimeInterval = 120
+  // The hint after a refusal stays until the next refresh after this.
+  static let failedFor: TimeInterval = 600
+  private static let lock = NSLock()
+
+  /// One task of the tasks widget (rowId "" and index -1: none).
+  static func taskID(source: String, pageId: String, rowId: String, index: Int) -> String {
+    let position: String = index >= 0 ? String(index) : ""
+    return "task:" + source + ":" + pageId + ":" + rowId + ":" + position
+  }
+  static func habitID(pageId: String, fieldId: String) -> String { "habit:" + pageId + ":" + fieldId }
+  static func readID(_ notificationId: String?) -> String { "read:" + (notificationId ?? "all") }
+  static let timerStartID = "timer:start"
+  static let timerStopID = "timer:stop"
+
+  private static func read(_ key: String) -> [String: Double] {
+    guard let raw = FPShared.defaults?.dictionary(forKey: key) else { return [:] }
+    var out: [String: Double] = [:]
+    for (id, value) in raw {
+      if let number = value as? NSNumber { out[id] = number.doubleValue }
+    }
+    return out
+  }
+  private static func write(_ key: String, _ value: [String: Double]) {
+    FPShared.defaults?.set(value, forKey: key)
+  }
+  private static func within(_ all: [String: Double], _ age: TimeInterval) -> [String: Double] {
+    let now: Double = Date().timeIntervalSince1970
+    return all.filter { now - $0.value < age }
+  }
+
+  /// Tapped: drawn done from now on.
+  static func begin(_ id: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    var pending = within(read(pendingKey), pendingFor)
+    pending[id] = Date().timeIntervalSince1970
+    write(pendingKey, pending)
+    var failed = within(read(failedKey), failedFor)
+    failed.removeValue(forKey: id)
+    write(failedKey, failed)
+  }
+
+  /// The instance took it: drawn done until its next answer.
+  static func succeeded(_ id: String, action: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    var pending = within(read(pendingKey), pendingFor)
+    let at: Double = pending.removeValue(forKey: id) ?? Date().timeIntervalSince1970
+    write(pendingKey, pending)
+    var confirmed = within(read(confirmedKey), pendingFor)
+    confirmed[id] = at
+    write(confirmedKey, confirmed)
+    os_log("Widget action %{public}@ done", log: FPLog.widgets, type: .info, action)
+  }
+
+  /// Refused or unreachable: the item comes back with a hint.
+  static func failed(_ id: String, action: String, error: Error) {
+    lock.lock()
+    var pending = within(read(pendingKey), pendingFor)
+    pending.removeValue(forKey: id)
+    write(pendingKey, pending)
+    var failed = within(read(failedKey), failedFor)
+    failed[id] = Date().timeIntervalSince1970
+    write(failedKey, failed)
+    lock.unlock()
+    record(action: action, error: error)
+  }
+
+  /// A fresh answer arrived: what it was asked after is shown as it is.
+  static func settle(before date: Date) {
+    lock.lock()
+    defer { lock.unlock() }
+    let limit: Double = date.timeIntervalSince1970
+    let confirmed = within(read(confirmedKey), pendingFor).filter { $0.value >= limit }
+    write(confirmedKey, confirmed)
+  }
+
+  static func marks() -> FPMarks {
+    var marks = FPMarks()
+    let pending = within(read(pendingKey), pendingFor)
+    let confirmed = within(read(confirmedKey), pendingFor)
+    for (id, at) in pending { marks.pending[id] = Date(timeIntervalSince1970: at) }
+    for (id, at) in confirmed { marks.pending[id] = Date(timeIntervalSince1970: at) }
+    marks.failed = Set(within(read(failedKey), failedFor).keys)
+    return marks
+  }
+
+  static func record(action: String, error: Error) {
+    var status = 0
+    var message = ""
+    switch error {
+    case FPError.http(let code, let text):
+      status = code
+      message = text
+    case FPError.signedOut:
+      status = 401
+      message = "signed out"
+    case FPError.noSession:
+      message = "no session"
+    case FPError.network:
+      message = "network"
+    default:
+      message = String(describing: error)
+    }
+    let entry: [String: Any] = ["action": action, "status": status, "message": message, "at": Date().timeIntervalSince1970]
+    FPShared.defaults?.set(entry, forKey: errorKey)
+    os_log("Widget action %{public}@ failed: %ld %{public}@", log: FPLog.widgets, type: .error, action, status, message)
+  }
+
+  static func lastError() -> FPActionError? {
+    guard let entry = FPShared.defaults?.dictionary(forKey: errorKey),
+          let action = entry["action"] as? String else { return nil }
+    let status: Int = (entry["status"] as? NSNumber)?.intValue ?? 0
+    let message: String = (entry["message"] as? String) ?? ""
+    let at: Double = (entry["at"] as? NSNumber)?.doubleValue ?? 0
+    return FPActionError(action: action, status: status, message: message, at: Date(timeIntervalSince1970: at))
   }
 }
 
 enum FPWidgets {
-  /// An action of a widget, a control or a shortcut; everything shown is
+  /// A button of a widget: the item is drawn done at once (its kind's
+  /// widgets reload before the request), then the action runs with a short
+  /// timeout; a refusal brings it back with a hint. Everything shown is
   /// asked again afterwards.
+  static func run(_ name: String, _ fields: [String: Any], item: String, kind: String) async {
+    FPActions.begin(item)
+    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+    do {
+      try await FPAPI.action(name, fields, timeout: 8)
+      FPActions.succeeded(item, action: name)
+    } catch {
+      FPActions.failed(item, action: name, error: error)
+    }
+    FPStore.invalidate()
+    WidgetCenter.shared.reloadAllTimelines()
+  }
+
+  /// An action of a control or a shortcut; everything shown is asked again
+  /// afterwards.
   @discardableResult
   static func act(_ name: String, _ fields: [String: Any] = [:]) async throws -> FPJSON {
     let answer = try await FPAPI.action(name, fields)

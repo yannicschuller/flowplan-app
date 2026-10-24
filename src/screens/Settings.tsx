@@ -7,7 +7,8 @@ import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, Text, 
 import * as Application from "expo-application";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { t } from "../i18n";
+import { locale, t } from "../i18n";
+import { formatWhen } from "../admin";
 import { activeProfile, type ProfileState } from "../profiles";
 import { shortServer } from "../server";
 import { store } from "../store";
@@ -15,6 +16,8 @@ import { Button, styles, usePalette } from "../ui";
 import { askForPush, pushPermission, type PushState } from "../native/notifications";
 import { ProfileList } from "./Profiles";
 import { activityChoices, setActivityChoices } from "../native/activities";
+import { lastWidgetActionError } from "../native/suite";
+import type { ActionError } from "../widgets/actions";
 
 export function Settings({
   visible,
@@ -48,8 +51,11 @@ export function Settings({
   const [lock, setLock] = useState(store.appLock());
   const [lockAvailable, setLockAvailable] = useState(true);
   const [choices, setChoices] = useState(activityChoices);
+  // What a widget's button last failed to do (status 0: not reached).
+  const [widgetError, setWidgetError] = useState<ActionError | null>(null);
 
   const load = useCallback(async () => {
+    setWidgetError(lastWidgetActionError());
     setPush(await pushPermission());
     setLock(store.appLock());
     try {
@@ -127,6 +133,16 @@ export function Settings({
             <Text style={[styles.small, { color: p.muted, marginTop: 8 }]}>
               {Platform.OS === "ios" ? t("liveActivityText") : t("timerNotificationText")}
             </Text>
+            {widgetError ? (
+              <Text style={[styles.small, { color: p.muted, marginTop: 8 }]} selectable>
+                {t("widgetLastError", {
+                  action: widgetError.action,
+                  status: widgetError.status || "–",
+                  message: widgetError.message,
+                  when: formatWhen(widgetError.at, Date.now(), locale()),
+                })}
+              </Text>
+            ) : null}
           </View>
 
           <Text style={heading}>{Platform.OS === "ios" ? t("liveActivitiesTitle") : t("ongoingTitle")}</Text>

@@ -253,3 +253,80 @@ test("the widgets' session follows the active profile; signing out keeps it with
   assert.deepEqual(widgetSessionFor(state, null, "fr"), { server: "https://work.example", token: null, profile: "work", lang: "fr" });
   assert.equal(widgetSessionFor({ profiles: [], active: null }, "fpd_x", "en"), null);
 });
+
+test("a tapped button: drawn done at once, back with a hint after a refusal, settled by the next answer", async () => {
+  const { actionMarks, answered, emptyActions, parseActions, settled, tapItem, tapped } = await import("../src/widgets/actions");
+  const now = options.now;
+  const answer = {
+    id: "x",
+    kind: "tasks",
+    ok: true as const,
+    data: {
+      title: "My tasks",
+      total: 2,
+      items: [
+        { source: "doc", pageId: PAGE, rowId: null, index: 4, key: "k4", text: "A long task…", due: null, page: "Notes", url: "/", canEdit: true },
+        { source: "row", pageId: PAGE, rowId: ROW, text: "Call Ben", due: null, page: "CRM", url: "/", canEdit: true },
+      ],
+    },
+  };
+  const draw = (state: ReturnType<typeof emptyActions>) => {
+    const view = suiteView("tasks", normalizeConfig("tasks", {}), answer, { ...options, marks: actionMarks(state) });
+    assert.equal(view.state, "tasks");
+    assertNoNull(view);
+    return view as Extract<typeof view, { state: "tasks" }>;
+  };
+  // The key goes back with the task; the tap names the same item the view draws.
+  const before = draw(emptyActions());
+  assert.deepEqual(before.items[0].complete, { source: "doc", pageId: PAGE, index: 4, key: "k4", text: "A long task…" });
+  const doc = tapItem("task.complete", { ...before.items[0].complete! });
+  const row = tapItem("task.complete", { ...before.items[1].complete! });
+  assert.notEqual(doc, row);
+
+  let state = tapped(emptyActions(), doc, now);
+  let view = draw(state);
+  assert.equal(view.items[0].done, true);
+  assert.equal(view.items[0].complete, undefined);
+  assert.equal(view.headline, "1 open");
+  // The instance took it: still drawn done until its next answer.
+  state = answered(state, doc, now + 500, { ok: true });
+  assert.equal(draw(state).items[0].done, true);
+  state = settled(state, now + 1000);
+  assert.equal(draw(state).items[0].done, undefined);
+
+  // Refused: back, with a hint, and kept for the settings.
+  state = tapped(state, row, now);
+  state = answered(state, row, now + 300, { ok: false, action: "task.complete", status: 409, message: "Changed meanwhile" });
+  view = draw(state);
+  assert.equal(view.items[1].done, undefined);
+  assert.ok(view.items[1].complete);
+  assert.equal(view.items[1].hint, "Couldn’t check off – open in Flowplan");
+  assert.deepEqual(parseActions(JSON.stringify(state)).lastError, { action: "task.complete", status: 409, message: "Changed meanwhile", at: now + 300 });
+  // The hint goes after a while; a new tap clears it at once.
+  const later = suiteView("tasks", normalizeConfig("tasks", {}), answer, { ...options, now: now + 11 * 60_000, marks: actionMarks(state) }) as typeof view;
+  assert.equal(later.items[1].hint, undefined);
+  assert.equal(draw(tapped(state, row, now + 1000)).items[1].hint, undefined);
+  assert.deepEqual(parseActions("not json"), emptyActions());
+});
+
+test("habits and mentions show a tap at once", async () => {
+  const { actionMarks, emptyActions, tapItem, tapped } = await import("../src/widgets/actions");
+  const journal = sampleResult("journal", "en", today, options.now) as { id: string; kind: string; ok: true; data: Record<string, any> };
+  const habitsId: string = journal.data.habits.id;
+  const marks = actionMarks(tapped(emptyActions(), tapItem("habit.check", { pageId: habitsId, fieldId: "c", done: true }), options.now));
+  const view = suiteView("journal", normalizeConfig("journal", {}), journal, { ...options, marks });
+  // As if the instance had answered with "c" done.
+  const items = journal.data.habits.items.map((item: { fieldId: string }) => (item.fieldId === "c" ? { ...item, done: true } : item));
+  const answeredView = suiteView("journal", normalizeConfig("journal", {}), { ...journal, data: { ...journal.data, habits: { ...journal.data.habits, done: 3, items } } }, options);
+  assert.ok(view.state === "journal" && answeredView.state === "journal");
+  if (view.state !== "journal" || answeredView.state !== "journal") return;
+  assert.deepEqual(view.habits, answeredView.habits);
+
+  const mentions = sampleResult("mentions", "en", today, options.now) as { id: string; kind: string; ok: true; data: Record<string, any> };
+  const read = suiteView("mentions", normalizeConfig("mentions", {}), mentions, { ...options, marks: actionMarks(tapped(emptyActions(), tapItem("mention.readAll", {}), options.now)) });
+  const none = suiteView("mentions", normalizeConfig("mentions", {}), { ...mentions, data: { ...mentions.data, unread: { mentions: 0, assignments: 0 } } }, options);
+  assert.ok(read.state === "mentions" && none.state === "mentions");
+  if (read.state !== "mentions" || none.state !== "mentions") return;
+  assert.ok(read.items.every((item) => item.read));
+  assert.equal(read.headline, none.headline);
+});

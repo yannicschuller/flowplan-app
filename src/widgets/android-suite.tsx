@@ -32,12 +32,30 @@ function Header({ title, trailing, theme }: { title: string; trailing?: string; 
   );
 }
 
-function Row({ text, detail, right, url, theme, late }: { text: string; detail?: string; right?: string; url: string; theme: Theme; late?: boolean }) {
+function Row({
+  text,
+  detail,
+  right,
+  url,
+  theme,
+  late,
+  done,
+  alert,
+}: {
+  text: string;
+  detail?: string;
+  right?: string;
+  url: string;
+  theme: Theme;
+  late?: boolean;
+  done?: boolean;
+  alert?: boolean;
+}) {
   return (
     <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: url }} style={{ flex: 1, flexDirection: "row", alignItems: "center" }} accessibilityLabel={[text, detail, right].filter(Boolean).join(", ")}>
       <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
-        <TextWidget text={text} maxLines={1} truncate="END" style={{ fontSize: 14, color: hex(theme.text) }} />
-        {detail ? <TextWidget text={detail} maxLines={1} truncate="END" style={{ fontSize: 11, color: hex(theme.muted) }} /> : null}
+        <TextWidget text={text} maxLines={1} truncate="END" style={{ fontSize: 14, color: hex(done ? theme.muted : theme.text) }} />
+        {detail ? <TextWidget text={detail} maxLines={1} truncate="END" style={{ fontSize: 11, fontWeight: alert ? "500" : "400", color: hex(alert ? theme.late : theme.muted) }} /> : null}
       </FlexWidget>
       {right ? <TextWidget text={right} maxLines={1} style={{ fontSize: 11, fontWeight: "500", color: hex(late ? theme.late : theme.muted), marginLeft: 6 }} /> : null}
     </FlexWidget>
@@ -56,6 +74,20 @@ function Tap({ glyph, action, data, label, theme }: { glyph: string; action: str
       <TextWidget text={glyph} style={{ fontSize: 17, color: hex(theme.muted) }} />
     </FlexWidget>
   );
+}
+
+// Drawn done: a checked circle that is no longer a tap target.
+function Checked({ theme }: { theme: Theme }) {
+  return (
+    <FlexWidget style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center", marginRight: 6 }}>
+      <TextWidget text="✓" style={{ fontSize: 17, fontWeight: "700", color: hex(theme.brand) }} />
+    </FlexWidget>
+  );
+}
+
+// Why the last tap did not work (until the next refresh).
+function Notice({ text, theme }: { text?: string; theme: Theme }) {
+  return text ? <TextWidget text={text} maxLines={1} truncate="END" style={{ fontSize: 11, fontWeight: "500", color: hex(theme.late) }} /> : null;
 }
 
 function Message({ text, theme }: { text: string; theme: Theme }) {
@@ -118,12 +150,23 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
           {view.items.slice(0, rows).map((item, index) => (
             <FlexWidget key={index} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 34 }}>
-              {item.complete ? (
+              {item.done ? (
+                <Checked theme={theme} />
+              ) : item.complete ? (
                 <Tap glyph="○" action={SUITE_CLICKS.complete} data={{ widgetId, ...item.complete }} label={`${item.text}`} theme={theme} />
               ) : (
                 <FlexWidget style={{ width: 38 }} />
               )}
-              <Row text={item.text} detail={small ? "" : item.detail} right={small ? "" : item.due} late={item.late} url={item.url} theme={theme} />
+              <Row
+                text={item.text}
+                detail={item.hint || (small ? "" : item.detail)}
+                alert={!!item.hint}
+                done={item.done}
+                right={small ? "" : item.due}
+                late={item.late}
+                url={item.url}
+                theme={theme}
+              />
             </FlexWidget>
           ))}
         </FlexWidget>
@@ -215,6 +258,7 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
                   <TextWidget text={habit.name} maxLines={1} style={{ fontSize: 14, color: hex(theme.text) }} />
                 </FlexWidget>
               ))}
+              <Notice text={view.notice} theme={theme} />
             </FlexWidget>
           ) : null}
         </FlexWidget>
@@ -247,6 +291,7 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
           ) : (
             <TextWidget text={view.hint} maxLines={2} style={{ fontSize: 12, color: hex(theme.muted) }} />
           )}
+          <Notice text={view.notice} theme={theme} />
         </FlexWidget>
       );
     case "mentions":
@@ -260,6 +305,7 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
               <Tap glyph="✓" action={SUITE_CLICKS.readAll} data={{ widgetId }} label={view.readAllLabel} theme={theme} />
             ) : null}
           </FlexWidget>
+          <Notice text={view.notice} theme={theme} />
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
           {view.items.slice(0, Math.max(1, Math.floor(rows * 0.7))).map((item) => (
             <FlexWidget key={item.id} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 42 }}>

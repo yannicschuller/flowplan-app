@@ -93,6 +93,7 @@ const strings = {
   Record: { de: "Eintrag", fr: "Entrée" },
   Position: { de: "Position", fr: "Position" },
   Text: { de: "Text", fr: "Texte" },
+  Key: { de: "Schlüssel", fr: "Clé" },
   Link: { de: "Link", fr: "Lien" },
   Notification: { de: "Mitteilung", fr: "Notification" },
   Done: { de: "Erledigt", fr: "Fait" },
@@ -110,6 +111,9 @@ const strings = {
   "Edit the widget and choose a page": { de: "Widget bearbeiten und eine Seite wählen", fr: "Modifie le widget et choisis une page" },
   "No longer available – edit the widget": { de: "Nicht mehr verfügbar – Widget bearbeiten", fr: "Plus disponible – modifie le widget" },
   "Can’t be reached right now": { de: "Gerade nicht erreichbar", fr: "Injoignable pour le moment" },
+  // A button the instance refused: shown at the item until the next refresh.
+  "Couldn’t check off – open in Flowplan": { de: "Konnte nicht abhaken – in Flowplan öffnen", fr: "Impossible de cocher – ouvre dans Flowplan" },
+  "Didn’t work – open Flowplan": { de: "Hat nicht geklappt – Flowplan öffnen", fr: "Échec – ouvre Flowplan" },
   "Protected by the journal PIN – unlock it in Flowplan": { de: "Mit Journal-PIN geschützt – in Flowplan entsperren", fr: "Protégé par le code du journal – déverrouille-le dans Flowplan" },
   "End-to-end encrypted – readable in Flowplan only": { de: "Ende-zu-Ende-verschlüsselt – nur in Flowplan lesbar", fr: "Chiffré de bout en bout – lisible uniquement dans Flowplan" },
   Locked: { de: "Gesperrt", fr: "Verrouillé" },

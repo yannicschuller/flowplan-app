@@ -32,9 +32,31 @@ export type TaskRow = {
   late: boolean;
   url: string;
   // What "task.complete" needs back, unchanged (empty when the person may
-  // not change the task).
-  complete?: { source: string; pageId: string; rowId?: string; index?: number; text: string };
+  // not change the task, or it was just checked off).
+  complete?: { source: string; pageId: string; rowId?: string; index?: number; key?: string; text: string };
+  // Just checked off: drawn done until the next answer no longer lists it.
+  done?: true;
+  // The instance refused: why, until the next refresh.
+  hint?: string;
 };
+
+// Taps on a widget's buttons (native/suite.ts): the item is drawn done at
+// once – until the instance's next answer – or comes back with a hint after
+// a refusal. The same as on iOS (WidgetShared.swift, FPActions).
+export type ActionMarks = { pending: Record<string, number>; failed: Record<string, number> };
+export const PENDING_MS = 120_000;
+export const FAILED_MS = 600_000;
+export const taskItemId = (c: { source: string; pageId: string; rowId?: string; index?: number }) =>
+  `task:${c.source}:${c.pageId}:${c.rowId ?? ""}:${typeof c.index === "number" && c.index >= 0 ? c.index : ""}`;
+export const habitItemId = (pageId: string, fieldId: string) => `habit:${pageId}:${fieldId}`;
+export const readItemId = (notificationId?: string) => `read:${notificationId || "all"}`;
+export const TIMER_START = "timer:start";
+export const TIMER_STOP = "timer:stop";
+function marking(marks: ActionMarks | undefined, now: number) {
+  const pending = (id: string) => !!marks && typeof marks.pending[id] === "number" && now - marks.pending[id] < PENDING_MS;
+  const failed = (id: string) => !!marks && !pending(id) && typeof marks.failed[id] === "number" && now - marks.failed[id] < FAILED_MS;
+  return { pending, failed, anyFailed: (prefix: string) => !!marks && Object.keys(marks.failed).some((id) => id.startsWith(prefix) && failed(id)) };
+}
 
 export type SuiteView =
   | ClosedView
@@ -48,6 +70,7 @@ export type SuiteView =
       journal?: { name: string; line: string; written: boolean; url: string; protected: boolean };
       habits?: { name: string; line: string; url: string; items: { fieldId: string; pageId: string; name: string; done: boolean; canWrite: boolean }[]; protected: boolean };
       today: string;
+      notice?: string;
     })
   | (Base & {
       state: "time";
@@ -59,6 +82,7 @@ export type SuiteView =
       startLabel: string;
       stopLabel: string;
       hint: string;
+      notice?: string;
     })
   | (Base & {
       state: "mentions";
@@ -67,6 +91,7 @@ export type SuiteView =
       items: { id: string; text: string; when: string; read: boolean; url: string }[];
       readLabel: string;
       readAllLabel: string;
+      notice?: string;
     })
   | (Base & { state: "forms"; headline: string; empty: string; items: { title: string; when: string; isNew: boolean; url: string }[] });
 
@@ -128,10 +153,11 @@ export function suiteView<K extends SuiteKind>(
   kind: K,
   config: SuiteConfig[K],
   result: WidgetResult | null,
-  options: { locale: Locale; today: string; signedIn: boolean; now?: number },
+  options: { locale: Locale; today: string; signedIn: boolean; now?: number; marks?: ActionMarks },
 ): SuiteView {
   const { locale, today } = options;
   const now = options.now ?? Date.now();
+  const marks = marking(options.marks, now);
   if (!options.signedIn) return closedView(kind, "signedOut", locale);
   if ((kind === "counter" && !(config as SuiteConfig["counter"]).pageId) || (kind === "forms" && !(config as SuiteConfig["forms"]).pageId))
     return closedView(kind, "setup", locale);
@@ -163,7 +189,30 @@ export function suiteView<K extends SuiteKind>(
     }
     case "tasks": {
       const items = list(d.items);
-      const total = num(d.total, items.length);
+      const rows = items.map((item) => {
+        const due = typeof item.due === "string" ? item.due : null;
+        const complete = widgetProps({
+          source: str(item.source, "doc"),
+          pageId: str(item.pageId),
+          rowId: typeof item.rowId === "string" ? item.rowId : undefined,
+          index: typeof item.index === "number" ? item.index : undefined,
+          key: typeof item.key === "string" && item.key ? item.key : undefined,
+          text: str(item.text),
+        });
+        const id = taskItemId(complete);
+        const row: TaskRow = {
+          text: str(item.text),
+          detail: str(item.page),
+          due: dueLabel(due, today, locale),
+          late: !!due && due < today,
+          url: pageLink(item.url),
+        };
+        if (marks.pending(id)) row.done = true;
+        else if (item.canEdit === true) row.complete = complete;
+        if (marks.failed(id)) row.hint = t("widgetCheckFailed", {}, locale);
+        return row;
+      });
+      const total = Math.max(0, num(d.total, items.length) - rows.filter((row) => row.done).length);
       return {
         kind,
         state: "tasks",
@@ -171,25 +220,7 @@ export function suiteView<K extends SuiteKind>(
         url: (config as SuiteConfig["tasks"]).source === "mine" ? appLink("/#tasks") : url,
         headline: total ? t("tasksOpen", { count: total }, locale) : t("tasksDone", {}, locale),
         empty: t("tasksDone", {}, locale),
-        items: items.map((item) => {
-          const due = typeof item.due === "string" ? item.due : null;
-          const row: TaskRow = {
-            text: str(item.text),
-            detail: str(item.page),
-            due: dueLabel(due, today, locale),
-            late: !!due && due < today,
-            url: pageLink(item.url),
-          };
-          if (item.canEdit === true)
-            row.complete = widgetProps({
-              source: str(item.source, "doc"),
-              pageId: str(item.pageId),
-              rowId: typeof item.rowId === "string" ? item.rowId : undefined,
-              index: typeof item.index === "number" ? item.index : undefined,
-              text: str(item.text),
-            });
-          return row;
-        }),
+        items: rows,
       };
     }
     case "calendar": {
@@ -274,15 +305,24 @@ export function suiteView<K extends SuiteKind>(
       }
       if (h) {
         const closed = h.locked === true || h.encrypted === true;
+        // Just tapped: the other state until the next answer.
+        const items = closed
+          ? []
+          : list(h.items).map((item) => {
+              const tapped = marks.pending(habitItemId(str(h.id), str(item.fieldId)));
+              return { fieldId: str(item.fieldId), pageId: str(h.id), name: str(item.name), done: tapped ? item.done !== true : item.done === true, canWrite: h.canWrite === true };
+            });
+        const shift = list(h.items).filter((item) => marks.pending(habitItemId(str(h.id), str(item.fieldId)))).reduce((sum, item) => sum + (item.done === true ? -1 : 1), 0);
         view.habits = {
           name: closed ? kindTitle("journal", locale) : str(h.name),
           protected: closed,
-          line: closed ? t(h.locked === true ? "widgetLockedShort" : "widgetEncryptedShort", {}, locale) : t("habitsDone", { done: num(h.done), total: num(h.total) }, locale),
+          line: closed
+            ? t(h.locked === true ? "widgetLockedShort" : "widgetEncryptedShort", {}, locale)
+            : t("habitsDone", { done: Math.max(0, num(h.done) + shift), total: num(h.total) }, locale),
           url: pageLink(h.url),
-          items: closed
-            ? []
-            : list(h.items).map((item) => ({ fieldId: str(item.fieldId), pageId: str(h.id), name: str(item.name), done: item.done === true, canWrite: h.canWrite === true })),
+          items,
         };
+        if (marks.anyFailed("habit:")) view.notice = t("widgetCheckFailed", {}, locale);
       }
       return view;
     }
@@ -306,6 +346,7 @@ export function suiteView<K extends SuiteKind>(
         stopLabel: t("timerStop", {}, locale),
         hint: pick || running ? "" : t("noRecentTimer", {}, locale),
       };
+      if (marks.failed(TIMER_START) || marks.failed(TIMER_STOP)) view.notice = t("widgetActionFailed", {}, locale);
       if (running && typeof running.start === "number")
         view.timer = { title: str(running.title) || str(running.database) || t("widgetTimer", {}, locale), start: running.start, url: pageLink(running.url) };
       else if (chosen && !pick) view.start = { ...chosen, title: "" };
@@ -314,24 +355,30 @@ export function suiteView<K extends SuiteKind>(
     }
     case "mentions": {
       const unread = (d.unread ?? {}) as Data;
-      const count = num(unread.mentions) + num(unread.assignments);
-      return {
+      const allRead = marks.pending(readItemId());
+      // Marked read here: read until the next answer.
+      const items = list(d.items).map((item) => ({
+        id: str(item.id),
+        text: str(item.text),
+        when: typeof item.createdAt === "number" ? formatWhen(item.createdAt, now, locale) : "",
+        read: item.read === true || allRead || marks.pending(readItemId(str(item.id))),
+        url: pageLink(item.url),
+        wasRead: item.read === true,
+      }));
+      const count = allRead ? 0 : Math.max(0, num(unread.mentions) + num(unread.assignments) - items.filter((item) => item.read && !item.wasRead).length);
+      const view: Extract<SuiteView, { state: "mentions" }> = {
         kind,
         state: "mentions",
         title,
         url: appLink("/#inbox"),
         headline: count ? t("widgetUnread", { count }, locale) : t("widgetInboxEmpty", {}, locale),
         empty: t("mentionsEmpty", {}, locale),
-        items: list(d.items).map((item) => ({
-          id: str(item.id),
-          text: str(item.text),
-          when: typeof item.createdAt === "number" ? formatWhen(item.createdAt, now, locale) : "",
-          read: item.read === true,
-          url: pageLink(item.url),
-        })),
+        items: items.map(({ wasRead: _wasRead, ...item }) => item),
         readLabel: t("markRead", {}, locale),
         readAllLabel: t("markAllRead", {}, locale),
       };
+      if (marks.anyFailed("read:")) view.notice = t("widgetActionFailed", {}, locale);
+      return view;
     }
     case "forms": {
       const fresh = num(d.new);

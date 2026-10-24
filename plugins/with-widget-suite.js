@@ -25,6 +25,13 @@ const TARGET = "ExpoWidgetsTarget";
 const SUITE = path.join(__dirname, "widget-suite");
 const SHARED = path.join(__dirname, "..", "modules", "flowplan-native", "ios", "WidgetShared.swift");
 
+const EXTENSION_FRAMEWORKS = ["AppIntents.framework", "WidgetKit.framework", "SwiftUI.framework"];
+// The frameworks in a target's "Frameworks" build phase.
+const linkedFrameworks = (project, targetUuid) => {
+  const phase = project.pbxFrameworksBuildPhaseObj(targetUuid);
+  return (phase?.files ?? []).map((file) => String(file.comment ?? "").replace(/ in Frameworks$/, ""));
+};
+
 const extensionFiles = () => [...fs.readdirSync(path.join(SUITE, "ios")).filter((f) => f.endsWith(".swift")).sort(), "WidgetShared.swift"];
 const appFiles = () => [...fs.readdirSync(path.join(SUITE, "app")).filter((f) => f.endsWith(".swift")).sort(), "WidgetShared.swift"];
 const source = (dir, file) => (file === "WidgetShared.swift" ? SHARED : path.join(SUITE, dir, file));
@@ -73,6 +80,12 @@ const withSuiteProject = (config) =>
     for (const file of extensionFiles()) {
       if (group.children.some((child) => child.comment === file)) continue;
       project.addSourceFile(file, { target: targetUuid }, groupKey);
+    }
+    // Linked by name, not only through `import`: the build extracts the App
+    // Intents metadata (the widgets' settings and buttons) from targets that
+    // link AppIntents.
+    for (const framework of EXTENSION_FRAMEWORKS) {
+      if (!linkedFrameworks(project, targetUuid).includes(framework)) project.addFramework(framework, { target: targetUuid, link: true });
     }
     const appTarget = project.getFirstTarget().uuid;
     for (const file of appFiles()) {

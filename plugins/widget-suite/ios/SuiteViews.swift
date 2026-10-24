@@ -366,32 +366,115 @@ struct FPCaptureView: View {
 
 // MARK: - 2. Tasks (check off right here)
 
+/// A round checkbox: in a widget the system draws the tapped state at once,
+/// before the action runs. With the label (habits) the whole row is the
+/// checkbox; without (tasks) only the circle, the text opens the page.
+@available(iOS 17.0, *)
+struct FPCheckStyle: ToggleStyle {
+  let accent: Color
+  var showsLabel = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    let on: Bool = configuration.isOn
+    let symbol: String = on ? "checkmark.circle.fill" : "circle"
+    let style: AnyShapeStyle = on ? AnyShapeStyle(accent) : AnyShapeStyle(.secondary)
+    return HStack(spacing: 6) {
+      Image(systemName: symbol)
+        .font(.body)
+        .foregroundStyle(style)
+        .widgetAccentable()
+        .frame(width: 30, height: 26)
+      if showsLabel {
+        configuration.label
+          .strikethrough(on)
+          .opacity(on ? 0.6 : 1)
+      }
+    }
+    .contentShape(Rectangle())
+  }
+}
+
+/// The short hint under an item whose action the instance refused.
+@available(iOS 17.0, *)
+struct FPHint: View {
+  let text: String
+
+  var body: some View {
+    Text(text)
+      .font(.caption2.weight(.medium))
+      .foregroundStyle(FPStyle.late)
+      .lineLimit(1)
+      .minimumScaleFactor(0.8)
+  }
+}
+
 @available(iOS 17.0, *)
 struct FPTaskRow: View {
   let item: FPJSON
   let compact: Bool
+  let marks: FPMarks
+  @Environment(\.colorScheme) private var scheme
+
+  /// The task as FPCompleteTaskIntent names it.
+  static func id(_ item: FPJSON) -> String {
+    let source: String = item["source"].string ?? "doc"
+    let rowId: String = item["rowId"].string ?? ""
+    let index: Int = item["index"].int ?? -1
+    return FPActions.taskID(source: source, pageId: item["pageId"].text, rowId: rowId, index: index)
+  }
+
+  @ViewBuilder private func check(done: Bool) -> some View {
+    if done {
+      // Checked off (or on its way): drawn done until the instance's next
+      // answer no longer lists it.
+      Image(systemName: "checkmark.circle.fill")
+        .font(.body)
+        .foregroundStyle(FPStyle.accent(scheme))
+        .widgetAccentable()
+        .frame(width: 30, height: 26)
+        .accessibilityLabel(L("Done"))
+    } else if item["canEdit"].bool, let pageId = item["pageId"].string {
+      let intent = FPCompleteTaskIntent(
+        source: item["source"].string ?? "doc",
+        pageId: pageId,
+        rowId: item["rowId"].string ?? "",
+        index: item["index"].int ?? -1,
+        key: item["key"].text,
+        text: item["text"].text
+      )
+      Toggle(isOn: false, intent: intent) {
+        Text(L("Mark as done"))
+      }
+      .toggleStyle(FPCheckStyle(accent: FPStyle.accent(scheme)))
+      .accessibilityLabel("\(L("Mark as done")): \(item["text"].text)")
+    } else {
+      Image(systemName: "circle.dotted")
+        .font(.body)
+        .foregroundStyle(.tertiary)
+        .frame(width: 30, height: 26)
+        .accessibilityHidden(true)
+    }
+  }
 
   var body: some View {
     let due = FPFormat.due(item["due"].string)
-    HStack(spacing: 8) {
-      if item["canEdit"].bool, let pageId = item["pageId"].string {
-        Button(intent: FPCompleteTaskIntent(source: item["source"].string ?? "doc", pageId: pageId, rowId: item["rowId"].string, index: item["index"].int, text: item["text"].text)) {
-          Image(systemName: "circle")
-            .font(.body)
-            .foregroundStyle(.secondary)
-            .frame(width: 22, height: 22)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(L("Mark as done")): \(item["text"].text)")
-      } else {
-        Image(systemName: "circle.dotted").font(.body).foregroundStyle(.tertiary).frame(width: 22, height: 22).accessibilityHidden(true)
-      }
+    let id: String = Self.id(item)
+    let done: Bool = marks.isPending(id)
+    let failed: Bool = !done && marks.hasFailed(id)
+    let textStyle: HierarchicalShapeStyle = done ? .secondary : .primary
+    HStack(spacing: 4) {
+      check(done: done)
       Link(destination: FPLink.page(item["url"].string)) {
         HStack(spacing: 6) {
           VStack(alignment: .leading, spacing: 0) {
-            Text(item["text"].text).font(.subheadline).lineLimit(1)
-            if !compact, !item["page"].text.isEmpty {
+            Text(item["text"].text)
+              .strikethrough(done)
+              .font(.subheadline)
+              .foregroundStyle(textStyle)
+              .lineLimit(1)
+            if failed {
+              FPHint(text: L("Couldn’t check off – open in Flowplan"))
+            } else if !compact, !item["page"].text.isEmpty {
               Text(item["page"].text).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
           }
@@ -406,6 +489,7 @@ struct FPTaskRow: View {
       }
       .accessibilityElement(children: .combine)
     }
+    .opacity(done ? 0.6 : 1)
     .invalidatableContent()
   }
 }
@@ -417,7 +501,8 @@ struct FPTasksView: View {
 
   var body: some View {
     let items = entry.data["items"].array
-    let total = entry.data["total"].int ?? items.count
+    let checked: Int = items.filter { entry.marks.isPending(FPTaskRow.id($0)) }.count
+    let total = max(0, (entry.data["total"].int ?? items.count) - checked)
     let headline = total == 0 ? L("All done") : FPFormat.count("%d open", total)
     switch family {
     case .accessoryInline:
@@ -440,7 +525,7 @@ struct FPTasksView: View {
           Spacer(minLength: 0)
         } else {
           ForEach(Array(items.prefix(rows).enumerated()), id: \.offset) { _, item in
-            FPTaskRow(item: item, compact: family == .systemSmall)
+            FPTaskRow(item: item, compact: family == .systemSmall, marks: entry.marks)
           }
           Spacer(minLength: 0)
         }
@@ -699,26 +784,43 @@ struct FPCounterView: View {
 struct FPHabitRow: View {
   let habits: FPJSON
   let item: FPJSON
+  let marks: FPMarks
   @Environment(\.colorScheme) private var scheme
 
   var body: some View {
-    let done = item["done"].bool
-    let label = HStack(spacing: 6) {
-      Image(systemName: done ? "checkmark.circle.fill" : "circle")
-        .font(.body)
-        .foregroundStyle(done ? AnyShapeStyle(FPStyle.accent(scheme)) : AnyShapeStyle(.secondary))
-        .widgetAccentable()
-      Text(item["name"].text).font(.subheadline).lineLimit(1)
-      Spacer(minLength: 0)
-    }
-    if habits["canWrite"].bool, let pageId = habits["id"].string, let fieldId = item["fieldId"].string {
-      Button(intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done)) { label }
-        .buttonStyle(.plain)
+    let pageId: String = habits["id"].text
+    let fieldId: String = item["fieldId"].text
+    let id: String = FPActions.habitID(pageId: pageId, fieldId: fieldId)
+    let stored: Bool = item["done"].bool
+    // Tapped: the other state until the instance's next answer.
+    let pending: Bool = marks.isPending(id)
+    let done: Bool = pending ? !stored : stored
+    let failed: Bool = !pending && marks.hasFailed(id)
+    VStack(alignment: .leading, spacing: 0) {
+      if habits["canWrite"].bool, !pageId.isEmpty, !fieldId.isEmpty {
+        Toggle(isOn: done, intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done)) {
+          HStack(spacing: 0) {
+            Text(item["name"].text).font(.subheadline).lineLimit(1)
+            Spacer(minLength: 0)
+          }
+        }
+        .toggleStyle(FPCheckStyle(accent: FPStyle.accent(scheme), showsLabel: true))
         .accessibilityLabel(item["name"].text)
         .accessibilityValue(done ? L("Done") : L("Open"))
         .invalidatableContent()
-    } else {
-      label
+      } else {
+        HStack(spacing: 6) {
+          Image(systemName: done ? "checkmark.circle.fill" : "circle")
+            .font(.body)
+            .foregroundStyle(done ? AnyShapeStyle(FPStyle.accent(scheme)) : AnyShapeStyle(.secondary))
+            .widgetAccentable()
+          Text(item["name"].text).font(.subheadline).lineLimit(1)
+          Spacer(minLength: 0)
+        }
+      }
+      if failed {
+        FPHint(text: L("Couldn’t check off – open in Flowplan"))
+      }
     }
   }
 }
@@ -754,6 +856,17 @@ struct FPJournalView: View {
     .accessibilityElement(children: .combine)
   }
 
+  /// Done today, with the habits just tapped.
+  private func doneCount(_ habits: FPJSON) -> Int {
+    let pageId: String = habits["id"].text
+    var count: Int = habits["done"].int ?? 0
+    for item in habits["items"].array {
+      let id: String = FPActions.habitID(pageId: pageId, fieldId: item["fieldId"].text)
+      if entry.marks.isPending(id) { count += item["done"].bool ? -1 : 1 }
+    }
+    return max(0, count)
+  }
+
   @ViewBuilder private func habits(_ rows: Int) -> some View {
     let habits = entry.data["habits"]
     let closed = habits["locked"].bool || habits["encrypted"].bool
@@ -762,14 +875,14 @@ struct FPJournalView: View {
         Text(closed ? L("Habits") : habits["name"].text).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
         Spacer(minLength: 4)
         if !closed {
-          Text("\(habits["done"].int ?? 0)/\(habits["total"].int ?? 0)").font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.secondary)
+          Text("\(doneCount(habits))/\(habits["total"].int ?? 0)").font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.secondary)
         }
       }
       if closed {
         Label(L(habits["locked"].bool ? "Locked" : "Encrypted"), systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
       } else {
         ForEach(Array(habits["items"].array.prefix(rows).enumerated()), id: \.offset) { _, item in
-          FPHabitRow(habits: habits, item: item)
+          FPHabitRow(habits: habits, item: item, marks: entry.marks)
         }
       }
     }
@@ -822,9 +935,28 @@ struct FPTimeView: View {
     return (pageId, rowId, fieldId, first["title"].string ?? first["database"].text)
   }
 
+  /// When the timer runs: the instance's answer, or the tap on "Start"
+  /// (until the next answer); not after a tap on "Stop".
+  private var runningSince: Date? {
+    if entry.marks.isPending(FPActions.timerStopID) { return nil }
+    return entry.data["timer"]["start"].date ?? entry.marks.pending[FPActions.timerStartID]
+  }
+
   @ViewBuilder private var timerRow: some View {
+    let failed: Bool = entry.marks.hasFailed(FPActions.timerStartID) || entry.marks.hasFailed(FPActions.timerStopID)
+    VStack(alignment: .leading, spacing: 2) {
+      timerControls
+      if failed {
+        FPHint(text: L("Didn’t work – open Flowplan"))
+      }
+    }
+  }
+
+  @ViewBuilder private var timerControls: some View {
     let timer = entry.data["timer"]
-    if let start = timer["start"].date {
+    if let start = runningSince {
+      let named: String? = timer["title"].string ?? timer["database"].string
+      let title: String = named ?? startTarget?.title ?? L("Timer")
       HStack(spacing: 8) {
         Link(destination: FPLink.page(timer["url"].string)) {
           VStack(alignment: .leading, spacing: 0) {
@@ -833,7 +965,7 @@ struct FPTimeView: View {
               .monospacedDigit()
               .foregroundStyle(FPStyle.accent(scheme))
               .widgetAccentable()
-            Text(timer["title"].string ?? timer["database"].text).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
           }
         }
         Spacer(minLength: 4)
@@ -941,9 +1073,29 @@ struct FPMentionsView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
 
+  /// Read on the instance, or just marked read here.
+  private func isRead(_ item: FPJSON) -> Bool {
+    if item["read"].bool || entry.marks.isPending(FPActions.readID(nil)) { return true }
+    return entry.marks.isPending(FPActions.readID(item["id"].string ?? ""))
+  }
+
+  private var unread: Int {
+    if entry.marks.isPending(FPActions.readID(nil)) { return 0 }
+    let count: Int = (entry.data["unread"]["mentions"].int ?? 0) + (entry.data["unread"]["assignments"].int ?? 0)
+    var marked: Int = 0
+    for item in entry.data["items"].array {
+      if !item["read"].bool && isRead(item) { marked += 1 }
+    }
+    return max(0, count - marked)
+  }
+
+  private var failed: Bool {
+    entry.marks.failed.contains { $0.hasPrefix("read:") }
+  }
+
   var body: some View {
     let items = entry.data["items"].array
-    let unread = (entry.data["unread"]["mentions"].int ?? 0) + (entry.data["unread"]["assignments"].int ?? 0)
+    let unread = self.unread
     switch family {
     case .accessoryCircular:
       ZStack {
@@ -982,21 +1134,25 @@ struct FPMentionsView: View {
             .accessibilityLabel(L("Mark all read"))
           }
         }
+        if failed {
+          FPHint(text: L("Didn’t work – open Flowplan"))
+        }
         if items.isEmpty {
           Spacer(minLength: 0)
           Label(L("No new mentions"), systemImage: "checkmark.circle").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
         }
         ForEach(Array(items.prefix(rows).enumerated()), id: \.offset) { _, item in
+          let read: Bool = isRead(item)
           HStack(alignment: .top, spacing: 8) {
             Link(destination: FPLink.page(item["url"].string)) {
               VStack(alignment: .leading, spacing: 1) {
-                Text(item["text"].text).font(.subheadline).lineLimit(2).fontWeight(item["read"].bool ? .regular : .medium)
+                Text(item["text"].text).font(.subheadline).lineLimit(2).fontWeight(read ? .regular : .medium)
                 Text(FPFormat.ago(item["createdAt"])).font(.caption2).foregroundStyle(.secondary)
               }
               .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityElement(children: .combine)
-            if !item["read"].bool, let id = item["id"].string {
+            if !read, let id = item["id"].string {
               Button(intent: FPMarkReadIntent(notificationId: id)) {
                 Image(systemName: "envelope.open").font(.caption).frame(width: 26, height: 26)
                   .background(.fill.tertiary, in: Circle())

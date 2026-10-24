@@ -67,6 +67,14 @@ public class FlowplanNativeModule: Module {
       Self.reloadWidgets()
     }
 
+    // The last action of a widget's button that went wrong (the app's
+    // settings show it); nil when none did.
+    Function("widgetActionError") { () -> [String: Any]? in
+      guard let error = FPActions.lastError() else { return nil }
+      let entry: [String: Any] = ["action": error.action, "status": error.status, "message": error.message, "at": error.at.timeIntervalSince1970 * 1000]
+      return entry
+    }
+
     Function("consumePendingLink") { () -> String? in
       Self.takePendingLink()
     }

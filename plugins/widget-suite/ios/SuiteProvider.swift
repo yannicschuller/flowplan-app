@@ -25,6 +25,8 @@ struct FPEntry: TimelineEntry {
   let settings: FPSettings
   // The answer is older than it should be (offline).
   var stale = false
+  // Buttons tapped: drawn done, or back with a hint (FPActions).
+  var marks = FPMarks()
 
   var locked: Bool { data["locked"].bool }
   var encrypted: Bool { data["encrypted"].bool }
@@ -55,7 +57,11 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
 
   func timeline(for configuration: Configuration, in context: Context) async -> Timeline<FPEntry> {
     let entry = await entry(for: configuration)
-    let next = entry.state == .data && !entry.stale ? maxAge : 900
+    var next: TimeInterval = entry.state == .data && !entry.stale ? maxAge : 900
+    // A hint after a refusal goes with the next refresh; an action that
+    // never answered is forgotten soon.
+    if !entry.marks.failed.isEmpty { next = min(next, FPActions.failedFor) }
+    if !entry.marks.pending.isEmpty { next = min(next, FPActions.pendingFor + 10) }
     return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(next)))
   }
 
@@ -75,7 +81,7 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
         let state: FPState = result.status == 403 || result.status == 404 ? .gone : .offline
         return FPEntry(date: Date(), kind: kind, state: state, data: FPJSON(nil), settings: settings)
       }
-      return FPEntry(date: Date(), kind: kind, state: .data, data: result.data, settings: settings, stale: stale)
+      return FPEntry(date: Date(), kind: kind, state: .data, data: result.data, settings: settings, stale: stale, marks: FPActions.marks())
     }
   }
 }
