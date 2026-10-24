@@ -33,6 +33,7 @@ import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
 import { Shell, type ShellHandle } from "./screens/Shell";
 import { Capture } from "./screens/Capture";
+import { VoiceNote } from "./screens/VoiceNote";
 import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
@@ -40,6 +41,10 @@ import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
 import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
+import { onNotificationButton, setUpNotificationButtons, syncButtonSession } from "./native/notification-actions";
+import { setLocalRemindersWanted } from "./native/local-reminders";
+import { originOf } from "./server";
+import { voiceRequest, type VoiceRequest } from "./voice-bridge";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -67,6 +72,8 @@ function Root() {
   const [pushAvailable, setPushAvailable] = useState(true);
   // The capture screen (widgets, controls, Siri, quick actions).
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
+  // A voice note the page asked for (VoiceNote.tsx).
+  const [voice, setVoice] = useState<VoiceRequest | null>(null);
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
   const pendingPath = useRef<string | null>(null);
@@ -76,6 +83,9 @@ function Root() {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(BACKGROUND.light).catch(() => {});
     setUpNotifications();
+    // The buttons on notifications, and (iOS) the session they act with.
+    void setUpNotificationButtons();
+    syncButtonSession();
     void SplashScreen.hideAsync().catch(() => {});
     void updateWidgets();
     // The configurable widgets get the session at once, also offline.
@@ -136,6 +146,7 @@ function Root() {
     const links = Linking.addEventListener("url", ({ url }) => appLink(url));
     const opened = onNotificationOpened(open);
     const received = onNotificationReceived(() => void refresh());
+    const buttons = onNotificationButton();
     const actions = onQuickAction(({ id, path, link }) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path)));
     const initialShare = consumeSharedText();
     if (initialShare) share(initialShare);
@@ -155,6 +166,7 @@ function Root() {
       links.remove();
       opened.remove();
       received.remove();
+      buttons.remove();
       actions.remove();
       shares.remove();
     };
@@ -177,6 +189,7 @@ function Root() {
         // A missing or outdated session of the configurable widgets is
         // written again (and the widgets reload), also offline.
         syncWidgetSession();
+        syncButtonSession();
         if (store.deviceToken()) void refresh().then((result) => "signedOut" in result && setSignedIn(false));
       }
     });
@@ -218,6 +231,7 @@ function Root() {
   const signedOut = useCallback(() => {
     registered.current = null;
     store.setDeviceToken(null);
+    syncButtonSession();
     setSignedIn(false);
     void apply(null);
     void endAllActivities();
@@ -246,6 +260,10 @@ function Root() {
           const body = message.body as { deviceToken?: string; push?: boolean; pushAvailable?: boolean } | null;
           if (message.status === 200 && body?.deviceToken) {
             store.setDeviceToken(body.deviceToken);
+            syncButtonSession();
+            // Without push from the instance, due tasks become reminders of
+            // the phone itself (local-reminders.ts).
+            setLocalRemindersWanted(body.push !== true);
             setSignedIn(true);
             setPushAvailable(body.pushAvailable !== false);
             registered.current = `${server}|${(await expoPushToken()) ?? null}`;
@@ -279,6 +297,16 @@ function Root() {
         case "openSettings":
           setSettings(true);
           return;
+        // A configuration profile (CalDAV) installs only from Safari; only
+        // addresses of the instance.
+        case "openInBrowser":
+          if (server && originOf(message.url) === server) void Linking.openURL(message.url).catch(() => {});
+          return;
+        case "voiceNote": {
+          const request = voiceRequest(message);
+          if (request) setVoice(request);
+          return;
+        }
       }
     },
     [server, register, signedOut],
@@ -402,6 +430,15 @@ function Root() {
         />
       ) : null}
       {server ? <Capture request={locked ? null : capture} onClose={() => setCapture(null)} onOpen={open} /> : null}
+      {server ? (
+        <VoiceNote
+          request={locked ? null : voice}
+          onResult={(id, scripts) => {
+            shell.current?.deliver(scripts);
+            setVoice((current) => (current?.id === id ? null : current));
+          }}
+        />
+      ) : null}
       {locked ? <Lock onUnlocked={() => setLocked(false)} /> : null}
       {covered ? <Cover /> : null}
     </>

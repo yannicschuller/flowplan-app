@@ -3,7 +3,10 @@
 //
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
-//   tap or the app settings (lib/native-app.ts in Flowplan);
+//   tap or the app settings, opens an address of the instance in the
+//   browser (a configuration profile installs only from Safari) and has the
+//   app record a voice note (src/voice-bridge.ts; lib/native-app.ts in
+//   Flowplan);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -20,7 +23,9 @@ export type PageMessage =
   // Flowplan), and what the page did when asked (null: no answer, an
   // instance from before window.FlowplanNavigation).
   | { type: "backState"; canGoBack: boolean }
-  | { type: "back"; handled: boolean | null };
+  | { type: "back"; handled: boolean | null }
+  | { type: "openInBrowser"; url: string }
+  | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -45,6 +50,8 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
     backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
+    openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
+    recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
   });
   // Vibrations of the page become haptic taps.
   try {
