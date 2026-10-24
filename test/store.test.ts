@@ -82,6 +82,23 @@ test("App Store screenshots: every device and language, exact sizes, PNG without
   }
 });
 
+test("App Store creative assets: header 3840×1646 (21:9) and search results 3:2, every language, PNG without alpha", () => {
+  // App Store Connect Help → Creative assets specifications (scripts/creative-assets.mjs).
+  for (const locale of LOCALES) {
+    const dir = join(STORE, "app-store", "creative", locale);
+    assert.deepEqual(readdirSync(dir).filter((f) => !f.startsWith(".")).sort(), ["header.png", "search-results.png"], `${locale} creative assets`);
+    const header = png(join(dir, "header.png"));
+    assert.deepEqual([header.width, header.height], [3840, 1646], `${locale} header size`);
+    const search = png(join(dir, "search-results.png"));
+    assert.equal(search.width * 2, search.height * 3, `${locale} search results: not 3:2`);
+    assert.ok(search.width >= 1920 && search.width <= 3840, `${locale} search results: ${search.width} px wide`);
+    for (const [name, image] of [["header", header], ["search-results", search]] as const) {
+      assert.equal(image.alpha, false, `${locale}/${name}.png has an alpha channel`);
+      assert.equal(image.depth, 8, `${locale}/${name}.png bit depth`);
+    }
+  }
+});
+
 test("Google Play images: sizes, no alpha, two to eight screenshots per device", () => {
   const SIZES: Record<string, [number, number]> = { phoneScreenshots: [1080, 1920], sevenInchScreenshots: [1200, 1920], tenInchScreenshots: [1600, 2560] };
   for (const locale of LOCALES) {

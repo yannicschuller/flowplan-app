@@ -14,6 +14,7 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | Categories, copyright, age rating | `app-store/{primary,secondary}_category.txt`, `copyright.txt`, `app_rating_config.json` |
 | Notes and name for App Review | `app-store/review_information/` (demo account and contact: environment, see below) |
 | iPhone 6.9" (1320×2868), iPhone 6.5" (1284×2778), iPad 13" (2064×2752) | `app-store/screenshots/<locale>/NN-name-<device>.png` (8 each, see [Screenshots](#screenshots)) |
+| Product page header 3840×1646 (21:9) and search results image 3840×2560 (3:2), iOS 27 | `app-store/creative/<locale>/{header,search-results}.png` (see [Creative assets](#creative-assets)) |
 | App preview video, 886×1920, about 23 s, 30 fps, H.264 with a silent AAC track | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` (see [Preview video](#preview-video)) |
 | Play title, short and full description, release notes | `google-play/<locale>/*.txt`, `changelogs/<versionCode>.txt` |
 | Phone (1080×1920), 7" tablet (1200×1920), 10" tablet (1600×2560) | `google-play/<locale>/images/{phone,sevenInch,tenInch}Screenshots/N.png` |
@@ -64,6 +65,40 @@ npm run preview -- --locales fr --stills /tmp/review   # one language, a few fra
 
 It also writes `preview/flowplan-<de|en|fr>.gif`. fastlane does not upload videos: in App Store Connect, open the version, choose the language and drag the file into *App Previews* for the 6.9″ iPhone (it is used for 6.5″ too). The same file can go to YouTube for Google Play's promo video (`google-play/<locale>/video.txt`).
 
+## Creative assets
+
+Since iOS 27 and iPadOS 27 (App Store Connect since 5 October 2026) a product page can have a **header** and its own **search results** image – in App Store Connect the version's tab *Header and Search Results* (German: *Kopfzeile und Suchergebnisse*), and the new *Asset Library* where all images and videos of the app live. Both are optional; without a search results image the App Store shows the screenshots there as before.
+
+| File | Placement | Size | Shows |
+| --- | --- | --- | --- |
+| `app-store/creative/<locale>/header.png` | Product page header | 3840×1646 (21:9) | A line in Instrument Serif in the middle, the iPad with the projects board on the left, iPhones with the start page and a document on the right |
+| `app-store/creative/<locale>/search-results.png` | Search results | 3840×2560 (3:2) | Icon and name, the line "Notes, tasks and projects in one app.", the iPad with the board between iPhones with the start page and the widgets |
+
+Apple's rules (App Store Connect Help → *Creative assets specifications*, developer.apple.com → *App Store asset best practices*):
+
+- Header: 21:9 at exactly 3840×1646, JPEG or PNG – or a "universal" 16:9 PNG at 5244×2950 that can serve both placements. Search results: 3:2 from 1920×1280 to 3840×2560, JPEG or PNG. **No alpha channel or transparency.** Videos are possible too (5–30 s, 30/60 fps, muted, looping); there are none yet.
+- One file per language, no light/dark variants. Assets must suit a 4+ rating and follow guideline 2.3: no prices, URLs, awards, other platforms' logos or Apple badges; text short and localized.
+- The iPhone in portrait shows only a centred part (Apple's templates; about 1646×661 of the header and 2168×1030 of the search image). The line and the main device stay in there; the devices at the sides are only seen on iPad and in landscape. `npm run store:creative -- --guides /tmp/review` writes copies with that area drawn in.
+
+```sh
+npm run store:images         # first: the creative assets are cut from the finished screenshots
+npm run store:creative       # header.png and search-results.png per language
+npm test                     # sizes, 3:2, no alpha
+```
+
+The lines are in `scripts/creative-assets.mjs` (`TEXT`); a line that is too long is set smaller until it fits.
+
+**Upload.** `fastlane ios creative`, or **Actions → iOS setup** with *creative* on (after the listing, before a submit). It uses the App Store Connect API's Asset Library (API 4.5.1; fastlane 2.241 has no action for it): it reads the specifications and placement groups from `appAssetLibraryRefData`, uploads each image once (category *Creative assets*, named `Flowplan <asset> <locale> <hash>`), waits for processing and places it as `PRODUCT_PAGE_HEADER_ASSET` / `APP_STORE_SEARCH_RESULTS_ASSET` on the language of the version in preparation, in every placement group (iPhone, iPad) the file fits. Running it again keeps what is already placed; a changed file replaces the placement, the old image stays in the Asset Library. The assets go to App Review with the version. If a placement cannot be made (the version is already in review or approved), the run names the image and ends red with the step below.
+
+**By hand** (App Store Connect; German labels where known, Apple's English ones from its help in brackets), for each language:
+
+1. *Apps* → Flowplan → in the sidebar the iOS version in preparation.
+2. Top right, choose the language (*Deutsch*, *Englisch (USA)*, *Französisch*).
+3. Under the product page information the tab **Kopfzeile und Suchergebnisse** (*Header and Search Results*) → **Kopfzeile** (*Header*): drag `app-store/creative/<locale>/header.png` into the field – or, if the run already uploaded it, *Browse Assets* and choose `Flowplan header <locale> …` → Save.
+4. **Suchergebnisse** (*Search Results*): the same with `search-results.png`. Leave *Use header asset in search results* off – it only works with a universal 16:9 asset.
+5. *Preview* shows both on iPhone and iPad, in both orientations; check that the line is not cut off.
+6. Submit the version as usual. Approved assets can later be swapped on the live version without a new version: same tab → *Browse Assets* → choose → *Next* → *Publish*. Or upload and submit them on their own: sidebar *Asset Library* → **+** → *Upload Creative Assets*, then *Edit* → select → *Add for Review*.
+
 ## One-click setup
 
 **Actions → iOS setup → Run workflow** ([`ios-setup.yml`](../.github/workflows/ios-setup.yml), `fastlane ios setup`) does on the own Mac everything the App Store Connect API key allows. Re-running it is safe: what exists is kept.
@@ -72,6 +107,7 @@ It also writes `preview/flowplan-<de|en|fr>.gif`. fastlane does not upload video
 2. Creates or reuses the *Apple Distribution* certificate and the App Store profiles of both App IDs with **fastlane match**. They are stored encrypted in the private repository `yannicschuller/flowplan-certificates`. Only this workflow writes there; builds (`build.yml`, `release.yml`) read them when the match secrets exist. If a profile lacks the App Group or push, the setup renews it once.
 3. Checks that the app exists in App Store Connect.
 4. Uploads texts, categories, copyright, age rating, review information and screenshots for iPhone 6.9″, iPhone 6.5″ and iPad 13″, for the version in `package.json`. It does **not** submit for review unless *submit* is on.
+5. With *creative* on: the product page header and search results image of every language ([Creative assets](#creative-assets)).
 
 The API cannot create the app record or register the App Group. When one of them is missing, the run does everything else and then ends red, with the exact values in the log and on the run's summary page. Do the step in the browser and run it again.
 
@@ -113,6 +149,7 @@ Actions → **iOS setup** → Run workflow, from `main`, with the default inputs
 | `force_profiles` | off | Renew the profiles anyway, e.g. after a capability changed |
 | `listing` | on | Texts, age rating, review information |
 | `screenshots` | on | … and the screenshots; replaces those in App Store Connect |
+| `creative` | off | Product page header and search results image onto the version (iOS 27) |
 | `submit` | off | Submit the version for review; needs a processed build of that version in TestFlight |
 
 ### What stays in the browser

@@ -11,7 +11,10 @@
 #   3. checks that the app exists in App Store Connect;
 #   4. texts, categories, age rating, review information and screenshots
 #      (iPhone 6.9" and 6.5", iPad 13") from store/app-store – without
-#      submitting, unless "submit" is on.
+#      submitting, unless "submit" is on;
+#   5. with "creative" on: the product page header and search results image
+#      (iOS 27) of every language from store/app-store/creative, into the
+#      Asset Library and onto the version (before it is submitted).
 #
 # What the API cannot do (create the app record, register the App Group) ends
 # the run red with the exact values to enter in the browser – in the log and
@@ -43,6 +46,10 @@ on:
         description: "… with the screenshots (iPhone and iPad), replacing those in App Store Connect"
         type: boolean
         default: true
+      creative:
+        description: "Product page header and search results image (store/app-store/creative) onto the version"
+        type: boolean
+        default: false
       submit:
         description: "Submit the version for review (needs a processed build of this version in TestFlight)"
         type: boolean
@@ -109,4 +116,5 @@ jobs:
           force_profiles:${{ inputs.force_profiles }}
           listing:${{ inputs.listing }}
           screenshots:${{ inputs.screenshots }}
+          creative:${{ inputs.creative }}
           submit:${{ inputs.submit }}

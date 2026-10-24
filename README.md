@@ -267,6 +267,7 @@ Everything for the store listings is in [`store/`](store), in the layout fastlan
 - texts in German, English and French;
 - screenshots for every required device;
 - the feature graphic, icons and preview video;
+- the App Store's product page header and search results image (iOS 27);
 - privacy answers and the submission checklist.
 
 The screenshots and the video are made from the real Flowplan UI with Playwright against a local Flowplan server (store/README.md → Screenshots):
@@ -274,6 +275,7 @@ The screenshots and the video are made from the real Flowplan UI with Playwright
 ```sh
 npm run screenshots                    # all languages; starts a Flowplan dev server from ../flowplan
 npm run store:images                   # device frames and captions, PNG for both stores
+npm run store:creative                 # App Store header and search results image, from those screenshots
 npm run preview                        # App Store preview videos and GIFs, all languages; needs ffmpeg
 ```
 
