@@ -96,6 +96,9 @@ const config: ExpoConfig = {
       NSMicrophoneUsageDescription: "Flowplan uses the microphone when you record a voice note or a video for a page.",
       NSPhotoLibraryAddUsageDescription: "Flowplan saves images to your photos when you ask it to.",
       NSFaceIDUsageDescription: "Flowplan uses Face ID to unlock the app when the app lock is on.",
+      // Voice notes of the page become text on the phone itself
+      // (modules/flowplan-speech, on-device only).
+      NSSpeechRecognitionUsageDescription: "Flowplan turns your voice notes into text on this device.",
       UIViewControllerBasedStatusBarAppearance: true,
     },
     privacyManifests: {

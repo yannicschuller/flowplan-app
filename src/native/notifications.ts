@@ -8,6 +8,7 @@ import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { t } from "../i18n";
 import { safePath } from "../navigation";
+import { isButton } from "../notification-buttons";
 
 export function setUpNotifications() {
   // In the app, a new notification shows as banner without a sound: the
@@ -76,8 +77,11 @@ export async function expoPushToken(): Promise<string | null> {
   }
 }
 
-// The path a notification wants to open (data.url, e.g. "/#page=…").
+// The path a notification wants to open (data.url, e.g. "/#page=…"); none
+// for its buttons, which do their work without opening anything
+// (notification-actions.ts).
 export function notificationPath(response: Notifications.NotificationResponse | null): string | null {
+  if (isButton(response?.actionIdentifier)) return null;
   const url = (response?.notification.request.content.data as { url?: unknown } | undefined)?.url;
   return typeof url === "string" ? safePath(url) : null;
 }

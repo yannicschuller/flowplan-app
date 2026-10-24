@@ -4,7 +4,10 @@
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
 //   tap or the app settings (lib/native-app.ts in Flowplan); on iPhone and
-//   iPad it opens the document scanner for the page (screens/Scan.tsx);
+//   iPad it opens the document scanner for the page (screens/Scan.tsx),
+//   opens an address of the instance in the browser (a configuration
+//   profile installs only from Safari) and has the app record a voice note (src/voice-bridge.ts; lib/native-app.ts in
+//   Flowplan);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -24,7 +27,9 @@ export type PageMessage =
   | { type: "back"; handled: boolean | null }
   // "Scan document" in the page: its page (and record), checked again by
   // the app (capture.ts pageScanRequest).
-  | { type: "scanDocument"; pageId: string; rowId?: string };
+  | { type: "scanDocument"; pageId: string; rowId?: string }
+  | { type: "openInBrowser"; url: string }
+  | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -54,6 +59,8 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`
         : ""
     }
+    openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
+    recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
   });
   // Vibrations of the page become haptic taps.
   try {

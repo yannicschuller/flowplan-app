@@ -4,7 +4,8 @@
     "NSCameraUsageDescription": "Flowplan uses the camera when you take a photo for a page or a whiteboard, or scan a document.",
     "NSMicrophoneUsageDescription": "Flowplan uses the microphone when you record a voice note or a video for a page.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan saves images to your photos when you ask it to.",
-    "NSFaceIDUsageDescription": "Flowplan uses Face ID to unlock the app when the app lock is on."
+    "NSFaceIDUsageDescription": "Flowplan uses Face ID to unlock the app when the app lock is on.",
+    "NSSpeechRecognitionUsageDescription": "Flowplan turns your voice notes into text on this device."
   },
   "android": {
     "share_label": "Save to Flowplan",

@@ -16,6 +16,7 @@ import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, re
 import type * as IosWidgets from "../widgets/ios";
 import { refreshSuite } from "./suite";
 import { syncSpotlight } from "./spotlight";
+import { syncLocalReminders } from "./local-reminders";
 
 // expo-widgets only on iOS: Android draws its widgets with
 // react-native-android-widget, the timer as notification.
@@ -119,6 +120,8 @@ export async function apply(summary: Summary | null, admin: AdminState = null) {
     refreshSuite(),
     // iOS: pages and open tasks in Spotlight; signed out it is emptied.
     syncSpotlight(summary),
+    // Due tasks as the phone's own reminders, where the instance cannot push.
+    syncLocalReminders(summary),
   ]);
 }
 

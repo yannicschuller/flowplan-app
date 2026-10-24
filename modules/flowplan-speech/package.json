@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-speech",
+  "version": "1.0.0",
+  "description": "Speech to text on the device (Apple Speech) for Flowplan's voice notes",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}

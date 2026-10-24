@@ -49,6 +49,9 @@ export type ShellHandle = {
   pencil: (action: PencilAction) => void;
   // Signs the web view out of the instance; resolves when done (at most 3 s).
   signOut: () => Promise<void>;
+  // Runs the app's answers in the instance's page, in order (a voice note:
+  // src/voice-bridge.ts).
+  deliver: (scripts: string[]) => void;
 };
 
 type Props = {
@@ -177,6 +180,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       },
       pencil: (action) => {
         if (onServer()) run(pencilScript(action));
+      },
+      deliver: (scripts) => {
+        if (onServer()) for (const script of scripts) run(script);
       },
       signOut: () =>
         new Promise<void>((resolve) => {

@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-notify",
+  "version": "1.0.0",
+  "description": "The buttons on Flowplan's push notifications, answered natively on iOS",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}
