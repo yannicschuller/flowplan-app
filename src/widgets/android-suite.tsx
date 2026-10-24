@@ -4,7 +4,7 @@
 // timer run the action in the background (widget-task.ts → native/suite.ts),
 // everything else opens the page in the app.
 import { FlexWidget, TextWidget } from "react-native-android-widget";
-import { DARK, hex, LIGHT, type Theme } from "./android";
+import { hex, widgetThemes, type Theme } from "./android";
 import type { SuiteView } from "./present";
 
 // What a tap does (clickAction); the data is what the action needs.
@@ -334,8 +334,9 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
 }
 
 export function renderSuite(view: SuiteView, size: Size, widgetId: number) {
+  const themes = widgetThemes();
   return {
-    light: <SuiteWidget view={view} size={size} theme={LIGHT} widgetId={widgetId} />,
-    dark: <SuiteWidget view={view} size={size} theme={DARK} widgetId={widgetId} />,
+    light: <SuiteWidget view={view} size={size} theme={themes.light} widgetId={widgetId} />,
+    dark: <SuiteWidget view={view} size={size} theme={themes.dark} widgetId={widgetId} />,
   };
 }

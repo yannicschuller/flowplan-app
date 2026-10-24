@@ -26,7 +26,7 @@ const timeout = (ms: number) => {
   }
 };
 
-async function call<T>(connection: Connection, path: string, init: { method?: string; body?: string | FormData }, fetcher: Fetch): Promise<ApiResult<T>> {
+export async function call<T>(connection: Connection, path: string, init: { method?: string; body?: string | FormData }, fetcher: Fetch): Promise<ApiResult<T>> {
   const headers: Record<string, string> = { Authorization: `Bearer ${connection.token}`, Accept: "application/json" };
   if (typeof init.body === "string") headers["Content-Type"] = "application/json";
   try {

@@ -5,10 +5,14 @@
 import { FlexWidget, TextWidget, type WidgetTaskHandlerProps } from "react-native-android-widget";
 import type { InboxWidgetProps, TasksWidgetProps } from "../summary";
 import type { AdminLiveProps, AdminStatusProps, AdminStorageProps } from "../admin";
+import { materialColors } from "../../modules/flowplan-android/src";
+import { materialThemes } from "../android/theme";
 
 export type Theme = { background: string; text: string; muted: string; brand: string; late: string; line: string; warn: string; ok: string };
 export const LIGHT: Theme = { background: "#fcfbf8", text: "#1d1b22", muted: "#6b6876", brand: "#4146e6", late: "#c23b3b", line: "#ebe8f2", warn: "#b7791f", ok: "#2f855a" };
 export const DARK: Theme = { background: "#16151b", text: "#f2f0f7", muted: "#a19dad", brand: "#8f93ff", late: "#ff7a7a", line: "#2a2832", warn: "#f6c25b", ok: "#68d391" };
+// Android 12+: the system's Material You colours instead (android/theme.ts).
+export const widgetThemes = () => materialThemes(materialColors(), { light: LIGHT, dark: DARK });
 type Hex = `#${string}`;
 export const hex = (value: string) => value as Hex;
 
@@ -190,23 +194,28 @@ function StorageView({ props, theme }: { props: AdminStorageProps; theme: Theme 
 }
 
 export function renderAdminStatus(props: AdminStatusProps) {
-  return { light: <StatusView props={props} theme={LIGHT} />, dark: <StatusView props={props} theme={DARK} /> };
+  const themes = widgetThemes();
+  return { light: <StatusView props={props} theme={themes.light} />, dark: <StatusView props={props} theme={themes.dark} /> };
 }
 export function renderAdminLive(props: AdminLiveProps, height = 180) {
+  const themes = widgetThemes();
   const chart = height >= 150;
-  return { light: <LiveView props={props} theme={LIGHT} chart={chart} />, dark: <LiveView props={props} theme={DARK} chart={chart} /> };
+  return { light: <LiveView props={props} theme={themes.light} chart={chart} />, dark: <LiveView props={props} theme={themes.dark} chart={chart} /> };
 }
 export function renderAdminStorage(props: AdminStorageProps) {
-  return { light: <StorageView props={props} theme={LIGHT} />, dark: <StorageView props={props} theme={DARK} /> };
+  const themes = widgetThemes();
+  return { light: <StorageView props={props} theme={themes.light} />, dark: <StorageView props={props} theme={themes.dark} /> };
 }
 
 export function renderTasks(props: TasksWidgetProps, height = 180) {
+  const themes = widgetThemes();
   const rows = Math.max(1, Math.min(8, Math.floor((height - 90) / 22)));
-  return { light: <TasksView props={props} theme={LIGHT} rows={rows} />, dark: <TasksView props={props} theme={DARK} rows={rows} /> };
+  return { light: <TasksView props={props} theme={themes.light} rows={rows} />, dark: <TasksView props={props} theme={themes.dark} rows={rows} /> };
 }
 
 export function renderInbox(props: InboxWidgetProps) {
-  return { light: <InboxView props={props} theme={LIGHT} />, dark: <InboxView props={props} theme={DARK} /> };
+  const themes = widgetThemes();
+  return { light: <InboxView props={props} theme={themes.light} />, dark: <InboxView props={props} theme={themes.dark} /> };
 }
 
 export type { WidgetTaskHandlerProps };

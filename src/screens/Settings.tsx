@@ -18,6 +18,7 @@ import { ProfileList } from "./Profiles";
 import { activityChoices, setActivityChoices } from "../native/activities";
 import { lastWidgetActionError } from "../native/suite";
 import type { ActionError } from "../widgets/actions";
+import { canAddTile, requestAddTile } from "../../modules/flowplan-android/src";
 
 export function Settings({
   visible,
@@ -142,6 +143,12 @@ export function Settings({
                   when: formatWhen(widgetError.at, Date.now(), locale()),
                 })}
               </Text>
+            ) : null}
+            {canAddTile() ? (
+              <>
+                <Text style={[styles.small, { color: p.muted, marginTop: 8 }]}>{t("tileText")}</Text>
+                <Button title={t("tileAdd")} kind="secondary" onPress={() => requestAddTile(t("quickCaptureTitle"))} style={{ marginTop: 10 }} />
+              </>
             ) : null}
           </View>
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="flowplan_tile_capture">Quick capture</string>
+  <string name="flowplan_shortcut_note">New note</string>
+  <string name="flowplan_shortcut_note_long">New note</string>
+  <string name="flowplan_shortcut_capture">Quick capture</string>
+  <string name="flowplan_shortcut_capture_long">Quick capture to Flowplan</string>
+</resources>

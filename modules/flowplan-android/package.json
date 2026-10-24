@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-android",
+  "version": "1.0.0",
+  "description": "Android pieces of the Flowplan app: share target, Quick Settings tile, app shortcuts, Material You colours for the widgets",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}

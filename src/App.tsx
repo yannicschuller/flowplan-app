@@ -12,15 +12,8 @@ import { getLocales } from "expo-localization";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import * as ScreenCapture from "expo-screen-capture";
-import {
-  addAppLinkListener,
-  addPencilListener,
-  addShareListener,
-  consumePendingLink,
-  consumeSharedText,
-  getManagedServer,
-  type SharedText,
-} from "../modules/flowplan-native/src";
+import { addAppLinkListener, addPencilListener, consumePendingLink, getManagedServer } from "../modules/flowplan-native/src";
+import { addShareListener, takeShare, type SharedContent } from "../modules/flowplan-android/src";
 import type { PageMessage } from "./bridge-script";
 import { deviceName } from "./device";
 import { pickLocale, setLocale } from "./i18n";
@@ -33,6 +26,9 @@ import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
 import { Shell, type ShellHandle } from "./screens/Shell";
 import { Capture } from "./screens/Capture";
+import { ShareCapture, type ShareRequest } from "./screens/ShareCapture";
+import { shareDraft, shareTargetPath } from "./android/share";
+import { shortcutLinkOpened, syncShortcuts } from "./android/shortcuts";
 import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
@@ -69,6 +65,8 @@ function Root() {
   const [pushAvailable, setPushAvailable] = useState(true);
   // The capture screen (widgets, controls, Siri, quick actions).
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
+  // Android: shared from another app, or quick capture (tile, shortcut).
+  const [shareRequest, setShareRequest] = useState<ShareRequest | null>(null);
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
   const pendingPath = useRef<string | null>(null);
@@ -93,15 +91,13 @@ function Root() {
     [server],
   );
 
-  // "Teilen" from other apps (Android): the instance's share target.
+  // "Teilen" from other apps (Android): the capture screen; before signing
+  // in, text and links go to the instance's share target (it signs in first).
   const share = useCallback(
-    (shared: SharedText) => {
-      const query = new URLSearchParams();
-      const text = shared.text.trim();
-      if (shared.subject) query.set("title", shared.subject);
-      if (/^https?:\/\/\S+$/.test(text)) query.set("url", text);
-      else if (text) query.set("text", text);
-      open(`/share-target?${query}`);
+    (shared: SharedContent) => {
+      const draft = shareDraft(shared);
+      if (!connection() && !draft.files.length) open(shareTargetPath(draft));
+      else setShareRequest({ kind: "share", content: shared });
     },
     [open],
   );
@@ -110,6 +106,8 @@ function Root() {
     (link: string) => {
       if (link.startsWith("flowplan://sign-in")) return shell.current?.signInLink(link);
       if (link.startsWith("flowplan://change-server")) return setSetup(true);
+      shortcutLinkOpened(link);
+      if (link === "flowplan://quick-capture") return setShareRequest({ kind: "quick" });
       // Capture (widgets, controls, Siri), steps of the app (focus, stop),
       // a meeting's note – each checked before anything happens.
       const request = captureRequest(link);
@@ -139,9 +137,9 @@ function Root() {
     const opened = onNotificationOpened(open);
     const received = onNotificationReceived(() => void refresh());
     const actions = onQuickAction(({ id, path, link }) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path)));
-    const initialShare = consumeSharedText();
-    if (initialShare) share(initialShare);
-    const shares = addShareListener(share);
+    const takeAndShow = () => void takeShare().then((shared) => shared && share(shared));
+    takeAndShow();
+    const shares = addShareListener(takeAndShow);
     // iPad: Apple Pencil double-tap and squeeze go to the page.
     const pencil = addPencilListener((action) => shell.current?.pencil(action));
     // App Shortcuts and Siri ("Voice memo", "Start focus") hand a link over.
@@ -162,7 +160,8 @@ function Root() {
     };
   }, [appLink, open, share]);
 
-  useEffect(() => setQuickActions(signedIn), [signedIn]);
+  // Android: app shortcuts with the recently opened pages (android/shortcuts.ts).
+  useEffect(() => (Platform.OS === "android" ? void syncShortcuts(signedIn) : setQuickActions(signedIn)), [signedIn]);
   useEffect(() => void scheduleBackgroundRefresh(signedIn), [signedIn]);
 
   // Back in the foreground: fresh widgets and badge; the app lock asks again
@@ -170,7 +169,11 @@ function Root() {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       setAppState(state);
-      if (state === "background") backgroundSince.current = Date.now();
+      if (state === "background") {
+        backgroundSince.current = Date.now();
+        // The pages just opened, for the next long press on the icon.
+        void syncShortcuts(!!store.deviceToken());
+      }
       if (state === "active") {
         if (store.appLock() && backgroundSince.current && Date.now() - backgroundSince.current > LOCK_AFTER_MS) setLocked(true);
         backgroundSince.current = 0;
@@ -426,6 +429,7 @@ function Root() {
         />
       ) : null}
       {server ? <Capture request={locked ? null : capture} onClose={() => setCapture(null)} onOpen={open} /> : null}
+      {server ? <ShareCapture request={locked ? null : shareRequest} onClose={() => setShareRequest(null)} onOpen={open} /> : null}
       {locked ? <Lock onUnlocked={() => setLocked(false)} /> : null}
       {covered ? <Cover /> : null}
     </>
