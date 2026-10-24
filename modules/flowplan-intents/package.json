@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-intents",
+  "version": "1.0.0",
+  "description": "Siri, Shortcuts and Focus filters of the Flowplan app: what the App Intents share with the app",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}

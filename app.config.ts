@@ -13,11 +13,13 @@ const nativeStrings = require("./plugins/widget-suite/strings") as {
   localizable: (table: Record<string, { de: string; fr: string }>, lang: string) => Record<string, string>;
   galleryStrings: (lang: string) => Record<string, string>;
 };
+// Siri, Shortcuts, Focus filter and the controls of plugins/intents.
+const intentStrings = require("./plugins/intents/strings") as { localizable: (lang: string) => Record<string, string> };
 const locale = (lang: "de" | "en" | "fr") => {
   const json = JSON.parse(readFileSync(`./locales/${lang}.json`, "utf8")) as { ios: Record<string, string>; android: Record<string, string> };
   return {
     ...json,
-    ios: { ...json.ios, "Localizable.strings": nativeStrings.localizable(nativeStrings.strings, lang) },
+    ios: { ...json.ios, "Localizable.strings": { ...nativeStrings.localizable(nativeStrings.strings, lang), ...intentStrings.localizable(lang) } },
     // The widget gallery (labels and descriptions) in the person's language.
     android: { ...json.android, ...nativeStrings.galleryStrings(lang) },
   };
@@ -198,6 +200,10 @@ const config: ExpoConfig = {
     // iOS: the configurable widgets, controls and App Shortcuts in Swift,
     // added to expo-widgets' extension and the app. Before expo-widgets:
     // mods run last-added first (plugins/with-widget-suite.js).
+    // iOS: Siri and Shortcuts, the Focus filter and two more controls, on
+    // top of the suite (plugins/with-intents.js) – listed before it, so it
+    // runs after it.
+    WIDGETS && "./plugins/with-intents",
     WIDGETS && "./plugins/with-widget-suite",
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).

@@ -40,6 +40,8 @@ import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
 import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
+import { addFocusFilterListener } from "../modules/flowplan-intents/src";
+import { sendFocusRule, syncIntentProfiles, takeFocusStep } from "./native/intents";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -358,6 +360,28 @@ function Root() {
     void refreshSuite({ force: true });
     if (!next.active) setSetup(true);
   };
+
+  // Focus filters (iOS, native/intents.ts): the Focus's profile and
+  // workspace when it starts or changes, the profile before when it ends.
+  const followFocus = useRef(() => {});
+  followFocus.current = () => {
+    const step = takeFocusStep(store.profiles());
+    if (step?.switchTo) {
+      switchTo(step.switchTo);
+      if (step.path) pendingPath.current = step.path;
+    } else if (step?.path) open(step.path);
+    void sendFocusRule(connection(), store.profiles().active);
+  };
+  useEffect(() => syncIntentProfiles(profiles), [profiles]);
+  useEffect(() => {
+    followFocus.current();
+    const focus = addFocusFilterListener(() => followFocus.current());
+    const foreground = AppState.addEventListener("change", (state) => state === "active" && followFocus.current());
+    return () => {
+      focus.remove();
+      foreground.remove();
+    };
+  }, []);
 
   return (
     <>

@@ -198,6 +198,32 @@ struct FlowplanShortcuts: AppShortcutsProvider {
       shortTitle: "Start focus",
       systemImageName: "scope"
     )
+    // plugins/intents (its phrases: plugins/intents/strings.js). An app has
+    // at most 10 App Shortcuts – this is the tenth.
+    AppShortcut(
+      intent: FPAddTaskIntent(),
+      phrases: ["Add a task to \(.applicationName)", "New \(.applicationName) task"],
+      shortTitle: "Add a task",
+      systemImageName: "checklist"
+    )
+    AppShortcut(
+      intent: FPDueTodayIntent(),
+      phrases: ["What's due today in \(.applicationName)", "My \(.applicationName) tasks for today"],
+      shortTitle: "What's due today?",
+      systemImageName: "checkmark.circle"
+    )
+    AppShortcut(
+      intent: FPOpenPageIntent(),
+      phrases: ["Open a page in \(.applicationName)"],
+      shortTitle: "Open a page",
+      systemImageName: "doc.text"
+    )
+    AppShortcut(
+      intent: FPSearchIntent(),
+      phrases: ["Search \(.applicationName)", "Search in \(.applicationName)"],
+      shortTitle: "Search Flowplan",
+      systemImageName: "magnifyingglass"
+    )
   }
 }
 
