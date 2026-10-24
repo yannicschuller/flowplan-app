@@ -3,11 +3,12 @@
 //
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
-//   tap or the app settings (lib/native-app.ts in Flowplan); on iPhone and
+//   tap or the app settings, lists its keyboard shortcuts and – on an iPad
+//   with several windows – opens a page in a new window; on iPhone and
 //   iPad it opens the document scanner for the page (screens/Scan.tsx),
 //   opens an address of the instance in the browser (a configuration
-//   profile installs only from Safari) and has the app record a voice note (src/voice-bridge.ts; lib/native-app.ts in
-//   Flowplan);
+//   profile installs only from Safari) and has the app record a voice
+//   note (src/voice-bridge.ts; lib/native-app.ts in Flowplan);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -29,7 +30,11 @@ export type PageMessage =
   // the app (capture.ts pageScanRequest).
   | { type: "scanDocument"; pageId: string; rowId?: string }
   | { type: "openInBrowser"; url: string }
-  | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean };
+  | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean }
+  // The page's keyboard shortcuts for the key commands (ipad.ts checks the
+  // list), and a page of the instance for a new window (iPad).
+  | { type: "shortcuts"; list: unknown }
+  | { type: "openWindow"; url: string };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -40,7 +45,7 @@ export function parsePageMessage(data: string): PageMessage | null {
   }
 }
 
-export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean }) {
+export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean; windows?: boolean }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
@@ -61,6 +66,9 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     }
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
+    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
+      options.windows ? `\n    openWindow: (url) => post({ type: "openWindow", url: String(url) }),` : ""
+    }
   });
   // Vibrations of the page become haptic taps.
   try {

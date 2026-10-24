@@ -33,6 +33,7 @@ import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../
 import { originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
 import { BACKGROUND, usePalette } from "../ui";
+import { useWindowFeatures } from "../window-features";
 import { Offline } from "./Offline";
 
 export type ShellHandle = {
@@ -104,6 +105,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const onServer = () => originOf(pageUrl.current) === server;
 
   const run = useCallback((script: string) => web.current?.injectJavaScript(script), []);
+  // iPad: key commands, Handoff and further windows (window-features.ts).
+  const features = useWindowFeatures({ run, server, active });
 
   const navigate = useCallback(
     (path: string) => {
@@ -239,15 +242,19 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   }, []);
 
   // iOS: the swipe from the left edge (modules/flowplan-native) instead of
-  // the web view's own, which walks its history.
+  // the web view's own, which walks its history – in the main window (it is
+  // on the window that has it, windows.ts).
   useEffect(() => {
+    if (!features.main) return;
     const subscription = addEdgeSwipeListener(() => void goBackRef.current());
     return () => {
       subscription.remove();
       setEdgeSwipe(false);
     };
-  }, []);
-  useEffect(() => setEdgeSwipe(active && backable && !offline), [active, backable, offline]);
+  }, [features.main]);
+  useEffect(() => {
+    if (features.main) setEdgeSwipe(active && backable && !offline);
+  }, [features.main, active, backable, offline]);
 
   // Android draws edge to edge: the page makes room for the keyboard itself.
   useEffect(() => {
@@ -288,7 +295,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       pageCanGoBack.current = message.canGoBack;
       updateBackable();
     } else if (message.type === "back") handleBackAnswer(message.handled);
-    else onMessage(message);
+    else if (message.type === "shortcuts") features.shortcuts(message.list);
+    else if (message.type === "openWindow") {
+      if (!features.openWindow(message.url)) route(message.url, true, true);
+    } else onMessage(message);
   };
 
   // Where a navigation goes (navigation.ts); true lets the web view load it.
@@ -331,6 +341,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
 
   const onNavigationStateChange = (state: WebViewNavigation) => {
     canGoBack.current = state.canGoBack;
+    features.page(state.url, state.title);
     if (state.url !== pageUrl.current) {
       pageUrl.current = state.url;
       bottomSettled.current = false;
@@ -364,13 +375,17 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           // The instance shows the app's sign-in (passkeys and SSO through the
           // system) when it sees this.
           applicationNameForUserAgent={`FlowplanMobile/${version}`}
-          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable() })}
+          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable(), windows: features.windows })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}
           onShouldStartLoadWithRequest={(request) => route(request.url, request.isTopFrame !== false)}
-          // Links with target=_blank.
-          onOpenWindow={(event) => void route(event.nativeEvent.targetUrl, true, true)}
+          // Links with target=_blank; on the iPad those to the instance in a
+          // window of their own.
+          onOpenWindow={(event) => {
+            const url = event.nativeEvent.targetUrl;
+            if (!features.openWindow(url)) void route(url, true, true);
+          }}
           setSupportMultipleWindows
           onNavigationStateChange={onNavigationStateChange}
           onLoadStart={(event) => {
