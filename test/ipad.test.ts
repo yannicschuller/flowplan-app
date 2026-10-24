@@ -19,6 +19,7 @@ test("the page's shortcuts become key commands: only with ⌘, ⌃ or ⌥, known
     { action: "shortcuts", title: "Keyboard shortcuts", input: "/", modifiers: ["command"], hidden: true },
     { action: "present", title: "Present", input: "f5", modifiers: ["shift", "control"] },
     { action: "moveUp", title: "Up", input: "up", modifiers: ["command", "shift"] },
+    { action: "send", title: "Send", input: "\r", modifiers: ["command"] },
     // Typing keys stay typing keys.
     { action: "shortcuts", title: "Overview", input: "?", modifiers: [] },
     { action: "sidebar", title: "Sidebar", input: "b", modifiers: ["shift"] },
@@ -37,6 +38,7 @@ test("the page's shortcuts become key commands: only with ⌘, ⌃ or ⌥, known
     { action: "shortcuts", title: "Keyboard shortcuts", input: "/", modifiers: ["command"], hidden: true },
     { action: "present", title: "Present", input: "f5", modifiers: ["control", "shift"] },
     { action: "moveUp", title: "Up", input: "up", modifiers: ["command", "shift"] },
+    { action: "send", title: "Send", input: "\r", modifiers: ["command"] },
   ]);
   assert.deepEqual(keyCommandsFrom("search"), []);
   assert.equal(keyCommandsFrom(Array.from({ length: 60 }, (_, i) => ({ action: `a${i}`, title: "x", input: String.fromCharCode(97 + (i % 26)), modifiers: i < 26 ? ["command"] : i < 52 ? ["alternate"] : ["control"] }))).length, 40);

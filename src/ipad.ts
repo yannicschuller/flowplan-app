@@ -31,7 +31,7 @@ export function keyCommandsFrom(raw: unknown): KeyCommand[] {
     const { action, title, input, modifiers, hidden } = entry as Record<string, unknown>;
     if (typeof action !== "string" || !/^[a-zA-Z][a-zA-Z0-9]{0,39}$/.test(action)) continue;
     if (typeof title !== "string" || !title.trim()) continue;
-    if (typeof input !== "string" || !(input.length === 1 ? input.trim() || input === " " : NAMED_INPUTS.has(input))) continue;
+    if (typeof input !== "string" || !(input.length === 1 || NAMED_INPUTS.has(input))) continue;
     if (!Array.isArray(modifiers) || !modifiers.every((m) => typeof m === "string" && MODIFIERS.has(m))) continue;
     const mods = [...new Set(modifiers as KeyCommand["modifiers"])].sort();
     if (!mods.some((m) => m !== "shift")) continue;
