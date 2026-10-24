@@ -53,7 +53,10 @@ test("widgets get finished texts and links into the app", () => {
   assert.equal(tasks.items[2].url, "flowplan://open?path=%2F%23page%3Dc%26row%3Dd");
   assert.equal(tasks.unreadLabel, "3 unread");
   assert.equal(tasks.timer?.title, "Write offer");
+  // The overview, not "Tasks": that is the widget that checks off.
+  assert.deepEqual((["de", "en", "fr"] as const).map((lang) => tasksWidget(summary, lang).title), ["Übersicht", "Overview", "Aperçu"]);
   const signedOut = tasksWidget(null, "de");
+  assert.equal(signedOut.title, "Übersicht");
   assert.equal(signedOut.signedIn, false);
   assert.equal(signedOut.headline, "Flowplan öffnen und anmelden");
   assert.equal(inboxWidget(summary, "de").label, "3 ungelesen");

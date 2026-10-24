@@ -69,6 +69,18 @@ test("every widget has a gallery name and description in three languages", () =>
   }
 });
 
+test("the overview is not called a tasks widget and points to the one that checks off", () => {
+  ["de", "en", "fr"].forEach((lang, i) => {
+    const ios = localizable(strings, lang);
+    const overview = ios[gallery.FlowplanTasks.label[1]];
+    const tasks = ios[gallery.FlowplanTaskList.label[1]];
+    assert.equal(overview, ["Übersicht", "Overview", "Aperçu"][i]);
+    assert.equal(tasks, ["Aufgaben", "Tasks", "Tâches"][i]);
+    assert.equal(tasks, gallery.FlowplanTaskList.label[i]);
+    assert.ok(gallery.FlowplanTasks.description[i].includes(tasks), `${lang}: the overview's description names "${tasks}"`);
+  });
+});
+
 test("the app config wires the suite: Android settings screens, iOS plugin before expo-widgets", () => {
   const plugins = (config.plugins ?? []).map((p) => (Array.isArray(p) ? p[0] : p));
   const suite = plugins.indexOf("./plugins/with-widget-suite");

@@ -81,7 +81,7 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
   if (!summary)
     return {
       signedIn: false,
-      title: t("widgetTasks", {}, locale),
+      title: t("widgetOverview", {}, locale),
       headline: t("widgetSignIn", {}, locale),
       detail: "",
       empty: "",
@@ -95,7 +95,7 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
   const { tasks } = summary;
   return {
     signedIn: true,
-    title: t("widgetTasks", {}, locale),
+    title: t("widgetOverview", {}, locale),
     headline: tasksHeadline(tasks, locale),
     detail: tasks.overdue ? t("widgetOverdue", { count: tasks.overdue }, locale) : "",
     empty: t("widgetNoTasks", {}, locale),

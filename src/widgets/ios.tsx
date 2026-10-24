@@ -41,8 +41,9 @@ export type TasksConfig = { show?: string; timer?: boolean };
 export type InstanceConfig = { show?: string };
 export type LiveConfig = { metric?: string };
 export type StorageConfig = { metric?: string };
-
-// Tasks due – and, if chosen, the inbox and the running timer.
+// The overview ("Übersicht"; kind FlowplanTasks so placed widgets stay): tasks
+// due – and, if chosen, the inbox and the running timer. Checking off is the
+// suite's "Tasks" widget (plugins/widget-suite/ios).
 function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<TasksConfig>) {
   "widget";
   const family = environment.widgetFamily || "systemMedium";
@@ -57,7 +58,7 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
   if (!props || !props.title)
     return (
       <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
-        <Image systemName="checklist" modifiers={[foregroundStyle(brand), font({ size: 15, weight: "semibold" })]} />
+        <Image systemName="rectangle.grid.1x2" modifiers={[foregroundStyle(brand), font({ size: 15, weight: "semibold" })]} />
         <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
       </VStack>
     );
@@ -79,7 +80,7 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
     return (
       <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
         <HStack spacing={5}>
-          <Image systemName="checklist" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
+          <Image systemName="rectangle.grid.1x2" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
           <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(brand)]}>{props.title}</Text>
         </HStack>
         <Spacer />
@@ -87,15 +88,27 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
         <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(secondary), lineLimit(3)]}>{props.headline}</Text>
       </VStack>
     );
-  // Each row starts with a dot, not a circle: the rows open the app, they do
-  // not check off (the suite's "Tasks" widget does).
+  // Each row starts with a dot, not a circle: the rows open their task's
+  // page, they do not check off (the suite's "Tasks" widget does). Links per
+  // row from medium up; a small widget opens only its one link.
   const rows = family === "systemExtraLarge" ? 8 : family === "systemLarge" ? 7 : family === "systemMedium" ? 3 : 2;
   const items = props.items.slice(0, rows);
   const small = family === "systemSmall";
+  // Explicit colours: a link would tint its text otherwise.
+  const row = (item: TasksWidgetProps["items"][number], index: number) => (
+    <HStack key={index} spacing={6}>
+      <Image systemName="circle.fill" modifiers={[font({ size: 5 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]} />
+      <Text modifiers={[font({ size: 13 }), foregroundStyle({ type: "hierarchical", style: "primary" }), lineLimit(1)]}>{item.text}</Text>
+      <Spacer />
+      {item.due && !small ? (
+        <Text modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle(item.late ? late : secondary), lineLimit(1)]}>{item.due}</Text>
+      ) : null}
+    </HStack>
+  );
   return (
     <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
       <HStack spacing={5}>
-        <Image systemName="checklist" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
+        <Image systemName="rectangle.grid.1x2" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
         <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(brand), lineLimit(1)]}>{props.title}</Text>
         <Spacer />
         {inbox && !small ? (
@@ -108,16 +121,15 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
       <Text modifiers={[font({ size: small ? 22 : 18, weight: "bold", design: "rounded" }), lineLimit(1), minimumScaleFactor(0.7)]}>{props.headline}</Text>
       {props.detail ? <Text modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle(late), lineLimit(1)]}>{props.detail}</Text> : null}
       {!items.length ? <Text modifiers={[font({ size: 13 }), foregroundStyle(secondary)]}>{props.empty}</Text> : null}
-      {items.map((item, index) => (
-        <HStack key={index} spacing={6}>
-          <Image systemName="circle.fill" modifiers={[font({ size: 5 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]} />
-          <Text modifiers={[font({ size: 13 }), lineLimit(1)]}>{item.text}</Text>
-          <Spacer />
-          {item.due && !small ? (
-            <Text modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle(item.late ? late : secondary), lineLimit(1)]}>{item.due}</Text>
-          ) : null}
-        </HStack>
-      ))}
+      {items.map((item, index) =>
+        !small && item.url ? (
+          <Link key={index} destination={item.url}>
+            {row(item, index)}
+          </Link>
+        ) : (
+          row(item, index)
+        ),
+      )}
       <Spacer />
       {timer && props.timer && !small ? (
         <HStack spacing={6}>

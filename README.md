@@ -63,7 +63,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 
 ### iPad, tablets and Apple Pencil
 
-- **Layout:** one app for iPhone and iPad (and Android phones and tablets), all orientations, resizable windows (Split View, Slide Over, Stage Manager, Android multi-window). On iPad the web view gets the desktop-class page, which Flowplan lays out for touch (`pointer: coarse`); the app's own screens stay a comfortable width. Keyboard shortcuts (⌘K, ⌘N …) and the trackpad pointer work as in Safari. The *Flowplan* widget also comes in the iPad's extra-large size.
+- **Layout:** one app for iPhone and iPad (and Android phones and tablets), all orientations, resizable windows (Split View, Slide Over, Stage Manager, Android multi-window). On iPad the web view gets the desktop-class page, which Flowplan lays out for touch (`pointer: coarse`); the app's own screens stay a comfortable width. Keyboard shortcuts (⌘K, ⌘N …) and the trackpad pointer work as in Safari. The *Overview* widget also comes in the iPad's extra-large size.
 - **Drawing** on whiteboards and in the image markup (Flowplan's `lib/stylus.ts`): the pen's pressure sets the line width, fast strokes keep every measured point, a hovering Pencil (iPad Pro, iPad Air M2 and newer) shows where the stroke starts. Once the Pencil has drawn, fingers move and zoom the board instead of drawing, so a resting hand leaves no marks (*Draw with the pen only* in the pen menu). The eraser end of styluses that have one erases.
 - **Double-tap and squeeze** (Apple Pencil 2nd generation, Pro): the app listens with `UIPencilInteraction` and passes the gesture with the action chosen in the iPad's settings (Settings → Apple Pencil) to the page: switch to the eraser and back, the previous tool, or the pen with its colours.
 - **Scribble:** handwriting with the Pencil works in every text field of the app and the page.
@@ -113,7 +113,7 @@ Set up once:
 | **Time this week** | the timer "Start" starts (the most recent one) | ▶ / ■ (`timer.start`, `timer.stop`) |
 | **Mentions** | mentions and new tasks / mentions / new tasks; unread only | mark one read, mark all read |
 | **Form responses** | form (asked for) | – |
-| **Flowplan** | tasks and inbox / tasks only; running timer on/off | – |
+| **Overview** (was "Flowplan"; kind `FlowplanTasks`) | tasks and inbox / tasks only; running timer on/off | – (a row opens its task's page; checking off: **Tasks**) |
 | **Flowplan Inbox** | – | – |
 | **Flowplan Instance / Live / Storage** (administrators) | Instance: state, last backup or version; Live: active now, requests/min, error rate or sign-ins; Storage: disk, database and files, fullest quota | – |
 

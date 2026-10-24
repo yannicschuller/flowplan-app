@@ -73,6 +73,9 @@ const de = {
   channelTimerText: "Die laufende Zeiterfassung",
   // Widgets and Live Activity
   widgetTasks: "Aufgaben",
+  // The overview widget (FlowplanTasks): not "Aufgaben" – that is the
+  // suite's widget that checks off.
+  widgetOverview: "Übersicht",
   widgetDue: "{count} fällig",
   widgetOverdue: "{count} überfällig",
   widgetNothingDue: "Nichts fällig",
@@ -321,6 +324,7 @@ const en: Record<Key, string> = {
   channelTimer: "Time tracking",
   channelTimerText: "The running timer",
   widgetTasks: "Tasks",
+  widgetOverview: "Overview",
   widgetDue: "{count} due",
   widgetOverdue: "{count} overdue",
   widgetNothingDue: "Nothing due",
@@ -567,6 +571,7 @@ const fr: Record<Key, string> = {
   channelTimer: "Suivi du temps",
   channelTimerText: "Le chronomètre en cours",
   widgetTasks: "Tâches",
+  widgetOverview: "Aperçu",
   widgetDue: "{count} à faire",
   widgetOverdue: "{count} en retard",
   widgetNothingDue: "Rien à faire",
