@@ -25,10 +25,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # No Actions cache: the own Mac keeps ~/.npm (and ~/.gradle) itself, and
+      # restoring the multi-GB cache from GitHub took longer than the build.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
       - run: npm ci
       - name: Tests and TypeScript
         run: npm run check

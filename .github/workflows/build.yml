@@ -66,10 +66,11 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
+      # No Actions cache: the own Mac keeps ~/.npm (and ~/.gradle) itself, and
+      # restoring the multi-GB cache from GitHub took longer than the build.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
       - run: npm ci
       - name: Gems (fastlane, CocoaPods)
         run: |
@@ -151,12 +152,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-          cache: gradle
       - uses: android-actions/setup-android@v4
       - run: npm ci
       - name: Firebase configuration (push on Android)
