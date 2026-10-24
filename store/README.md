@@ -14,12 +14,12 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | Categories, copyright, age rating | `app-store/{primary,secondary}_category.txt`, `copyright.txt`, `app_rating_config.json` |
 | Notes and name for App Review | `app-store/review_information/` (demo account and contact: environment, see below) |
 | iPhone 6.9" (1320×2868), iPhone 6.5" (1284×2778), iPad 13" (2064×2752) | `app-store/screenshots/<locale>/NN-name-<device>.png` (8 each, see [Screenshots](#screenshots)) |
-| App preview video, 886×1920, 27 s, H.264 | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` (German and English) |
+| App preview video, 886×1920, about 23 s, 30 fps, H.264 with a silent AAC track | `app-store/preview/<locale>/flowplan-preview-iphone.mp4` (see [Preview video](#preview-video)) |
 | Play title, short and full description, release notes | `google-play/<locale>/*.txt`, `changelogs/<versionCode>.txt` |
 | Phone (1080×1920), 7" tablet (1200×1920), 10" tablet (1600×2560) | `google-play/<locale>/images/{phone,sevenInch,tenInch}Screenshots/N.png` |
 | Feature graphic 1024×500, icon 512×512 | `google-play/<locale>/images/featureGraphic.png`, `icon.png` |
 | App icon 1024×1024 (App Store, no transparency) and 512×512 (Play) | `icons/` |
-| Preview GIFs (README, website) | `preview/flowplan-{de,en}.gif` |
+| Preview GIFs (README, website) | `preview/flowplan-{de,en,fr}.gif` |
 
 All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too (below and the main README).
 
@@ -52,6 +52,17 @@ npm test                     # sizes, alpha, counts
 ```
 
 `npm run screenshots -- --locales fr --only iphone-69,ipad-13 --shots 02-widgets` redoes a part (then run `store:images` again). Captions are in `scripts/store-images.mjs` (`CAPTIONS`), the made-up content in `scripts/screenshots.mjs` (`seed`). Dates on the screens are relative to the day they are made. `CHROMIUM_PATH` (or `--chromium`) points Playwright to another Chromium. The PNGs are written with a 256-colour palette (sharp), about 150–250 KB each.
+
+## Preview video
+
+One App Store preview per language (`app-store/preview/<locale>/flowplan-preview-iphone.mp4`), in the style of the screenshots: for each scene a short card with the screenshot's headline, then the real screen in motion – start page, widgets (a task and a habit checked off, the timer running), projects board, the kick-off document, whiteboard, switching profiles – joined by cross-fades, ending on the app icon. 886×1920 (the size for 6.9″ and 6.5″ iPhones), 30 fps, H.264 with a silent AAC track, about 23 s (Apple: 15–30 s), about 3 MB.
+
+```sh
+npm run preview                                  # all languages; needs ffmpeg and ../flowplan
+npm run preview -- --locales fr --stills /tmp/review   # one language, a few frames to look at
+```
+
+It also writes `preview/flowplan-<de|en|fr>.gif`. fastlane does not upload videos: in App Store Connect, open the version, choose the language and drag the file into *App Previews* for the 6.9″ iPhone (it is used for 6.5″ too). The same file can go to YouTube for Google Play's promo video (`google-play/<locale>/video.txt`).
 
 ## One-click setup
 
@@ -135,7 +146,7 @@ Actions → **iOS setup** → Run workflow, from `main`, with the default inputs
    - *Messaging and Chat*;
    - *User-Generated Content*. Flowplan has comments, shared pages and public share links, so the honest answer is probably *Yes*.
 6. **Pricing and Availability:** price **Free** (USD 0.00), all countries or regions.
-7. **App preview video** (`app-store/preview/`): fastlane does not upload videos.
+7. **App preview video** (`app-store/preview/<locale>/`, German, English, French): fastlane does not upload videos; drag each into App Previews of its language.
 8. **Submit:** choose the build on the version page and press *Add for Review* → *Submit*, or run iOS setup with *submit* on.
 
 ## App Review: demo account and contact
@@ -260,7 +271,7 @@ Apple and Google, however, count the data that the developer's own service recei
 4. **App Store Connect:**
    - choose the build;
    - fill App Privacy (above) and the age rating;
-   - upload the preview video by hand (App Previews; fastlane does not upload videos);
+   - upload the preview video by hand for each language (App Previews; fastlane does not upload videos, see [Preview video](#preview-video));
    - set pricing *Free* and availability;
    - **Submit for Review**.
 5. **Play Console:**

@@ -8,7 +8,7 @@
 
 [Flowplan](https://github.com/yannicschuller/flowplan) · [Flowplan Desktop](https://github.com/yannicschuller/flowplan-desktop) · [Documentation](https://docs.flowplan.org/offline-and-apps)
 
-<img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, roadmap board, a document, a whiteboard and the journal">
+<img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, widgets, projects board, a document, a whiteboard and profiles">
 
 </div>
 
@@ -245,7 +245,7 @@ The screenshots and the video are made from the real Flowplan UI with Playwright
 ```sh
 npm run screenshots                    # all languages; starts a Flowplan dev server from ../flowplan
 npm run store:images                   # device frames and captions, PNG for both stores
-npm run preview -- --locale de         # App Store preview video and GIF; see the script
+npm run preview                        # App Store preview videos and GIFs, all languages; needs ffmpeg
 ```
 
 ## Why Expo
