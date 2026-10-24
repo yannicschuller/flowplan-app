@@ -409,6 +409,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           javaScriptEnabled
           // Back is the app's (back.ts), not a walk through the history.
           allowsBackForwardNavigationGestures={false}
+          // The page scrolls inside its own panes; the document itself must
+          // not bounce, or a swipe on the tab bar slides the whole layout.
+          bounces={false}
           allowsInlineMediaPlayback
           allowsLinkPreview={false}
           mediaPlaybackRequiresUserAction
