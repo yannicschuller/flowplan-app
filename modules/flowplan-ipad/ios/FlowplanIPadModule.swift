@@ -231,11 +231,11 @@ enum FlowplanKeyCommands {
     case "delete": return UIKeyCommand.inputDelete
     default: break
     }
-    // F1–F11: UIKit has no constant for F12 (the system keeps it).
+    // UIKit's F-key inputs (UIKeyInputF1 …) are UIKeyCommand.f1 … f12 in Swift.
     let functionKeys = [
-      UIKeyCommand.inputF1, UIKeyCommand.inputF2, UIKeyCommand.inputF3, UIKeyCommand.inputF4,
-      UIKeyCommand.inputF5, UIKeyCommand.inputF6, UIKeyCommand.inputF7, UIKeyCommand.inputF8,
-      UIKeyCommand.inputF9, UIKeyCommand.inputF10, UIKeyCommand.inputF11,
+      UIKeyCommand.f1, UIKeyCommand.f2, UIKeyCommand.f3, UIKeyCommand.f4,
+      UIKeyCommand.f5, UIKeyCommand.f6, UIKeyCommand.f7, UIKeyCommand.f8,
+      UIKeyCommand.f9, UIKeyCommand.f10, UIKeyCommand.f11, UIKeyCommand.f12,
     ]
     if raw.count > 1, raw.hasPrefix("f"), let number = Int(raw.dropFirst()), number >= 1, number <= functionKeys.count {
       return functionKeys[number - 1]
