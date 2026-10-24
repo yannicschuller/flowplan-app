@@ -15,6 +15,7 @@ import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary,
 import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
 import type * as IosWidgets from "../widgets/ios";
 import { refreshSuite } from "./suite";
+import { syncSpotlight } from "./spotlight";
 
 // expo-widgets only on iOS: Android draws its widgets with
 // react-native-android-widget, the timer as notification.
@@ -116,6 +117,8 @@ export async function apply(summary: Summary | null, admin: AdminState = null) {
     // The configurable widgets: one batched request (Android) or a reload
     // of the extension (iOS); signed out they ask to sign in.
     refreshSuite(),
+    // iOS: pages and open tasks in Spotlight; signed out it is emptied.
+    syncSpotlight(summary),
   ]);
 }
 

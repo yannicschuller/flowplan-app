@@ -3,9 +3,9 @@
 # (self-hosted runner, README → Build machine), only by the repository owner.
 # Safe to run again – what exists is kept (fastlane ios setup):
 #
-#   1. App IDs app.flowplan.mobile (App Groups, Push Notifications) and
-#      app.flowplan.mobile.widgets (App Groups);
-#   2. Apple Distribution certificate and App Store profiles of both with
+#   1. App IDs app.flowplan.mobile (App Groups, Push Notifications),
+#      app.flowplan.mobile.widgets and app.flowplan.mobile.share (App Groups);
+#   2. Apple Distribution certificate and App Store profiles of all three with
 #      fastlane match, stored encrypted in the private repository
 #      yannicschuller/flowplan-certificates (builds then only read them);
 #   3. checks that the app exists in App Store Connect;

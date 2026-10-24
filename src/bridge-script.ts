@@ -3,7 +3,8 @@
 //
 // - window.FlowplanApp: the page tells the app about changes (widgets, badge,
 //   Live Activity), hands it files for the share sheet, asks for a haptic
-//   tap or the app settings (lib/native-app.ts in Flowplan);
+//   tap or the app settings (lib/native-app.ts in Flowplan); on iPhone and
+//   iPad it opens the document scanner for the page (screens/Scan.tsx);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -20,7 +21,10 @@ export type PageMessage =
   // Flowplan), and what the page did when asked (null: no answer, an
   // instance from before window.FlowplanNavigation).
   | { type: "backState"; canGoBack: boolean }
-  | { type: "back"; handled: boolean | null };
+  | { type: "back"; handled: boolean | null }
+  // "Scan document" in the page: its page (and record), checked again by
+  // the app (capture.ts pageScanRequest).
+  | { type: "scanDocument"; pageId: string; rowId?: string };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -31,7 +35,7 @@ export function parsePageMessage(data: string): PageMessage | null {
   }
 }
 
-export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string }) {
+export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
@@ -44,7 +48,12 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     saveFile: (name, base64, mime) => post({ type: "saveFile", name: String(name), base64: String(base64), mime: String(mime || "") }),
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
-    backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
+    backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),${
+      options.scanner
+        ? `
+    scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`
+        : ""
+    }
   });
   // Vibrations of the page become haptic taps.
   try {

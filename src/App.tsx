@@ -14,10 +14,12 @@ import * as Device from "expo-device";
 import * as ScreenCapture from "expo-screen-capture";
 import { addAppLinkListener, addPencilListener, consumePendingLink, getManagedServer } from "../modules/flowplan-native/src";
 import { addShareListener, takeShare, type SharedContent } from "../modules/flowplan-android/src";
+import { addOpenedLinkListener, consumeOpenedLink } from "../modules/flowplan-capture/src";
 import type { PageMessage } from "./bridge-script";
 import { deviceName } from "./device";
 import { pickLocale, setLocale } from "./i18n";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
+import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
 import { activeProfile, addProfile, removeProfile, renameProfile, switchProfile, type ProfileState } from "./profiles";
 import { store } from "./store";
 import { BACKGROUND } from "./ui";
@@ -29,6 +31,7 @@ import { Capture } from "./screens/Capture";
 import { ShareCapture, type ShareRequest } from "./screens/ShareCapture";
 import { shareDraft, shareTargetPath } from "./android/share";
 import { shortcutLinkOpened, syncShortcuts } from "./android/shortcuts";
+import { Scan } from "./screens/Scan";
 import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, expoPushToken, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
@@ -67,6 +70,8 @@ function Root() {
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
   // Android: shared from another app, or quick capture (tile, shortcut).
   const [shareRequest, setShareRequest] = useState<ShareRequest | null>(null);
+  // The document scanner (the page's "Scan document", flowplan://scan).
+  const [scan, setScan] = useState<ScanRequest | null>(null);
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
   const pendingPath = useRef<string | null>(null);
@@ -112,6 +117,8 @@ function Root() {
       // a meeting's note – each checked before anything happens.
       const request = captureRequest(link);
       if (request) return setCapture(request);
+      const scanning = scanRequest(link);
+      if (scanning) return setScan(scanning);
       const step = doLink(link);
       if (step) return void runAppAction(step.action, step.minutes);
       const meeting = meetingLink(link);
@@ -146,9 +153,14 @@ function Root() {
     const pending = consumePendingLink();
     if (pending) appLink(pending);
     const intentLinks = addAppLinkListener(appLink);
+    // A result tapped in Spotlight (iOS).
+    const found = consumeOpenedLink();
+    if (found) appLink(found);
+    const spotlight = addOpenedLinkListener(appLink);
     // "End" and "Stop" in the Live Activities.
     const activityButtons = listenToActivityButtons();
     return () => {
+      spotlight.remove();
       intentLinks.remove();
       activityButtons.remove();
       pencil.remove();
@@ -284,6 +296,11 @@ function Root() {
         case "openSettings":
           setSettings(true);
           return;
+        case "scanDocument": {
+          const request = pageScanRequest(message);
+          if (request) setScan(request);
+          return;
+        }
       }
     },
     [server, register, signedOut],
@@ -430,6 +447,7 @@ function Root() {
       ) : null}
       {server ? <Capture request={locked ? null : capture} onClose={() => setCapture(null)} onOpen={open} /> : null}
       {server ? <ShareCapture request={locked ? null : shareRequest} onClose={() => setShareRequest(null)} onOpen={open} /> : null}
+      {server ? <Scan request={locked ? null : scan} onClose={() => setScan(null)} onOpen={open} /> : null}
       {locked ? <Lock onUnlocked={() => setLocked(false)} /> : null}
       {covered ? <Cover /> : null}
     </>
