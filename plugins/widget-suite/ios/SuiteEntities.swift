@@ -82,14 +82,14 @@ enum FPCompositeID {
 @available(iOS 17.0, *)
 struct FPCaptureTarget: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Page"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPCaptureTargetQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPCaptureTargetQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPCaptureTarget] {
       await FPOptions.resolve(identifiers, FPOptions.pages("capture", "targets")).map(FPCaptureTarget.init)
     }
@@ -102,14 +102,14 @@ struct FPCaptureTarget: AppEntity {
 @available(iOS 17.0, *)
 struct FPTaskDatabase: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Database"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPTaskDatabaseQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPTaskDatabaseQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPTaskDatabase] {
       await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "databases")).map(FPTaskDatabase.init)
     }
@@ -122,14 +122,14 @@ struct FPTaskDatabase: AppEntity {
 @available(iOS 17.0, *)
 struct FPTodoPage: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Page"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPTodoPageQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPTodoPageQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPTodoPage] {
       await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "pages")).map(FPTodoPage.init)
     }
@@ -142,14 +142,14 @@ struct FPTodoPage: AppEntity {
 @available(iOS 17.0, *)
 struct FPPinnedPage: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Page"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPPinnedPageQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPPinnedPageQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPPinnedPage] {
       await FPOptions.resolve(identifiers, FPOptions.pages("pinned", "pages")).map(FPPinnedPage.init)
     }
@@ -162,14 +162,14 @@ struct FPPinnedPage: AppEntity {
 @available(iOS 17.0, *)
 struct FPCounterDatabase: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Database"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPCounterDatabaseQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPCounterDatabaseQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPCounterDatabase] {
       await FPOptions.resolve(identifiers, FPOptions.pages("counter", "databases")).map(FPCounterDatabase.init)
     }
@@ -182,14 +182,14 @@ struct FPCounterDatabase: AppEntity {
 @available(iOS 17.0, *)
 struct FPJournalPage: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Journal"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPJournalPageQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPJournalPageQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPJournalPage] {
       await FPOptions.resolve(identifiers, FPOptions.pages("journal", "journals")).map(FPJournalPage.init)
     }
@@ -202,13 +202,13 @@ struct FPJournalPage: AppEntity {
 @available(iOS 17.0, *)
 struct FPHabitDatabase: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Habits"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPHabitDatabaseQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
-  struct Query: EntityQuery {
+  struct FPHabitDatabaseQuery: EntityQuery {
     private func all() async -> [FPHabitDatabase] {
       guard let answer = await FPOptions.answer("journal") else { return [] }
       return answer["habits"].array.compactMap { item in
@@ -230,14 +230,14 @@ struct FPHabitDatabase: AppEntity {
 @available(iOS 17.0, *)
 struct FPFormPage: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Form"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPFormPageQuery()
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
-  struct Query: EntityQuery {
+  struct FPFormPageQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [FPFormPage] {
       await FPOptions.resolve(identifiers, FPOptions.pages("forms", "forms")).map(FPFormPage.init)
     }
@@ -252,7 +252,7 @@ struct FPFormPage: AppEntity {
 @available(iOS 17.0, *)
 struct FPViewEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "View"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPViewEntityQuery()
   // "<database id>|<view id>"
   var id: String
   var name: String
@@ -268,7 +268,7 @@ struct FPViewEntity: AppEntity {
     }
   }
 
-  struct Query: EntityQuery {
+  struct FPViewEntityQuery: EntityQuery {
     // The database chosen in the same widget's settings.
     @IntentParameterDependency<FPTasksConfiguration>(\.$database) var tasks
     @IntentParameterDependency<FPPinnedConfiguration>(\.$page) var pinned
@@ -297,7 +297,7 @@ struct FPViewEntity: AppEntity {
 @available(iOS 17.0, *)
 struct FPFieldEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Property"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPFieldEntityQuery()
   // "<database id>|<property id>"
   var id: String
   var name: String
@@ -315,7 +315,7 @@ struct FPFieldEntity: AppEntity {
     }
   }
 
-  struct Query: EntityQuery {
+  struct FPFieldEntityQuery: EntityQuery {
     @IntentParameterDependency<FPPinnedConfiguration>(\.$page) var pinned
     @IntentParameterDependency<FPCounterConfiguration>(\.$database) var counter
 
@@ -366,14 +366,14 @@ struct FPGroupValues: DynamicOptionsProvider {
 @available(iOS 17.0, *)
 struct FPCalendarEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Calendar"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPCalendarEntityQuery()
   // "<page id>|<view id>"
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
-  struct Query: EntityQuery {
+  struct FPCalendarEntityQuery: EntityQuery {
     private func all() async -> [FPCalendarEntity] {
       guard let answer = await FPOptions.answer("calendar") else { return [] }
       return answer["calendars"].array.compactMap { item in
@@ -397,14 +397,14 @@ struct FPCalendarEntity: AppEntity {
 @available(iOS 17.0, *)
 struct FPTimerEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Timer"
-  static var defaultQuery = Query()
+  static var defaultQuery = FPTimerEntityQuery()
   // "<page id>|<record id>|<property id>"
   var id: String
   var name: String
   var detail: String
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
-  struct Query: EntityQuery {
+  struct FPTimerEntityQuery: EntityQuery {
     private func all() async -> [FPTimerEntity] {
       guard let answer = await FPOptions.answer("time") else { return [] }
       return answer["recent"].array.compactMap { item in
