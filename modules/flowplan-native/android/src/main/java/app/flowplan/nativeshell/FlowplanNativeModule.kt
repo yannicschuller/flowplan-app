@@ -1,6 +1,5 @@
 package app.flowplan.nativeshell
 
-import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -20,34 +19,24 @@ import expo.modules.kotlin.records.Record
  * What the Flowplan app needs from Android beyond Expo's modules:
  *
  * - the address a managed installation suggests (EMM app restrictions, key "server");
- * - text and links shared from other apps ("Save to Flowplan"), for the instance's share target;
  * - the running timer of the time tracking as an ongoing notification with a running clock –
  *   Android's counterpart of the Live Activity, promoted to a Live Update on Android 16;
  * - the same for what else runs now: focus, the meeting now, imports and exports, a voice
  *   memo being recorded, an incident of the instance (src/native/activities.ts);
  * - "New note" as a Quick Settings tile (CaptureTileService).
+ *
+ * "Share" from other apps, the app shortcuts and "Quick capture" are modules/flowplan-android's.
  */
 class FlowplanNativeModule : Module() {
-  private var pendingShare: Map<String, String>? = null
-
   private val context: Context
     get() = appContext.reactContext ?: throw IllegalStateException("No context")
 
   override fun definition() = ModuleDefinition {
     Name("FlowplanNative")
 
-    Events("onShare")
-
     Function("getManagedServer") {
       val manager = context.getSystemService(Context.RESTRICTIONS_SERVICE) as? RestrictionsManager
       manager?.applicationRestrictions?.getString("server")?.trim()?.takeIf { it.isNotEmpty() }
-    }
-
-    // A share that opened the app, once.
-    Function("consumeSharedText") {
-      val share = pendingShare ?: appContext.currentActivity?.let { take(it, it.intent) }
-      pendingShare = null
-      share
     }
 
     Function("showTimer") { options: TimerOptions ->
@@ -65,24 +54,6 @@ class FlowplanNativeModule : Module() {
     Function("hideOngoing") { id: String ->
       NotificationManagerCompat.from(context).cancel(ongoingId(id))
     }
-
-    OnNewIntent { intent ->
-      val activity = appContext.currentActivity ?: return@OnNewIntent
-      take(activity, intent)?.let { share ->
-        pendingShare = share
-        sendEvent("onShare", share)
-      }
-    }
-  }
-
-  /** "Teilen" with text or a link; handled once, not again after a configuration change. */
-  private fun take(activity: Activity, intent: Intent?): Map<String, String>? {
-    if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return null
-    val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
-    val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-    activity.intent = Intent(Intent.ACTION_MAIN)
-    if (subject.isBlank() && text.isBlank()) return null
-    return mapOf("subject" to subject, "text" to text)
   }
 
   private fun showTimer(options: TimerOptions) {

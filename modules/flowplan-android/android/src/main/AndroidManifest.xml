@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- "Quick capture" in Quick Settings: the compact capture screen
+         (flowplan://quick-capture); "New note" is modules/flowplan-native's. -->
+    <service
+      android:name="app.flowplan.androidshell.QuickCaptureTileService"
+      android:exported="true"
+      android:icon="@drawable/flowplan_tile_capture"
+      android:label="@string/flowplan_tile_capture"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+      <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
+    </service>
+  </application>
+</manifest>

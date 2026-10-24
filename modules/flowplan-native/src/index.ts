@@ -3,7 +3,6 @@
 import { Platform } from "react-native";
 import { requireOptionalNativeModule, type EventSubscription } from "expo";
 
-export type SharedText = { subject: string; text: string };
 export type TimerOptions = {
   title: string;
   text: string;
@@ -65,12 +64,10 @@ type NativeModule = {
   donateShortcut?(name: string): void;
   showOngoing?(options: OngoingOptions): void;
   hideOngoing?(id: string): void;
-  consumeSharedText(): SharedText | null;
   showTimer(options: TimerOptions): void;
   hideTimer(): void;
   startPencil(): void;
   setEdgeSwipe?(enabled: boolean): void;
-  addListener(event: "onShare", listener: (share: SharedText) => void): EventSubscription;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
   addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
   addListener(event: "onAppLink", listener: (event: { url: string }) => void): EventSubscription;
@@ -85,14 +82,6 @@ export function getManagedServer(): string | null {
   } catch {
     return null;
   }
-}
-
-// Android: text or a link shared from another app.
-export function consumeSharedText(): SharedText | null {
-  return Platform.OS === "android" ? (native?.consumeSharedText() ?? null) : null;
-}
-export function addShareListener(listener: (share: SharedText) => void) {
-  return Platform.OS === "android" && native ? native.addListener("onShare", listener) : { remove() {} };
 }
 
 // Android: the running timer as an ongoing notification with a running clock.

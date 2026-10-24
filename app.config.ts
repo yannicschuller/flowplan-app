@@ -130,11 +130,24 @@ const config: ExpoConfig = {
       "android.permission.SYSTEM_ALERT_WINDOW",
     ],
     intentFilters: [
-      // "Teilen" from other apps: text and links go to the instance's share target.
+      // "Teilen" from other apps: text and links (the capture screen; before
+      // signing in the instance's share target).
       {
         action: "SEND",
         category: ["DEFAULT"],
         data: [{ mimeType: "text/plain" }],
+      },
+      // Photos and PDFs, one or several: the app's capture screen
+      // (src/screens/ShareCapture.tsx, modules/flowplan-android).
+      {
+        action: "SEND",
+        category: ["DEFAULT"],
+        data: [{ mimeType: "image/*" }, { mimeType: "application/pdf" }],
+      },
+      {
+        action: "SEND_MULTIPLE",
+        category: ["DEFAULT"],
+        data: [{ mimeType: "image/*" }, { mimeType: "application/pdf" }],
       },
     ],
     predictiveBackGestureEnabled: true,
@@ -340,6 +353,8 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/with-managed-config",
+    // Android: static app shortcuts, the share sheet's name for several files.
+    "./plugins/with-android-extras",
     "./plugins/with-android-signing",
   ].filter((plugin) => plugin !== false) as ExpoConfig["plugins"],
   extra: {
