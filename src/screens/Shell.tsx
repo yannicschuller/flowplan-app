@@ -16,6 +16,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
+import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
 import { afterAnswer, backAction } from "../back";
 import {
   backScript,
@@ -30,6 +31,7 @@ import {
   type PageMessage,
 } from "../bridge-script";
 import { t } from "../i18n";
+import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
 import { originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
@@ -68,6 +70,8 @@ type Props = {
 };
 
 const version = Application.nativeApplicationVersion || "1.0.0";
+// Checked once: Vision's text recognition does not come and go.
+const inkRecognition = inkRecognitionAvailable();
 const FADE = 14;
 
 function luminance(color: string) {
@@ -294,6 +298,29 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     });
   };
 
+  // Handwriting of the page's ink (ink-bridge.ts): one recognition per id,
+  // the answer as "flowplan:ink-recognized" – only to the instance's page.
+  const inkRuns = useRef(new InkRuns());
+  const handleInk = (message: Extract<PageMessage, { type: "recognizeInk" }>) => {
+    const id = inkId(message);
+    if (id === null) return;
+    const answer = (detail: InkDetail) => {
+      if (onServer()) run(inkScript(detail));
+    };
+    if (!inkRecognition) return answer(inkFailure(id, "unavailable"));
+    const request = inkRequest(message);
+    const ticket = request ? inkRuns.current.start(id) : null;
+    if (!request || ticket === null) return answer(inkFailure(id, "failed"));
+    void recognizeInk(request)
+      .then(
+        (result): InkDetail => ({ id, text: result.text, lines: result.lines }),
+        (error: unknown): InkDetail => inkFailure(id, error instanceof Error && error.message === "unavailable" ? "unavailable" : "failed"),
+      )
+      .then((detail) => {
+        if (inkRuns.current.finish(id, ticket)) answer(detail);
+      });
+  };
+
   const handleMessage = (event: WebViewMessageEvent) => {
     // Only the instance's pages talk to the app.
     if (originOf(event.nativeEvent.url) !== server) return;
@@ -306,6 +333,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       updateBackable();
     } else if (message.type === "back") handleBackAnswer(message.handled);
     else if (message.type === "shortcuts") features.shortcuts(message.list);
+    else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "openWindow") {
       if (!features.openWindow(message.url)) route(message.url, true, true);
     } else onMessage(message);
@@ -391,7 +419,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           // The instance shows the app's sign-in (passkeys and SSO through the
           // system) when it sees this.
           applicationNameForUserAgent={`FlowplanMobile/${version}`}
-          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable(), windows: features.windows })}
+          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable(), windows: features.windows, inkRecognition })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}

@@ -9,7 +9,10 @@
 //   iPad it opens the document scanner for the page (screens/Scan.tsx),
 //   opens an address of the instance in the browser (a configuration
 //   profile installs only from Safari) and has the app record a voice
-//   note (src/voice-bridge.ts; lib/native-app.ts in Flowplan);
+//   note (src/voice-bridge.ts; lib/native-app.ts in Flowplan); where the
+//   device can (iOS, Vision) it reads the handwriting of the page's ink
+//   (recognizeInk, src/ink-bridge.ts) and answers with the event
+//   "flowplan:ink-recognized";
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
@@ -35,18 +38,23 @@ export type PageMessage =
   // The page's keyboard shortcuts for the key commands (ipad.ts checks the
   // list), and a page of the instance for a new window (iPad, iPhone Duo).
   | { type: "shortcuts"; list: unknown }
-  | { type: "openWindow"; url: string };
+  | { type: "openWindow"; url: string }
+  // Handwriting to read (ink-bridge.ts inkRequest checks it again).
+  | { type: "recognizeInk"; id: string; width: number; height: number; strokes: unknown };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
     const message = JSON.parse(data) as PageMessage;
-    return message && typeof message.type === "string" ? message : null;
+    if (!message || typeof message !== "object" || typeof message.type !== "string") return null;
+    // Without an id there is no one to answer (ink-bridge.ts checks the rest).
+    if (message.type === "recognizeInk" && typeof (message as { id?: unknown }).id !== "string") return null;
+    return message;
   } catch {
     return null;
   }
 }
 
-export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean; windows?: boolean }) {
+export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean; windows?: boolean; inkRecognition?: boolean }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
@@ -62,6 +70,32 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
   addEventListener("flowplan:windows", (event) => { windowsOpen = event.detail === true; });
   const openWindow = (url) => post({ type: "openWindow", url: String(url) });`
       : ""
+  }${
+    options.inkRecognition
+      ? `
+  // Handwriting to read: { id, width, height, strokes: [{ points: [[x, y]] }] }
+  // in points, origin top left. Only finite points, at most 5000 strokes and
+  // 200000 points, two decimals; the answer is the event
+  // "flowplan:ink-recognized" with { id, text, lines } (or error).
+  const recognizeInk = (request) => {
+    const source = request && Array.isArray(request.strokes) ? request.strokes : [];
+    const strokes = [];
+    let count = 0;
+    for (const stroke of source) {
+      if (strokes.length >= 5000 || count >= 200000) break;
+      const points = [];
+      for (const point of (stroke && Array.isArray(stroke.points) ? stroke.points : [])) {
+        if (count >= 200000) break;
+        const x = point && point[0], y = point && point[1];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        points.push([Math.round(x * 100) / 100, Math.round(y * 100) / 100]);
+        count++;
+      }
+      if (points.length) strokes.push({ points });
+    }
+    post({ type: "recognizeInk", id: String((request && request.id) || "").slice(0, 200), width: request ? Number(request.width ?? NaN) : NaN, height: request ? Number(request.height ?? NaN) : NaN, strokes });
+  };`
+      : ""
   }
   window.FlowplanApp = Object.freeze({
     platform: ${JSON.stringify(options.platform)},
@@ -75,7 +109,7 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
         ? `
     scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`
         : ""
-    }
+    }${options.inkRecognition ? `\n    recognizeInk,` : ""}
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${

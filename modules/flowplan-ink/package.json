@@ -1,0 +1,10 @@
+{
+  "name": "flowplan-ink",
+  "version": "1.0.0",
+  "description": "Handwriting recognition for the ink of the Flowplan app (iOS, Vision)",
+  "private": true,
+  "main": "src/index.ts",
+  "license": "AGPL-3.0-only",
+  "author": "Flowplan",
+  "homepage": "https://flowplan.org"
+}
