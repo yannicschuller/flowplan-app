@@ -38,6 +38,8 @@ import {
   type RegistrationDeps,
 } from "../push-relay";
 import { activeProfile, type Profile } from "../profiles";
+import { liveActivityLabels } from "../activities";
+import { locale } from "../i18n";
 import { store } from "../store";
 import { expoPushToken, pushPermission } from "./notifications";
 
@@ -46,6 +48,17 @@ const extra = Constants.expoConfig?.extra as { pushRelay?: string; apsEnvironmen
 export const RELAY = relayOrigin(extra?.pushRelay) ?? DEFAULT_RELAY;
 
 export const http: Http = (url, init) => fetch(url, init) as unknown as Promise<HttpAnswer>;
+
+// The texts of the Live Activity views for the instance's pushes, in the
+// app's language and the phone's time zone.
+const zone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+export const liveLabels = () => liveActivityLabels(locale(), zone());
 
 export const sha256 = (value: string) => digestStringAsync(CryptoDigestAlgorithm.SHA256, value);
 
@@ -111,6 +124,7 @@ const deps: RegistrationDeps = {
   setLive: (id, records) => store.setLiveRecords(id, records),
   deleteKey: (id) => void deleteDeviceKey(id),
   isActive: (id) => store.profiles().active === id,
+  liveLabels,
 };
 
 // What the registration with the instance gets (lib/mobile-devices.ts in

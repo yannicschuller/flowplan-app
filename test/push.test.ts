@@ -51,7 +51,10 @@ import {
   type PushRecord,
   type RegistrationDeps,
 } from "../src/push-relay";
-import { buttonRequest, CATEGORIES } from "../src/notification-buttons";
+import { buttonRequest, CATEGORIES, categoryButtons } from "../src/notification-buttons";
+import { focusActivity, liveActivityLabels } from "../src/activities";
+import { timerProps } from "../src/summary";
+import { t } from "../src/i18n";
 import { PROFILE_KEYS } from "../src/profiles";
 import { deriveKey, fromBase64Url, openPayload, privateKeyOf, rawPublic, sealPayload, x25519 } from "./push-crypto";
 
@@ -453,7 +456,9 @@ test("records and Live Activity tokens are checked when read; at most 8 activity
 
 test("the instance's answer: another relay or origin makes the relay registration useless", () => {
   assert.equal(relayMismatch({ version: 1, url: RELAY, instance: INSTANCE }, RELAY, INSTANCE), false);
-  assert.equal(relayMismatch(null, RELAY, INSTANCE), false, "older instances say nothing");
+  assert.equal(relayMismatch(undefined, RELAY, INSTANCE), false, "older instances say nothing");
+  // The instance answers null: it does not push through the relay (push or the relay off there).
+  assert.equal(relayMismatch(null, RELAY, INSTANCE), true);
   assert.equal(relayMismatch({ version: 1, url: "https://relay.other.example", instance: INSTANCE }, RELAY, INSTANCE), true);
   assert.equal(relayMismatch({ version: 1, url: RELAY, instance: "https://www.flowplan.example.com" }, RELAY, INSTANCE), true);
 });
@@ -597,4 +602,100 @@ test("Live Activities ask for push tokens in store builds", () => {
   assert.match(activities, /watchLiveActivity\(kind, factory\.start\(props, props\.url\)\)/);
   assert.match(activities, /endLiveActivity\(kind\)/);
   assert.match(read("src/native/sync.ts"), /watchLiveActivity\("timer"/);
+});
+
+// ---- The contract with the instance (Flowplan tests/fixtures/push-contract.json) ----
+//
+// What a Flowplan instance really sends (written by its tests/push-relay.test.ts,
+// copied here): the app's own code must open and read all of it.
+const CONTRACT = join(__dirname, "fixtures", "push-contract.json");
+const contract = JSON.parse(readFileSync(CONTRACT, "utf8")) as {
+  instance: string;
+  devicePrivateKey: string;
+  devicePublicKey: string;
+  alert: { message: Record<string, unknown> & { payload: string; category: string }; plaintext: Record<string, unknown> & { sentAt: number; id: string } };
+  comment: { payload: string; sentAt: number };
+  liveActivity: Record<string, unknown> & { labels: unknown };
+};
+
+test("contract: the instance's alert opens with the app's code and works for taps and buttons", () => {
+  const device = fromBase64Url(contract.devicePrivateKey);
+  assert.equal(encodeBase64Url(rawPublic(privateKeyOf(device))), contract.devicePublicKey);
+  const text = openPayload(contract.alert.message.payload, device, protocolInfo(contract.instance));
+  assert.ok(text, "opens with the instance's origin as HKDF info and aad");
+  assert.equal(openPayload(contract.alert.message.payload, device, protocolInfo("https://other.example.org")), null);
+  const message = parsePlaintext(text!, contract.instance, contract.alert.plaintext.sentAt)!;
+  assert.ok(message, "a plaintext the app accepts (seconds, known category, link on the instance)");
+  assert.equal(message.id, contract.alert.plaintext.id);
+  assert.equal(message.category, "flowplan.read");
+  assert.ok(message.path?.startsWith("/"));
+  const data = notificationData(message, contract.instance);
+  assert.equal(data.notificationId, contract.alert.plaintext.id);
+  assert.equal(data.origin, contract.instance);
+  assert.equal(data.url, message.path);
+  // The envelope fits the app's limits.
+  assert.ok(parseEnvelope(contract.alert.message.payload));
+
+  // Buttons come only from the encrypted category (the Notification Service
+  // Extension / the Android service set it). The relay's own category
+  // (aps.category, outside the encryption) is never a registered one, so a
+  // placeholder the extension could not replace never shows buttons whose
+  // notification id is missing.
+  const registered = categoryButtons({ done: "", tomorrow: "", reply: "", send: "", placeholder: "", read: "" }).map((c) => c.identifier);
+  assert.deepEqual(registered.sort(), Object.values(CATEGORIES).sort());
+  assert.ok(registered.includes(message.category!));
+  for (const outer of ["task", "comment", "default"]) assert.ok(!registered.includes(outer), outer);
+  assert.ok(["task", "comment", "default"].includes(contract.alert.message.category));
+
+  const comment = parsePlaintext(openPayload(contract.comment.payload, device, protocolInfo(contract.instance))!, contract.instance, contract.comment.sentAt)!;
+  assert.equal(comment.category, CATEGORIES.comment);
+  assert.equal(comment.path, "/#page=00000000-0000-4000-8000-000000000001");
+});
+
+test("contract: the instance's Live Activity states are exactly the props the app's views take", () => {
+  const live = contract.liveActivity as Record<string, { name: string; props: string }> & { labels: unknown };
+  // The labels the instance used are what the app sends (German, Berlin).
+  assert.deepEqual(live.labels, liveActivityLabels("de", "Europe/Berlin"));
+  const at = Date.UTC(2026, 9, 24, 12, 0, 0);
+  const berlin = (ms: number) => t("focusEndsAt", { time: new Intl.DateTimeFormat("de", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date(ms)) }, "de");
+  const task = { title: "Write the release notes", url: "/#page=00000000-0000-4000-8000-000000000002" };
+  const session = (withTask: boolean) => ({ phase: "focus", startedAt: at, focusEndsAt: at + 25 * 60_000, breakEndsAt: at + 30 * 60_000, task: withTask ? task : null });
+  const expected: Record<string, { name: string; props: object }> = {
+    focus: { name: "FlowplanFocus", props: { ...focusActivity(session(false), "de", at + 60_000)!, untilLabel: berlin(at + 25 * 60_000) } },
+    focusBreakWithContent: { name: "FlowplanFocus", props: { ...focusActivity(session(true), "de", at + 26 * 60_000)!, untilLabel: berlin(at + 30 * 60_000) } },
+    timer: { name: "FlowplanTimer", props: timerProps({ timer: { start: at, title: "", database: "", url: "/" } } as never, "de")! },
+    timerWithContent: { name: "FlowplanTimer", props: timerProps({ timer: { start: at, title: "Client call", database: "Billable work", url: "/#page=00000000-0000-4000-8000-000000000003" } } as never, "de")! },
+  };
+  for (const [name, want] of Object.entries(expected)) {
+    const state = live[name];
+    // expo-widgets' ContentState: { name, props: String }.
+    assert.deepEqual(Object.keys(state).sort(), ["name", "props"], name);
+    assert.equal(typeof state.props, "string", name);
+    assert.equal(state.name, want.name, name);
+    assert.deepEqual(JSON.parse(state.props), JSON.parse(JSON.stringify(want.props)), name);
+  }
+  // Every prop the views read is in the state (src/widgets/ios.tsx), none null.
+  const source = read("src/widgets/ios.tsx");
+  for (const [view, sample] of [["FlowplanTimer", live.timer], ["FlowplanFocus", live.focus]] as const) {
+    const body = source.slice(source.indexOf(`function ${view}(`), source.indexOf("\n}\n", source.indexOf(`function ${view}(`)));
+    const read_ = [...new Set([...body.matchAll(/props\.(\w+)/g)].map((m) => m[1]))];
+    const props = JSON.parse(sample.props) as Record<string, unknown>;
+    assert.ok(read_.length >= 4, view);
+    for (const key of read_) assert.ok(props[key] !== undefined && props[key] !== null, `${view} reads ${key}`);
+  }
+});
+
+test("Live Activity tokens reach the instance with the views' texts; without tokens no texts", async () => {
+  const labels = liveActivityLabels("fr", "Europe/Paris");
+  assert.equal(labels.focus.until.includes("{time}"), true);
+  const phone = fakePhone({ liveLabels: () => labels });
+  const first = await registrationFields(profile, { create: true }, phone.deps);
+  assert.equal(first.liveActivityLabels, undefined);
+  phone.live.set("p1", { focus: { relayToken: "F".repeat(30), tokenHash: "0".repeat(64), relay: RELAY, instance: INSTANCE, registeredAt: now } });
+  const fields = await registrationFields(profile, { create: true }, phone.deps);
+  assert.deepEqual(fields.liveActivityRelayTokens, { focus: "F".repeat(30) });
+  assert.deepEqual(fields.liveActivityLabels, labels);
+  const net = fakeNetwork({ POST: () => ({ status: 200, body: { ok: true } }) });
+  assert.equal(await sendLiveToken(INSTANCE, "fpd_x", { kind: "focus", relayToken: "F".repeat(30), relayUrl: RELAY, labels }, net.http), "ok");
+  assert.deepEqual((net.calls[0].body as { labels?: unknown }).labels, labels);
 });

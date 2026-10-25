@@ -17,7 +17,7 @@ import { Platform } from "react-native";
 import { allowLiveRegistration, isDeviceToken, isLiveKind, registerWithRelay, sendLiveToken, unregisterFromRelay, type LiveKind } from "../push-relay";
 import { activeProfile } from "../profiles";
 import { store } from "../store";
-import { bundleId, http, sha256 } from "./push";
+import { bundleId, http, liveLabels, sha256 } from "./push";
 
 export type PushTokenActivity = {
   addPushTokenListener?: (listener: (event: { activityId: string; pushToken: string }) => void) => { remove(): void };
@@ -41,7 +41,7 @@ function registerAgain() {
 async function tellInstance(instance: string, kind: LiveKind, relayToken: string | null, relay: string) {
   const deviceToken = store.deviceToken();
   if (!deviceToken || store.server() !== instance) return;
-  if ((await sendLiveToken(instance, deviceToken, { kind, relayToken, relayUrl: relay }, http)) === "missing") registerAgain();
+  if ((await sendLiveToken(instance, deviceToken, { kind, relayToken, relayUrl: relay, ...(relayToken ? { labels: liveLabels() } : {}) }, http)) === "missing") registerAgain();
 }
 
 // A started or running activity of this kind: its token, now and whenever

@@ -13,6 +13,7 @@
 // modules/flowplan-push/android/…/PushContent.kt), and when to register
 // again. src/native/push.ts runs them with the network and the keychain.
 import { originOf } from "./server";
+import type { LiveActivityLabels } from "./activities";
 import { safePath } from "./navigation";
 
 export const DEFAULT_RELAY = "https://push.flowplan.org";
@@ -291,7 +292,10 @@ export function liveTokensFor(records: LiveRecords, instance: string, relay: str
 // through and the origin it signs as (pushRelay). Another relay than the
 // app's (only the app's relay can reach this app) or another origin than the
 // profile's: the relay registration is of no use there.
+// null: the instance does not send through the relay at all (push or the
+// relay switched off there); undefined: an older instance that says nothing.
 export function relayMismatch(answer: unknown, relay: string, instance: string): boolean {
+  if (answer === null) return true;
   if (!answer || typeof answer !== "object") return false;
   const value = answer as { url?: unknown; instance?: unknown };
   return relayOrigin(value.url) !== relay || originOf(typeof value.instance === "string" ? value.instance : null) !== instance;
@@ -463,6 +467,8 @@ export type PushFields = {
   relayUrl?: string;
   publicKey?: string;
   liveActivityRelayTokens?: Record<string, string>;
+  // The texts of the Live Activity views, with the tokens (activities.ts).
+  liveActivityLabels?: LiveActivityLabels;
 };
 
 export type RegistrationDeps = {
@@ -484,15 +490,16 @@ export type RegistrationDeps = {
   setLive: (profile: string, records: LiveRecords) => void;
   deleteKey: (profile: string) => void;
   isActive: (profile: string) => boolean;
+  liveLabels?: () => LiveActivityLabels | null;
 };
 
-function fieldsOf(record: PushRecord, live: LiveRecords): Omit<PushFields, "pushToken"> {
+function fieldsOf(record: PushRecord, live: LiveRecords, labels: LiveActivityLabels | null): Omit<PushFields, "pushToken"> {
   const tokens = liveTokensFor(live, record.instance, record.relay);
   return {
     relayToken: record.relayToken,
     relayUrl: record.relay,
     publicKey: record.publicKey,
-    ...(Object.keys(tokens).length ? { liveActivityRelayTokens: tokens } : {}),
+    ...(Object.keys(tokens).length ? { liveActivityRelayTokens: tokens, ...(labels ? { liveActivityLabels: labels } : {}) } : {}),
   };
 }
 
@@ -524,14 +531,14 @@ export async function registrationFields(
   const now = deps.now();
   const reusable = () =>
     record && record.instance === profile.server && record.relay === deps.relay && record.publicKey === publicKey && recordUsable(record, now)
-      ? { pushToken: null, pending: false, ...fieldsOf(record, deps.live(profile.id)) }
+      ? { pushToken: null, pending: false, ...fieldsOf(record, deps.live(profile.id), deps.liveLabels?.() ?? null) }
       : none;
   const device = await deps.deviceToken();
   if (!device || !isDeviceToken(device.platform, device.token)) return reusable();
   const tokenHash = await deps.sha256(device.token);
   const environment = device.platform === "ios" ? deps.environment() : null;
   if (record && !needsRegistration(record, { relay: deps.relay, instance: profile.server, tokenHash, publicKey, environment }, now))
-    return { pushToken: null, pending: false, ...fieldsOf(record, deps.live(profile.id)) };
+    return { pushToken: null, pending: false, ...fieldsOf(record, deps.live(profile.id), deps.liveLabels?.() ?? null) };
   if (!record && (support !== "yes" || !options.create)) return { ...none, pending: support === "yes" };
   let registration: RelayRegistration;
   try {
@@ -566,7 +573,7 @@ export async function registrationFields(
     publicKey,
   };
   deps.setRecord(profile.id, next);
-  return { pushToken: null, pending: false, ...fieldsOf(next, deps.live(profile.id)) };
+  return { pushToken: null, pending: false, ...fieldsOf(next, deps.live(profile.id), deps.liveLabels?.() ?? null) };
 }
 
 // Leaves the relay for a profile: its relay tokens (device and Live
@@ -592,7 +599,7 @@ export async function leaveRelay(profile: string, deps: Pick<RegistrationDeps, "
 export async function sendLiveToken(
   instance: string,
   deviceToken: string,
-  body: { kind: LiveKind; relayToken: string | null; relayUrl: string },
+  body: { kind: LiveKind; relayToken: string | null; relayUrl: string; labels?: LiveActivityLabels },
   http: Http,
 ): Promise<"ok" | "refused" | "missing" | "failed"> {
   if (!isLiveKind(body.kind) || (body.relayToken !== null && !isRelayToken(body.relayToken))) return "refused";

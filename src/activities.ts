@@ -70,6 +70,32 @@ export function focusActivity(data: Data, locale: Locale, now = Date.now()): Foc
   };
 }
 
+// The texts of the focus and timer views for pushes from the instance
+// (lib/live-activity-push.ts in Flowplan): ActivityKit replaces the whole
+// content state on a push, so the instance sends every prop the views read
+// (focusActivity above, timerProps in summary.ts) – with these labels, in
+// this language and time zone ("{time}" is filled in with clock()'s
+// format). Labels only, nothing of the person's data.
+export type LiveActivityLabels = {
+  locale: Locale;
+  timeZone: string;
+  focus: { focus: string; break: string; until: string; stop: string };
+  timer: { label: string };
+};
+export function liveActivityLabels(locale: Locale, timeZone: string): LiveActivityLabels {
+  return {
+    locale,
+    timeZone,
+    focus: {
+      focus: t("focus", {}, locale),
+      break: t("focusBreak", {}, locale),
+      until: t("focusEndsAt", { time: "{time}" }, locale),
+      stop: t("focusEnd", {}, locale),
+    },
+    timer: { label: t("widgetTimer", {}, locale) },
+  };
+}
+
 // The meeting that runs now; "Open notes" opens its note or creates it
 // (flowplan://meeting, App.tsx → meeting.note).
 export function meetingActivity(data: Data, locale: Locale, now = Date.now()): MeetingProps | undefined {

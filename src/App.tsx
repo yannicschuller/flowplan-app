@@ -301,7 +301,7 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
     sentRelay.current = !!push.relayToken;
     // Live Activity tokens reach the instance on their own (live-push.ts):
     // not a reason to register again.
-    const { liveActivityRelayTokens: _live, ...lasting } = push;
+    const { liveActivityRelayTokens: _live, liveActivityLabels: _labels, ...lasting } = push;
     const key = `${server}|${JSON.stringify(lasting)}`;
     if (registered.current === key) return;
     sent.current = key;
