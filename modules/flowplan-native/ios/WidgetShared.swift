@@ -177,7 +177,9 @@ enum FPAPI {
     return format.string(from: date)
   }
 
-  static func call(_ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, session: FPSession, timeout: TimeInterval = 20) async throws -> FPJSON {
+  /// `idempotencyKey`: one per action (a tap, a shortcut run), sent again
+  /// unchanged when the same action is retried – the instance applies it once.
+  static func call(_ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, session: FPSession, timeout: TimeInterval = 20, idempotencyKey: String? = nil) async throws -> FPJSON {
     guard let token = session.token else { throw FPError.signedOut }
     guard var components = URLComponents(string: session.server) else { throw FPError.noSession }
     components.path = path
@@ -190,6 +192,9 @@ enum FPAPI {
       request.httpMethod = "POST"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.httpBody = try JSONSerialization.data(withJSONObject: body)
+      if let idempotencyKey {
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+      }
     }
     let data: Data
     let response: URLResponse
@@ -218,13 +223,19 @@ enum FPAPI {
     return try await call("/api/mobile/widgets/options", query: query, session: session)
   }
 
-  /// An action: short timeout, a button in a widget has only seconds.
+  /// An action: short timeout, a button in a widget has only seconds. One
+  /// Idempotency-Key per tap; without an answer the request goes once more
+  /// with the same key, so the tap counts once even if the first arrived.
   @discardableResult
-  static func action(_ name: String, _ fields: [String: Any] = [:], timeout: TimeInterval = 10) async throws -> FPJSON {
+  static func action(_ name: String, _ fields: [String: Any] = [:], timeout: TimeInterval = 10, key: String = UUID().uuidString) async throws -> FPJSON {
     guard let session = FPKeychain.load() else { throw FPError.noSession }
     var body = fields
     body["action"] = name
-    return try await call("/api/mobile/widgets/action", body: body, session: session, timeout: timeout)
+    do {
+      return try await call("/api/mobile/widgets/action", body: body, session: session, timeout: timeout, idempotencyKey: key)
+    } catch FPError.network {
+      return try await call("/api/mobile/widgets/action", body: body, session: session, timeout: timeout, idempotencyKey: key)
+    }
   }
 
   /// One batched request (at most 16 widgets).

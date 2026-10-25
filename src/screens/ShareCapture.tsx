@@ -4,7 +4,7 @@
 // default capture database) or a page or database they pick –, title, text,
 // link and files, saved in one go with the instance's capture.share action
 // (android/share.ts). After a share, "Done" goes back to the app that shared.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { clearShare, leaveApp, type SharedContent, type SharedFile } from "../../modules/flowplan-android/src";
@@ -14,6 +14,7 @@ import { widgetData, widgetOptions } from "../widgets/api";
 import { connection, refreshSuite, timeZone } from "../native/suite";
 import { fileSize, hasContent, MAX_SHARE_FILES, saveShare, shareDraft, shareTargetPath, type ShareDraft } from "../android/share";
 import { Button, SheetBody, styles, usePalette } from "../ui";
+import { draftKey, type DraftKey } from "../idempotency";
 
 export type ShareRequest = { kind: "share"; content: SharedContent } | { kind: "quick" };
 type Target = { id: string; name: string; detail: string; kind: string };
@@ -100,6 +101,9 @@ export function ShareCapture({
     if (fromShare && saved !== null) leaveApp();
   };
 
+  // The share's Idempotency-Key: Save again after a failure sends the same
+  // one while the share is unchanged (the first attempt may have arrived).
+  const saveKey = useRef<DraftKey | null>(null);
   const save = async () => {
     const server = connection();
     if (!server || !target || !hasContent(draft)) return;
@@ -113,7 +117,8 @@ export function ShareCapture({
     }
     setBusy(true);
     setMessage(draft.files.length ? t("uploading") : "");
-    const result = await saveShare(server, target.id, draft);
+    saveKey.current = draftKey(saveKey.current, JSON.stringify([target.id, draft.title, draft.text, draft.url, draft.files.map((file) => file.uri)]));
+    const result = await saveShare(server, target.id, draft, undefined, saveKey.current.key);
     setBusy(false);
     if (result.ok) {
       setSaved(result.value.url ?? "");

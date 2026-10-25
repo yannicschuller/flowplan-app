@@ -23,6 +23,7 @@ import { buttonRequest, categoryButtons, notificationData, type ButtonRequest } 
 import { timeoutSignal } from "../server";
 import { store } from "../store";
 import { localDay } from "../summary";
+import { IDEMPOTENCY_HEADER, newIdempotencyKey } from "../idempotency";
 
 const TASK = "flowplan-notification-button";
 // Android may report a button twice (background task and listener).
@@ -60,19 +61,22 @@ async function ask(request: ButtonRequest) {
   const server = store.server(),
     token = store.deviceToken();
   if (!server || !token) return { ok: false as const, error: "" };
-  try {
-    const response = await fetch(`${server}/api/mobile/notifications?lang=${encodeURIComponent(locale())}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal: timeoutSignal(20_000),
-    });
-    const body = (await response.json().catch(() => null)) as { unread?: unknown; error?: unknown } | null;
-    if (response.ok) return { ok: true as const, unread: typeof body?.unread === "number" ? body.unread : null };
-    return { ok: false as const, error: typeof body?.error === "string" ? body.error : "" };
-  } catch {
-    return { ok: false as const, error: "" };
-  }
+  // One Idempotency-Key per tap: the retry without an answer acts at most once.
+  const idempotencyKey = newIdempotencyKey();
+  for (let attempt = 0; ; attempt++)
+    try {
+      const response = await fetch(`${server}/api/mobile/notifications?lang=${encodeURIComponent(locale())}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json", [IDEMPOTENCY_HEADER]: idempotencyKey },
+        body: JSON.stringify(request),
+        signal: timeoutSignal(20_000),
+      });
+      const body = (await response.json().catch(() => null)) as { unread?: unknown; error?: unknown } | null;
+      if (response.ok) return { ok: true as const, unread: typeof body?.unread === "number" ? body.unread : null };
+      return { ok: false as const, error: typeof body?.error === "string" ? body.error : "" };
+    } catch {
+      if (attempt > 0) return { ok: false as const, error: "" };
+    }
 }
 
 // Answers a tapped button (Android; on iOS Swift does).

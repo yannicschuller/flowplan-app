@@ -163,11 +163,26 @@ final class FPNotificationActions: NotificationDelegate {
     request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
+    // One key per tap, the same on the retry: the instance acts once even
+    // when the first attempt arrived and only its answer got lost.
+    request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
     request.httpBody = try? JSONSerialization.data(withJSONObject: body)
     let background = FPBackgroundTask()
     background.begin()
+    attempt(request, retries: 1, link: link, background: background)
+  }
+
+  /// Sends the button's request; without any answer once more (same
+  /// request, same Idempotency-Key) after a second.
+  static func attempt(_ request: URLRequest, retries: Int, link: String?, background: FPBackgroundTask) {
     URLSession.shared.dataTask(with: request) { data, response, error in
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+      if status == 0, error != nil, retries > 0 {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+          attempt(request, retries: retries - 1, link: link, background: background)
+        }
+        return
+      }
       var answer: [String: Any] = [:]
       if let data = data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
         answer = object

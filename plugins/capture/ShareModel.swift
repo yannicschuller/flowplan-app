@@ -299,13 +299,30 @@ enum FPSAPI {
     return FPSTargets(targets: targets, maxFiles: maxFiles, maxUploadMb: maxUploadMb)
   }
 
+  /// The upload; without an answer once more (same body, same
+  /// Idempotency-Key), then offline.
+  private static func uploadTwice(_ request: URLRequest, fromFile file: URL) async throws -> (Data, URLResponse) {
+    do {
+      return try await URLSession.shared.upload(for: request, fromFile: file)
+    } catch {
+      do {
+        return try await URLSession.shared.upload(for: request, fromFile: file)
+      } catch {
+        throw FPSError.offline
+      }
+    }
+  }
+
   /// Saves; the multipart body goes through a file (photos and PDFs can be
-  /// large, the extension has little memory).
-  static func save(session: FPSSession, target: FPSTarget, title: String, text: String, link: String, files: [FPSFile]) async throws {
+  /// large, the extension has little memory). `key` is the share's
+  /// Idempotency-Key: the same on every attempt to save the same content,
+  /// so the instance saves it once.
+  static func save(session: FPSSession, target: FPSTarget, title: String, text: String, link: String, files: [FPSFile], key: String = UUID().uuidString) async throws {
     var request = try makeRequest("save", session: session, timeout: 120)
     let boundary = "FlowplanShare-" + UUID().uuidString
     request.httpMethod = "POST"
     request.setValue("multipart/form-data; boundary=" + boundary, forHTTPHeaderField: "Content-Type")
+    request.setValue(key, forHTTPHeaderField: "Idempotency-Key")
     var body = Data()
     func field(_ name: String, _ value: String) {
       body.append(Data(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").utf8))
@@ -329,13 +346,7 @@ enum FPSAPI {
     try body.write(to: upload)
     body = Data()
     defer { try? FileManager.default.removeItem(at: upload) }
-    let data: Data
-    let response: URLResponse
-    do {
-      (data, response) = try await URLSession.shared.upload(for: request, fromFile: upload)
-    } catch {
-      throw FPSError.offline
-    }
+    let (data, response) = try await uploadTwice(request, fromFile: upload)
     _ = try check(data, response)
     FPSShared.defaults?.set(target.inbox ? "inbox" : target.id, forKey: "flowplan.share.lastTarget." + session.profile)
   }

@@ -14,9 +14,15 @@ enum FPIntentAPI {
     return try await FPAPI.call("/api/mobile/intents/\(action)", query: items, session: session)
   }
 
+  /// One Idempotency-Key per run, kept for the retry without an answer.
   static func post(_ action: String, _ body: [String: Any]) async throws -> FPJSON {
     guard let session = FPKeychain.load() else { throw FPError.noSession }
-    return try await FPAPI.call("/api/mobile/intents/\(action)", body: body, session: session, timeout: 10)
+    let key = UUID().uuidString
+    do {
+      return try await FPAPI.call("/api/mobile/intents/\(action)", body: body, session: session, timeout: 10, idempotencyKey: key)
+    } catch FPError.network {
+      return try await FPAPI.call("/api/mobile/intents/\(action)", body: body, session: session, timeout: 10, idempotencyKey: key)
+    }
   }
 }
 

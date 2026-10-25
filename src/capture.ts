@@ -8,6 +8,7 @@ import { safePath } from "./navigation";
 import { dueLabel, localDay } from "./summary";
 import { t, type Locale } from "./i18n";
 import type { SpotlightEntry } from "../modules/flowplan-capture/src";
+import { IDEMPOTENCY_HEADER, newIdempotencyKey, retryable } from "./idempotency";
 
 export type CaptureConnection = { server: string; token: string; lang: string };
 export type CaptureResult<T> = { ok: true; value: T } | { ok: false; signedOut: true } | { ok: false; status: number; error: string };
@@ -26,20 +27,38 @@ const timeout = (ms: number) => {
   }
 };
 
-async function call<T>(connection: CaptureConnection, action: string, init: { method?: string; body?: FormData }, fetcher: Fetch, ms = 20_000): Promise<CaptureResult<T>> {
-  try {
-    const response = await fetcher(`${connection.server}/api/mobile/capture/${action}?lang=${encodeURIComponent(connection.lang)}`, {
-      ...init,
-      headers: { Authorization: `Bearer ${connection.token}`, Accept: "application/json" },
-      signal: timeout(ms),
-    });
-    if (response.status === 401) return { ok: false, signedOut: true };
-    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!response.ok || !body) return { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
-    return { ok: true, value: body as T };
-  } catch {
-    return { ok: false, status: 0, error: "" };
+// With an Idempotency-Key (saving), a request without an answer goes once
+// more with the same key: the instance saves it once.
+async function call<T>(
+  connection: CaptureConnection,
+  action: string,
+  init: { method?: string; body?: FormData; idempotencyKey?: string },
+  fetcher: Fetch,
+  ms = 20_000,
+): Promise<CaptureResult<T>> {
+  const { idempotencyKey, ...request } = init;
+  const headers: Record<string, string> = { Authorization: `Bearer ${connection.token}`, Accept: "application/json" };
+  if (idempotencyKey) headers[IDEMPOTENCY_HEADER] = idempotencyKey;
+  let result: CaptureResult<T> = { ok: false, status: 0, error: "" };
+  for (let attempt = 0; attempt < (idempotencyKey ? 2 : 1); attempt++) {
+    let body: Record<string, unknown> | null = null;
+    try {
+      const response = await fetcher(`${connection.server}/api/mobile/capture/${action}?lang=${encodeURIComponent(connection.lang)}`, {
+        ...request,
+        headers,
+        signal: timeout(ms),
+      });
+      if (response.status === 401) return { ok: false, signedOut: true };
+      body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      if (response.ok && body) return { ok: true, value: body as T };
+      result = { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
+    } catch {
+      result = { ok: false, status: 0, error: "" };
+    }
+    if (!retryable("status" in result ? result.status : 401, body) || attempt > 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  return result;
 }
 
 // ---- Targets and saving ----
@@ -58,6 +77,7 @@ export function saveScan(
   connection: CaptureConnection,
   input: { targetId: string; rowId?: string; title: string; text: string; file: { uri: string; name: string } },
   fetcher: Fetch = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
 ) {
   const form = new FormData();
   form.append("targetId", input.targetId);
@@ -68,7 +88,7 @@ export function saveScan(
   if (input.text.trim()) form.append("recognized", input.text.slice(0, 100_000));
   // React Native's FormData takes { uri, name, type } for a file.
   form.append("file", { uri: input.file.uri, name: input.file.name, type: "application/pdf" } as unknown as Blob);
-  return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form }, fetcher, 120_000);
+  return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, 120_000);
 }
 
 // Choosing a target: the inbox first, then the rest; protected pages are

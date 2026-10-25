@@ -6,6 +6,7 @@
 // capture.share get text and links through their web share target instead.
 import type { SharedContent, SharedFile } from "../../modules/flowplan-android/src";
 import { call, type Connection } from "../widgets/api";
+import { newIdempotencyKey } from "../idempotency";
 
 export const MAX_SHARE_FILES = 10;
 // What the instance keeps (photos, PDFs); other types are named as skipped.
@@ -61,13 +62,21 @@ type Fetcher = Parameters<typeof call>[3];
 const defaultFetch: Fetcher = (url, init) => fetch(url, init);
 
 // Saves the share: multipart with the files, JSON without.
-export function saveShare(connection: Connection, targetId: string, draft: Pick<ShareDraft, "title" | "text" | "url" | "files">, fetcher: Fetcher = defaultFetch) {
+// `idempotencyKey`: one per share; the sheet passes the same one when the
+// person taps Save again after a failure (the first attempt may have arrived).
+export function saveShare(
+  connection: Connection,
+  targetId: string,
+  draft: Pick<ShareDraft, "title" | "text" | "url" | "files">,
+  fetcher: Fetcher = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
+) {
   const fields = shareFields(targetId, draft);
   type Answer = { ok: true; action: string; url?: string; files?: string[] };
-  if (!draft.files.length) return call<Answer>(connection, "/api/mobile/widgets/action", { method: "POST", body: JSON.stringify(fields) }, fetcher);
+  if (!draft.files.length) return call<Answer>(connection, "/api/mobile/widgets/action", { method: "POST", body: JSON.stringify(fields), idempotencyKey }, fetcher);
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
   // React Native's FormData takes { uri, name, type } for a file.
   for (const file of draft.files) form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
-  return call<Answer>(connection, "/api/mobile/widgets/action", { method: "POST", body: form }, fetcher);
+  return call<Answer>(connection, "/api/mobile/widgets/action", { method: "POST", body: form, idempotencyKey }, fetcher);
 }

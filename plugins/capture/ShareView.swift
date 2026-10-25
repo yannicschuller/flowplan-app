@@ -25,6 +25,9 @@ final class FPSShareModel: ObservableObject {
   private var maxUploadMb: Double = 25
   private let session: FPSSession?
   private let done: @MainActor (Bool) -> Void
+  // The share's Idempotency-Key, kept while the same content is saved again
+  // after a failure (the first attempt may have arrived after all).
+  private var saveKey: (fingerprint: String, key: String)?
 
   init(session: FPSSession?, done: @escaping @MainActor (Bool) -> Void) {
     self.session = session
@@ -89,8 +92,17 @@ final class FPSShareModel: ObservableObject {
     message = ""
     let cleanTitle: String = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let cleanText: String = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let fileList: String = files.map { $0.name + ":" + String($0.data.count) }.joined(separator: "|")
+    let fingerprint: String = [target.inbox ? "inbox" : target.id, cleanTitle, cleanText, link, fileList].joined(separator: "\n")
+    let key: String
+    if let previous = saveKey, previous.fingerprint == fingerprint {
+      key = previous.key
+    } else {
+      key = UUID().uuidString
+    }
+    saveKey = (fingerprint: fingerprint, key: key)
     do {
-      try await FPSAPI.save(session: session, target: target, title: cleanTitle, text: cleanText, link: link, files: files)
+      try await FPSAPI.save(session: session, target: target, title: cleanTitle, text: cleanText, link: link, files: files, key: key)
       phase = .saved
       UINotificationFeedbackGenerator().notificationOccurred(.success)
       try? await Task.sleep(nanoseconds: 900_000_000)

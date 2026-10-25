@@ -9,6 +9,7 @@ import { focusFilterText, setIntentProfiles } from "../../modules/flowplan-inten
 import { focusRule, focusStep, parseFocusFilter, parseFocusMemory, type FocusStep } from "../focus";
 import type { ProfileState } from "../profiles";
 import type { Connection } from "../widgets/api";
+import { IDEMPOTENCY_HEADER, newIdempotencyKey } from "../idempotency";
 
 const MEMORY_KEY = "flowplan.focus.memory";
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
@@ -45,13 +46,17 @@ export async function sendFocusRule(connection: Connection | null, active: strin
   const rule = focusRule(filter, active);
   const key = [connection.server, connection.token, active, filter.at, rule.hide, rule.workspaceId].join("|");
   if (key === lastRule) return;
-  try {
-    const response = await fetch(`${connection.server}/api/mobile/intents/focus?lang=${encodeURIComponent(connection.lang)}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${connection.token}`, Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify(rule),
-    });
-    // Answered (also by an instance without Focus filters): not again.
-    if (response.status) lastRule = key;
-  } catch {}
+  // One Idempotency-Key for this rule, the same on the retry without an answer.
+  const idempotencyKey = newIdempotencyKey();
+  for (let attempt = 0; attempt < 2; attempt++)
+    try {
+      const response = await fetch(`${connection.server}/api/mobile/intents/focus?lang=${encodeURIComponent(connection.lang)}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${connection.token}`, Accept: "application/json", "Content-Type": "application/json", [IDEMPOTENCY_HEADER]: idempotencyKey },
+        body: JSON.stringify(rule),
+      });
+      // Answered (also by an instance without Focus filters): not again.
+      if (response.status) lastRule = key;
+      return;
+    } catch {}
 }

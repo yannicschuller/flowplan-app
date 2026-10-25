@@ -3,6 +3,7 @@
 // device token died with its session: signed out (the widgets show "Open
 // Flowplan to sign in", their settings stay).
 import { configKey, MAX_WIDGETS_PER_REQUEST, type ServerKind } from "./suite";
+import { IDEMPOTENCY_HEADER, newIdempotencyKey, retryable } from "../idempotency";
 
 export type WidgetRequest = { id: string; kind: ServerKind; config: Record<string, unknown> };
 export type WidgetResult =
@@ -26,23 +27,37 @@ const timeout = (ms: number) => {
   }
 };
 
-export async function call<T>(connection: Connection, path: string, init: { method?: string; body?: string | FormData }, fetcher: Fetch): Promise<ApiResult<T>> {
+// `idempotencyKey`: the action's key (src/idempotency.ts). With one, a
+// request without an answer (or one the instance still works on) goes once
+// more with the same key – applied at most once.
+export async function call<T>(
+  connection: Connection,
+  path: string,
+  init: { method?: string; body?: string | FormData; idempotencyKey?: string },
+  fetcher: Fetch,
+): Promise<ApiResult<T>> {
+  const { idempotencyKey, ...request } = init;
   const headers: Record<string, string> = { Authorization: `Bearer ${connection.token}`, Accept: "application/json" };
-  if (typeof init.body === "string") headers["Content-Type"] = "application/json";
-  try {
-    const separator = path.includes("?") ? "&" : "?";
-    const response = await fetcher(`${connection.server}${path}${separator}lang=${encodeURIComponent(connection.lang)}`, {
-      ...init,
-      headers,
-      signal: timeout(20_000),
-    });
-    if (response.status === 401) return { ok: false, signedOut: true };
-    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!response.ok || !body) return { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
-    return { ok: true, value: body as T };
-  } catch {
-    return { ok: false, status: 0, error: "" };
+  if (typeof request.body === "string") headers["Content-Type"] = "application/json";
+  if (idempotencyKey) headers[IDEMPOTENCY_HEADER] = idempotencyKey;
+  const separator = path.includes("?") ? "&" : "?";
+  const url = `${connection.server}${path}${separator}lang=${encodeURIComponent(connection.lang)}`;
+  let result: ApiResult<T> = { ok: false, status: 0, error: "" };
+  for (let attempt = 0; attempt < (idempotencyKey ? 2 : 1); attempt++) {
+    let body: Record<string, unknown> | null = null;
+    try {
+      const response = await fetcher(url, { ...request, headers, signal: timeout(20_000) });
+      if (response.status === 401) return { ok: false, signedOut: true };
+      body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      if (response.ok && body) return { ok: true, value: body as T };
+      result = { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
+    } catch {
+      result = { ok: false, status: 0, error: "" };
+    }
+    if (!retryable("status" in result ? result.status : 401, body) || attempt > 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  return result;
 }
 
 const defaultFetch: Fetch = (url, init) => fetch(url, init);
@@ -103,8 +118,15 @@ export type ActionName =
   | "mention.readAll"
   | "meeting.note";
 
-export function widgetAction<T = Record<string, unknown>>(connection: Connection, action: ActionName, body: Record<string, unknown> = {}, fetcher: Fetch = defaultFetch) {
-  return call<T & { ok: true; action: string }>(connection, "/api/mobile/widgets/action", { method: "POST", body: JSON.stringify({ ...body, action }) }, fetcher);
+// One Idempotency-Key per tap (pass the tap's key to send it again later).
+export function widgetAction<T = Record<string, unknown>>(
+  connection: Connection,
+  action: ActionName,
+  body: Record<string, unknown> = {},
+  fetcher: Fetch = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
+) {
+  return call<T & { ok: true; action: string }>(connection, "/api/mobile/widgets/action", { method: "POST", body: JSON.stringify({ ...body, action }), idempotencyKey }, fetcher);
 }
 
 // A photo or voice memo (multipart, capture.upload).
@@ -112,6 +134,7 @@ export function uploadCapture(
   connection: Connection,
   input: { targetId: string; type: "photo" | "voice"; title?: string; file: { uri: string; name: string; type: string } },
   fetcher: Fetch = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
 ) {
   const form = new FormData();
   form.append("action", "capture.upload");
@@ -121,5 +144,5 @@ export function uploadCapture(
   if (input.title) form.append("title", input.title);
   // React Native's FormData takes { uri, name, type } for a file.
   form.append("file", input.file as unknown as Blob);
-  return call<{ url?: string; transcribed?: boolean | null; text?: string }>(connection, "/api/mobile/widgets/action", { method: "POST", body: form }, fetcher);
+  return call<{ url?: string; transcribed?: boolean | null; text?: string }>(connection, "/api/mobile/widgets/action", { method: "POST", body: form, idempotencyKey }, fetcher);
 }
