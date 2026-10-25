@@ -68,6 +68,13 @@ type NativeModule = {
   hideTimer(): void;
   startPencil(): void;
   setEdgeSwipe?(enabled: boolean): void;
+  offlineRead?(path: string): Promise<string | null>;
+  offlineWrite?(path: string, base64: string): Promise<void>;
+  offlineReadText?(path: string): Promise<string | null>;
+  offlineWriteText?(path: string, text: string): Promise<void>;
+  offlineRemove?(path: string): Promise<void>;
+  offlineList?(path: string): Promise<string[]>;
+  offlineAvailable?(): Promise<number>;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
   addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
   addListener(event: "onAppLink", listener: (event: { url: string }) => void): EventSubscription;
@@ -174,4 +181,32 @@ export function hideOngoing(id: string) {
   try {
     native?.hideOngoing?.(id);
   } catch {}
+}
+
+// iOS: the files of the offline copies (src/offline/store.ts) in the app's
+// container, protected until the first unlock and kept out of backups
+// (FlowplanOfflineFiles.swift). null where the app has none (Android: the
+// web view's service worker keeps the copy there, as in a browser; an
+// older build without the functions).
+export type OfflineFileSystem = {
+  read(path: string): Promise<string | null>;
+  write(path: string, base64: string): Promise<void>;
+  readText(path: string): Promise<string | null>;
+  writeText(path: string, text: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  list(path: string): Promise<string[]>;
+  available(): Promise<number>;
+};
+export function offlineFileSystem(): OfflineFileSystem | null {
+  const m = native;
+  if (Platform.OS !== "ios" || !m?.offlineRead || !m.offlineWrite || !m.offlineReadText || !m.offlineWriteText || !m.offlineRemove || !m.offlineList || !m.offlineAvailable) return null;
+  return {
+    read: (path) => m.offlineRead!(path),
+    write: (path, base64) => m.offlineWrite!(path, base64),
+    readText: (path) => m.offlineReadText!(path),
+    writeText: (path, text) => m.offlineWriteText!(path, text),
+    remove: (path) => m.offlineRemove!(path),
+    list: (path) => m.offlineList!(path),
+    available: () => m.offlineAvailable!(),
+  };
 }

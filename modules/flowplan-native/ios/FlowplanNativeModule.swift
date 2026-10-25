@@ -66,6 +66,57 @@ public class FlowplanNativeModule: Module {
       Self.takePendingLink()
     }
 
+    // The offline copies' files (FlowplanOfflineFiles.swift; used by
+    // src/offline/native.ts). Paths are relative to the copies' folder,
+    // bodies base64; a missing file reads as nil.
+    AsyncFunction("offlineRead") { (path: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ promise.resolve($0) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        guard let data = try FlowplanOfflineFiles.read(path) else { return nil }
+        return data.base64EncodedString()
+      }
+    }
+
+    AsyncFunction("offlineWrite") { (path: String, base64: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ _ in promise.resolve(nil) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        guard let data = Data(base64Encoded: base64) else { throw FlowplanOfflineFiles.Failure.invalidData }
+        try FlowplanOfflineFiles.write(path, data)
+        return nil
+      }
+    }
+
+    AsyncFunction("offlineReadText") { (path: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ promise.resolve($0) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        guard let data = try FlowplanOfflineFiles.read(path) else { return nil }
+        return String(data: data, encoding: .utf8)
+      }
+    }
+
+    AsyncFunction("offlineWriteText") { (path: String, text: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ _ in promise.resolve(nil) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        try FlowplanOfflineFiles.write(path, Data(text.utf8))
+        return nil
+      }
+    }
+
+    AsyncFunction("offlineRemove") { (path: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ _ in promise.resolve(nil) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        try FlowplanOfflineFiles.remove(path)
+        return nil
+      }
+    }
+
+    AsyncFunction("offlineList") { (path: String, promise: Promise) in
+      FlowplanOfflineFiles.run({ promise.resolve($0) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        return try FlowplanOfflineFiles.list(path)
+      }
+    }
+
+    AsyncFunction("offlineAvailable") { (promise: Promise) in
+      FlowplanOfflineFiles.run({ promise.resolve($0) }, { promise.reject("ERR_OFFLINE_FILES", $0) }) {
+        return FlowplanOfflineFiles.available()
+      }
+    }
+
     // Siri suggestions: "note", "voice", "timer", "focus", "today".
     Function("donateShortcut") { (name: String) in
       guard let type = NSClassFromString("FlowplanIntentDonor") as? NSObject.Type else { return }

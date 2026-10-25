@@ -13,9 +13,14 @@
 //   device can (iOS, Vision) it reads the handwriting of the page's ink
 //   (recognizeInk, src/ink-bridge.ts) and answers with the event
 //   "flowplan:ink-recognized";
+// - on iOS the offline copy: window.FlowplanApp.offline, the caches the
+//   page's offline module fills, kept by the app, and the loader that runs
+//   the stored page without a connection (src/offline/loader.ts);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
+import { offlineScript } from "./offline/loader";
+
 export type PageMessage =
   | { type: "edges"; top: string; bottom: string; scrolls: boolean; atTop: boolean; atBottom: boolean; background: string; cover?: boolean }
   | { type: "refresh" }
@@ -40,7 +45,11 @@ export type PageMessage =
   | { type: "shortcuts"; list: unknown }
   | { type: "openWindow"; url: string }
   // Handwriting to read (ink-bridge.ts inkRequest checks it again).
-  | { type: "recognizeInk"; id: string; width: number; height: number; strokes: unknown };
+  | { type: "recognizeInk"; id: string; width: number; height: number; strokes: unknown }
+  // A call to the offline copy (src/offline/messages.ts checks it), and the
+  // stored page that may give way to the live one (returnScript).
+  | { type: "offline"; id: number; op: string; cache?: string | null; key?: string; entry?: unknown }
+  | { type: "offlineReturn" };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -54,12 +63,21 @@ export function parsePageMessage(data: string): PageMessage | null {
   }
 }
 
-export function bridgeScript(options: { server: string; platform: "ios" | "android"; version: string; scanner?: boolean; windows?: boolean; inkRecognition?: boolean }) {
+export function bridgeScript(options: {
+  server: string;
+  platform: "ios" | "android";
+  version: string;
+  scanner?: boolean;
+  windows?: boolean;
+  inkRecognition?: boolean;
+  // iOS: the app keeps the offline copy (src/offline/loader.ts).
+  offline?: boolean;
+}) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
     try { window.ReactNativeWebView.postMessage(JSON.stringify(message)); } catch (e) {}
-  };${
+  };${options.offline ? offlineScript() : ""}${
     options.windows
       ? `
   // Whether this window can open another one now (windowsScript: the app
@@ -112,7 +130,7 @@ export function bridgeScript(options: { server: string; platform: "ios" | "andro
     }${options.inkRecognition ? `\n    recognizeInk,` : ""}
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
-    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
+    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${options.offline ? `\n    offline,` : ""}${
       options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""
     }
   });

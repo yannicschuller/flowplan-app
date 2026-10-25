@@ -238,6 +238,6 @@ test("the native module is autolinked for iOS and matches its JavaScript side", 
   // The window offers it only when the module says so.
   const shell = read("src/screens/Shell.tsx");
   assert.match(shell, /const inkRecognition = inkRecognitionAvailable\(\);/);
-  assert.match(shell, /windows: features\.windows, inkRecognition \}\)/);
+  assert.match(shell, /windows: features\.windows,\s*inkRecognition,/);
   assert.match(shell, /message\.type === "recognizeInk"\) handleInk\(message\)/);
 });

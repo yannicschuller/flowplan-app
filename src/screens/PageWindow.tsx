@@ -21,7 +21,8 @@ export function PageWindow({ url }: { url: string | null }) {
   const palette = usePalette();
   const [profiles] = useSharedState<ProfileState>("profiles", () => store.profiles());
   const [locked, setLocked] = useSharedState("locked", () => store.appLock());
-  const server = activeProfile(profiles)?.server ?? null;
+  const profile = activeProfile(profiles);
+  const server = profile?.server ?? null;
   const shell = useRef<ShellHandle>(null);
   // The page this window opens with, once the instance has loaded.
   const pendingPath = useRef(pathOn(url, server));
@@ -40,12 +41,13 @@ export function PageWindow({ url }: { url: string | null }) {
     else if (message.type === "refresh" && store.deviceToken()) void refresh();
   };
 
-  if (!server) return <View style={{ flex: 1, backgroundColor: palette.background }} />;
+  if (!server || !profile) return <View style={{ flex: 1, backgroundColor: palette.background }} />;
   return (
     <>
       <Shell
         ref={shell}
         server={server}
+        profile={profile.id}
         onMessage={onMessage}
         // flowplan:// links of the page go through the system to the main window.
         onAppLink={(link) => void Linking.openURL(link).catch(() => {})}
