@@ -4,8 +4,15 @@
 // and footer run into the system bars like in a native app. Pages that scroll
 // as a whole (sign-in) keep their colours while scrolling, and content fades
 // out at the edges instead of being cut.
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Alert, BackHandler, Keyboard, Linking, Platform, StyleSheet, View } from "react-native";
+//
+// Without a connection the window shows the profile's offline copy (iOS,
+// src/offline/): the instance's page as it was last stored, at the
+// instance's address, its files from the copy. Back online it gives way to
+// the live page once nobody is typing. Only without a copy does the app's
+// own offline screen show.
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Alert, AppState, BackHandler, Keyboard, Linking, Platform, StyleSheet, View } from "react-native";
+import * as Network from "expo-network";
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -38,6 +45,11 @@ import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
 import { Offline } from "./Offline";
+import { copyDocument } from "../offline/copy";
+import { refreshScript, reachedScript, returnScript } from "../offline/loader";
+import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
+import { offlineCopy } from "../offline/native";
+import { setOfflineRefreshHook } from "../offline/refresh-hook";
 
 export type ShellHandle = {
   // Opens a path of the instance ("/#inbox"); in the open page when possible.
@@ -60,6 +72,8 @@ export type ShellHandle = {
 
 type Props = {
   server: string;
+  // The active profile: its offline copy (iOS).
+  profile: string;
   onMessage: (message: PageMessage) => void;
   onAppLink: (link: string) => void;
   onProfiles: () => void;
@@ -81,12 +95,34 @@ function luminance(color: string) {
 }
 const transparent = (color: string) => color.replace(/^rgba?\(([^,]+),([^,]+),([^,)]+).*$/, "rgba($1,$2,$3,0)");
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
+// Whether the network lets the instance be tried at all.
+const connected = (state: Network.NetworkState) => !!state.isConnected && state.isInternetReachable !== false;
+
+// Whether the instance answers (its health check, without cookies).
+async function reachable(server: string) {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 6000);
+  try {
+    return (await fetch(`${server}/api/health`, { cache: "no-store", credentials: "omit", signal: abort.signal })).ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   // WebView<object>: its typings make the props `never` without a type argument.
   const web = useRef<WebView<object>>(null);
-  const [source, setSource] = useState({ uri: server });
+  const [source, setSource] = useState<{ uri: string } | { html: string; baseUrl: string }>({ uri: server });
+  // The profile's offline copy (iOS; null elsewhere and in older builds).
+  const copy = useMemo(() => (Platform.OS === "ios" ? offlineCopy(profile) : null), [profile]);
+  // The stored page is showing (not the live one).
+  const [showingCopy, setShowingCopy] = useState(false);
+  const showingCopyRef = useRef(false);
+  showingCopyRef.current = showingCopy;
   // A new key loads the page again even when the address stays the same.
   const [attempt, setAttempt] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -108,6 +144,39 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const bottomSettled = useRef(false);
 
   const onServer = () => originOf(pageUrl.current) === server;
+  // A message of the instance's page – the live one, or the stored one the
+  // app loaded itself (whose address some WebKit versions may report as
+  // about:blank).
+  const fromInstance = (url: string) => originOf(url) === server || (showingCopyRef.current && /^about:blank/.test(url || ""));
+
+  // Without a connection: the stored copy if there is one that works, the
+  // offline screen otherwise.
+  const building = useRef(false);
+  const showCopy = useCallback(async () => {
+    if (building.current) return;
+    building.current = true;
+    try {
+      const html = copy ? await copyDocument(copy).catch(() => null) : null;
+      if (!html) {
+        setOffline(true);
+        return;
+      }
+      const hash = pageUrl.current.includes("#") ? pageUrl.current.slice(pageUrl.current.indexOf("#")) : "";
+      setOffline(false);
+      setShowingCopy(true);
+      setSource({ html, baseUrl: `${server}/${hash}` });
+    } finally {
+      building.current = false;
+    }
+  }, [copy, server]);
+  // Back to the live page (the same page of it).
+  const goLive = useCallback(() => {
+    const hash = pageUrl.current.includes("#") ? pageUrl.current.slice(pageUrl.current.indexOf("#")) : "";
+    setShowingCopy(false);
+    setOffline(false);
+    setSource({ uri: `${server}/${hash}` });
+    setAttempt((value) => value + 1);
+  }, [server]);
 
   const run = useCallback((script: string) => web.current?.injectJavaScript(script), []);
   // The window's size (it changes when iPhone Duo opens or closes, in Split
@@ -125,6 +194,12 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   const navigate = useCallback(
     (path: string) => {
       const target = new URL(path, server).href;
+      // The stored copy has the app's page only: another place in it.
+      if (showingCopyRef.current) {
+        const url = new URL(target);
+        if (url.pathname === "/" && url.hash) run(`location.hash = ${JSON.stringify(url.hash)}; true;`);
+        return;
+      }
       setOffline(false);
       if (onServer()) run(`location.assign(${JSON.stringify(target)}); true;`);
       else setSource({ uri: target });
@@ -182,7 +257,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
       navigate,
       reload: () => {
         setOffline(false);
-        if (onServer()) web.current?.reload();
+        if (showingCopyRef.current) goLive();
+        else if (onServer()) web.current?.reload();
         else {
           setSource({ uri: server });
           setAttempt((value) => value + 1);
@@ -214,7 +290,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
         }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navigate, signInLink, server, run],
+    [navigate, signInLink, server, run, goLive],
   );
 
   // A new instance (another profile): start there, forget pending sign-ins,
@@ -227,7 +303,63 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     pageUrl.current = "";
     setSource({ uri: server });
     setOffline(false);
-  }, [server]);
+    setShowingCopy(false);
+    // No network at all: straight to the copy, without waiting for the
+    // web view to fail.
+    let stale = false;
+    void Network.getNetworkStateAsync()
+      .then((state) => {
+        if (!stale && !connected(state)) void showCopy();
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [server, showCopy]);
+
+  // The stored copy is showing: once the network is back and the instance
+  // answers, the page hears it (it sends what was changed offline) and the
+  // live page follows (returnScript waits until nobody types).
+  useEffect(() => {
+    if (!showingCopy) return;
+    let checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        if (await reachable(server)) {
+          run(reachedScript);
+          run(returnScript);
+        }
+      } finally {
+        checking = false;
+      }
+    };
+    const subscription = Network.addNetworkStateListener((state) => {
+      if (connected(state)) void check();
+    });
+    const foreground = AppState.addEventListener("change", (state) => state === "active" && void check());
+    return () => {
+      subscription.remove();
+      foreground.remove();
+    };
+  }, [showingCopy, server, run]);
+
+  // Back in the foreground: the page brings its copy up to date (it asks
+  // the instance only for what changed); the background task asks too.
+  useEffect(() => {
+    if (!copy || !features.main) return;
+    const ask = () => {
+      if (onServer() && !showingCopyRef.current) run(refreshScript);
+    };
+    const subscription = AppState.addEventListener("change", (state) => state === "active" && ask());
+    setOfflineRefreshHook(ask);
+    return () => {
+      subscription.remove();
+      setOfflineRefreshHook(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copy, features.main, run]);
 
   // "Back" (back.ts): the page decides on instances that know how, the web
   // view's history on older ones; otherwise back is the system's.
@@ -323,9 +455,18 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
 
   const handleMessage = (event: WebViewMessageEvent) => {
     // Only the instance's pages talk to the app.
-    if (originOf(event.nativeEvent.url) !== server) return;
+    if (!fromInstance(event.nativeEvent.url)) return;
     const message = parsePageMessage(event.nativeEvent.data);
     if (!message) return;
+    if (message.type === "offline") {
+      const call = parseOfflineMessage(message);
+      if (call && copy) void offlineAnswer(copy, call).then((script) => run(script));
+      return;
+    }
+    if (message.type === "offlineReturn") {
+      if (showingCopyRef.current) goLive();
+      return;
+    }
     if (message.type === "edges") handleEdges(message);
     else if (message.type === "signedOut") signedOut.current?.();
     else if (message.type === "backState") {
@@ -394,8 +535,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
 
   const retry = useCallback(() => {
     setOffline(false);
+    setShowingCopy(false);
+    setSource({ uri: server });
     setAttempt((value) => value + 1);
-  }, []);
+  }, [server]);
   if (offline) return <Offline server={server} onRetry={retry} onProfiles={onProfiles} />;
 
   return (
@@ -419,7 +562,15 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
           // The instance shows the app's sign-in (passkeys and SSO through the
           // system) when it sees this.
           applicationNameForUserAgent={`FlowplanMobile/${version}`}
-          injectedJavaScriptBeforeContentLoaded={bridgeScript({ server, platform: Platform.OS === "ios" ? "ios" : "android", version, scanner: scannerAvailable(), windows: features.windows, inkRecognition })}
+          injectedJavaScriptBeforeContentLoaded={bridgeScript({
+            server,
+            platform: Platform.OS === "ios" ? "ios" : "android",
+            version,
+            scanner: scannerAvailable(),
+            windows: features.windows,
+            inkRecognition,
+            offline: !!copy,
+          })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}
@@ -444,7 +595,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
             const url = event.nativeEvent.url;
             pageUrl.current = url;
             pageRendered(navigation.current);
-            if (originOf(url) !== server) return;
+            if (!fromInstance(url)) return;
             if (features.windows) run(windowsScript(windowsAvailable.current));
             if (redeemWhenLoaded.current) {
               run(redeemWhenLoaded.current);
@@ -459,7 +610,11 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
             // iOS: cancelled (-999), interrupted by the app's own decision (102);
             // Android: a scheme the web view does not load (-10).
             if (code === -999 || code === 102 || code === -10) return;
-            if (!url || originOf(url) === server) setOffline(true);
+            if (!url || originOf(url) === server) {
+              // The stored copy itself failed: the offline screen.
+              if (showingCopyRef.current) setOffline(true);
+              else void showCopy();
+            }
           }}
           onContentProcessDidTerminate={() => web.current?.reload()}
           onRenderProcessGone={() => web.current?.reload()}

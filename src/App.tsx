@@ -42,6 +42,7 @@ import { relayMismatch } from "./push-relay";
 import { onLiveTokensChanged } from "./native/live-push";
 import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
 import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
+import { wipeOfflineCopy, wipeOrphanCopies } from "./offline/native";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
 import { addFocusFilterListener } from "../modules/flowplan-intents/src";
@@ -116,6 +117,8 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
     syncWidgetSession();
     // Push relay keys of profiles left while the app was not running.
     cleanUpPushKeys();
+    // Offline copies of profiles removed while a write was running.
+    void wipeOrphanCopies(store.profiles().profiles.map((p) => p.id));
   }, []);
 
   const open = useCallback(
@@ -479,6 +482,8 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
     const next = removeProfile(store.profiles(), current.id);
     saveProfiles(next);
     void forgetSuiteProfile(current.id);
+    // The offline copy of the instance's content goes with the profile.
+    void wipeOfflineCopy(current.id);
     void refreshSuite({ force: true });
     if (!next.active) setSetup(true);
   };
@@ -519,6 +524,7 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
         <Shell
           ref={shell}
           server={server}
+          profile={activeProfile(profiles)?.id ?? ""}
           onMessage={(message) => void onMessage(message)}
           onAppLink={appLink}
           onProfiles={() => setSetup(true)}

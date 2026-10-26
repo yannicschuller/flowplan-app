@@ -7,6 +7,7 @@ import { setLocale, pickLocale } from "../i18n";
 import { getLocales } from "expo-localization";
 import { refresh } from "./sync";
 import { refreshActivities } from "./activities";
+import { requestOfflineRefresh } from "../offline/refresh-hook";
 
 const TASK = "flowplan-refresh";
 
@@ -18,6 +19,9 @@ export function defineBackgroundRefresh() {
       // Running Live Activities and ongoing notifications follow (iOS does
       // not start new ones in the background).
       await refreshActivities().catch(() => {});
+      // The open window's offline copy (iOS; only if iOS lets the web view
+      // run now – otherwise at the next foreground).
+      requestOfflineRefresh();
       return "failed" in result ? BackgroundTask.BackgroundTaskResult.Failed : BackgroundTask.BackgroundTaskResult.Success;
     } catch {
       return BackgroundTask.BackgroundTaskResult.Failed;
