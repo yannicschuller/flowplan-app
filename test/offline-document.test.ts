@@ -80,6 +80,7 @@ test("the pieces: attributes, paths, the policy, style sheets, UTF-8", async () 
       ["disabled", ""],
     ],
   );
+  assert.equal(attributes('<a title="&amp;lt;b&amp;gt; &amp;amp; &quot;c&quot;">').get("title"), '&lt;b&gt; &amp; "c"');
   assert.equal(staticPath("/_next/static/chunks/a.js?dpl=1"), "/_next/static/chunks/a.js?dpl=1");
   assert.equal(staticPath("https://flowplan.invalid/fonts/x.woff2"), "/fonts/x.woff2");
   for (const other of ["https://cdn.example/_next/static/a.js", "/api/files/x", "/sw.js", "//evil/_next/static/a.js", undefined]) assert.equal(staticPath(other), null, String(other));

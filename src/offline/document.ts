@@ -24,8 +24,9 @@ export type Lookup = (path: string) => Promise<{ body: string; type: string } | 
 const STATIC_PATH = /^\/(?:_next\/static\/[^"'?#\s]+|fonts\.css|fonts\/[^"'?#\s/]+|icons\/[^"'?#\s/]+)(?:\?[^"'#\s]*)?$/;
 export const COPY_META = '<meta name="flowplan-offline-copy" content="1">';
 
+// &amp; last, so "&amp;lt;" stays the text "&lt;".
 const unescapeAttr = (value: string) =>
-  value.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  value.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 const escapeAttr = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // The attributes of a start tag (React writes them double-quoted; bare and

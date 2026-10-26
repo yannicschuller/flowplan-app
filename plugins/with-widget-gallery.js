@@ -6,8 +6,10 @@ const { galleryStrings } = require("./widget-suite/strings");
 
 module.exports = (config) =>
   withStringsXml(config, (config) => {
+    // Android resources: a backslash starts an escape, a bare apostrophe is
+    // an error – both are escaped.
     config.modResults = AndroidConfig.Strings.setStringItem(
-      Object.entries(galleryStrings("en")).map(([name, value]) => ({ $: { name }, _: value.replace(/'/g, "\\'") })),
+      Object.entries(galleryStrings("en")).map(([name, value]) => ({ $: { name }, _: value.replace(/[\\']/g, "\\$&") })),
       config.modResults,
     );
     return config;
