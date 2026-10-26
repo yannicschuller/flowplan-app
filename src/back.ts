@@ -33,3 +33,25 @@ export function afterAnswer(handled: boolean | null, historyCanGoBack: boolean):
   if (handled === null && historyCanGoBack) return "history";
   return "system";
 }
+
+// The predictive back gesture on Android (modules/flowplan-android): its
+// progress goes to the page (backProgressScript, FlowplanNavigation.
+// backProgress in Flowplan's lib/app-back.ts), which shows what back will
+// close; "commit" is the back itself.
+export type BackPhase = "start" | "progress" | "cancel" | "commit";
+export type BackProgress = { phase: BackPhase; progress: number; edge: "left" | "right" };
+const PHASES: readonly BackPhase[] = ["start", "progress", "cancel", "commit"];
+
+// The native event, checked: a known phase, progress 0–1, a known edge.
+export function parseBackProgress(event: unknown): BackProgress | null {
+  if (!event || typeof event !== "object") return null;
+  const { phase, progress, edge } = event as Record<string, unknown>;
+  if (typeof phase !== "string" || !PHASES.includes(phase as BackPhase)) return null;
+  const value = typeof progress === "number" && Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0;
+  return { phase: phase as BackPhase, progress: Math.round(value * 1000) / 1000, edge: edge === "right" ? "right" : "left" };
+}
+
+// Whether the page gets the gesture: only when back is the page's own step.
+export function previewsBack(state: BackState): boolean {
+  return backAction(state) === "page";
+}

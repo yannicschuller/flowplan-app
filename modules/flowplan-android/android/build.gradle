@@ -13,3 +13,8 @@ android {
     versionName "1.0.0"
   }
 }
+
+dependencies {
+  // OnBackPressedCallback with the gesture's progress (BackEventCompat, 1.8+).
+  implementation 'androidx.activity:activity:1.9.3'
+}

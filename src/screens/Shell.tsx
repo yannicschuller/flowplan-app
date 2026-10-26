@@ -15,10 +15,12 @@ import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
+import { addBackProgressListener, setPredictiveBack } from "../../modules/flowplan-android/src";
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
-import { afterAnswer, backAction } from "../back";
+import { afterAnswer, backAction, parseBackProgress, previewsBack } from "../back";
 import {
+  backProgressScript,
   backScript,
   bridgeScript,
   downloadScript,
@@ -241,12 +243,28 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
   };
   const goBackRef = useRef(goBack);
   goBackRef.current = goBack;
+  // Android: back to the system (the launcher). The predictive back
+  // callback steps aside first, or the system's back would come to it again.
+  const leaveApp = () => {
+    setPredictiveBack(false);
+    BackHandler.exitApp();
+  };
   const handleBackAnswer = (handled: boolean | null) => {
     const next = afterAnswer(handled, canGoBack.current);
     if (next === "history") web.current?.goBack();
     // The page had nothing left to close (it changed meanwhile): Android
     // leaves the app as its back would have.
-    else if (next === "system" && Platform.OS === "android") BackHandler.exitApp();
+    else if (next === "system" && Platform.OS === "android") leaveApp();
+  };
+  // The predictive back gesture (Android 14+): its progress goes to the page,
+  // which shows what back will close (the top sheet sinks, the page slides);
+  // "commit" is the back itself, also for the back button.
+  const backProgressRef = useRef((_: unknown) => {});
+  backProgressRef.current = (raw: unknown) => {
+    const event = parseBackProgress(raw);
+    if (!event) return;
+    if (previewsBack(backState())) run(backProgressScript(event));
+    if (event.phase === "commit" && !goBack()) leaveApp();
   };
 
   // Android's back button and gesture.
@@ -254,6 +272,19 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, onM
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => goBackRef.current());
     return () => subscription.remove();
   }, []);
+  // With a step back in the page, the gesture (and its preview) is the app's;
+  // without one, the system's.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const subscription = addBackProgressListener((event) => backProgressRef.current(event));
+    return () => {
+      subscription.remove();
+      setPredictiveBack(false);
+    };
+  }, []);
+  useEffect(() => {
+    if (Platform.OS === "android") setPredictiveBack(active && backable && !offline);
+  }, [active, backable, offline]);
 
   // iOS: the swipe from the left edge (modules/flowplan-native) instead of
   // the web view's own, which walks its history – in the main window (it is

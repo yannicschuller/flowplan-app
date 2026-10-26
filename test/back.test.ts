@@ -3,8 +3,11 @@
 // pages, and the start page leaves back to the system.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { afterAnswer, backAction, type BackState } from "../src/back";
-import { backScript, bridgeScript, parsePageMessage } from "../src/bridge-script";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import config from "../app.config";
+import { afterAnswer, backAction, parseBackProgress, previewsBack, type BackState } from "../src/back";
+import { backProgressScript, backScript, bridgeScript, parsePageMessage } from "../src/bridge-script";
 
 const state = (extra: Partial<BackState> = {}): BackState => ({ offline: false, onServer: true, pageCanGoBack: null, historyCanGoBack: false, ...extra });
 
@@ -56,4 +59,50 @@ test("the page reports whether back does something through FlowplanApp.backState
   (window.FlowplanApp as { backState: (value: unknown) => void }).backState(true);
   (window.FlowplanApp as { backState: (value: unknown) => void }).backState("yes");
   assert.deepEqual(posted, [{ type: "backState", canGoBack: true }, { type: "backState", canGoBack: false }]);
+});
+
+test("the predictive back gesture's events are checked before they reach the page", () => {
+  assert.deepEqual(parseBackProgress({ phase: "start", progress: 0, edge: "left" }), { phase: "start", progress: 0, edge: "left" });
+  assert.deepEqual(parseBackProgress({ phase: "progress", progress: 0.4567, edge: "right" }), { phase: "progress", progress: 0.457, edge: "right" });
+  // Out of range and odd values are clamped or fall back.
+  assert.deepEqual(parseBackProgress({ phase: "progress", progress: 3, edge: "top" }), { phase: "progress", progress: 1, edge: "left" });
+  assert.deepEqual(parseBackProgress({ phase: "commit", progress: Number.NaN }), { phase: "commit", progress: 0, edge: "left" });
+  assert.equal(parseBackProgress({ phase: "jump", progress: 0.5 }), null);
+  assert.equal(parseBackProgress(null), null);
+  assert.equal(parseBackProgress("start"), null);
+});
+
+test("only the page's own step back is previewed", () => {
+  assert.equal(previewsBack(state({ pageCanGoBack: true })), true);
+  // Older instances go back in the history: nothing to preview.
+  assert.equal(previewsBack(state({ historyCanGoBack: true })), false);
+  assert.equal(previewsBack(state({ pageCanGoBack: false })), false);
+  assert.equal(previewsBack(state({ offline: true, pageCanGoBack: true })), false);
+});
+
+test("backProgressScript hands the gesture to FlowplanNavigation.backProgress", () => {
+  const calls: unknown[][] = [];
+  const window: Record<string, unknown> = { FlowplanNavigation: { backProgress: (...args: unknown[]) => calls.push(args) } };
+  new Function("window", backProgressScript({ phase: "progress", progress: 0.5, edge: "right" }))(window);
+  assert.deepEqual(calls, [["progress", 0.5, "right"]]);
+  // A page that throws or has no backProgress (older instances) is left alone.
+  new Function("window", backProgressScript({ phase: "start", progress: 0, edge: "left" }))({ FlowplanNavigation: { backProgress: () => { throw new Error("x"); } } });
+  new Function("window", backProgressScript({ phase: "start", progress: 0, edge: "left" }))({});
+  // Values are data, never code.
+  const odd: unknown[][] = [];
+  let ran = false;
+  new Function("window", "mark", backProgressScript({ phase: '"); mark(); ("', progress: Number.NaN, edge: "</script>" }))(
+    { FlowplanNavigation: { backProgress: (...args: unknown[]) => odd.push(args) } },
+    () => (ran = true),
+  );
+  assert.equal(ran, false);
+  assert.deepEqual(odd, [['"); mark(); ("', 0, "left"]]);
+});
+
+test("Android: predictive back is switched on and the module reports the gesture", () => {
+  assert.equal((config as { android?: { predictiveBackGestureEnabled?: boolean } }).android?.predictiveBackGestureEnabled, true);
+  const kotlin = readFileSync(join(__dirname, "../modules/flowplan-android/android/src/main/java/app/flowplan/androidshell/FlowplanAndroidModule.kt"), "utf8");
+  for (const name of ["handleOnBackStarted", "handleOnBackProgressed", "handleOnBackCancelled", "handleOnBackPressed", '"onBackProgress"', 'Function("setPredictiveBack")']) assert.ok(kotlin.includes(name), name);
+  for (const phase of ["start", "progress", "cancel", "commit"]) assert.ok(kotlin.includes(`sendBack("${phase}"`), phase);
+  assert.match(readFileSync(join(__dirname, "../modules/flowplan-android/android/build.gradle"), "utf8"), /androidx\.activity:activity:1\.(9|1\d)/);
 });

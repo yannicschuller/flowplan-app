@@ -264,3 +264,15 @@ export const backScript = `(() => {
   try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: "back", handled })); } catch (e) {}
 })();
 true;`;
+
+// The predictive back gesture's progress for the page (Android; src/back.ts
+// parseBackProgress has checked it). Instances without backProgress ignore it.
+export function backProgressScript(event: { phase: string; progress: number; edge: string }) {
+  return `(() => {
+  const nav = window.FlowplanNavigation;
+  if (nav && typeof nav.backProgress === "function") {
+    try { nav.backProgress(${JSON.stringify(event.phase)}, ${Number(event.progress) || 0}, ${JSON.stringify(event.edge === "right" ? "right" : "left")}); } catch (e) {}
+  }
+})();
+true;`;
+}
