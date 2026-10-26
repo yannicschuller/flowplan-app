@@ -12,7 +12,10 @@
 //   note (src/voice-bridge.ts; lib/native-app.ts in Flowplan); where the
 //   device can (iOS, Vision) it reads the handwriting of the page's ink
 //   (recognizeInk, src/ink-bridge.ts) and answers with the event
-//   "flowplan:ink-recognized";
+//   "flowplan:ink-recognized"; on iOS with the on-device AI module
+//   (modules/flowplan-ai) window.FlowplanApp.ai – Apple's on-device model
+//   for the page's light AI actions (src/ai-bridge.ts), answering with the
+//   event "flowplan:ai";
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
 //   page's offline module fills, kept by the app, and the loader that runs
 //   the stored page without a connection (src/offline/loader.ts);
@@ -46,6 +49,8 @@ export type PageMessage =
   | { type: "openWindow"; url: string }
   // Handwriting to read (ink-bridge.ts inkRequest checks it again).
   | { type: "recognizeInk"; id: string; width: number; height: number; strokes: unknown }
+  // A call of the on-device AI (ai-bridge.ts aiCall checks it).
+  | { type: "ai"; op: string; id: string; request?: unknown }
   // A call to the offline copy (src/offline/messages.ts checks it), and the
   // stored page that may give way to the live one (returnScript).
   | { type: "offline"; id: number; op: string; cache?: string | null; key?: string; entry?: unknown }
@@ -56,7 +61,7 @@ export function parsePageMessage(data: string): PageMessage | null {
     const message = JSON.parse(data) as PageMessage;
     if (!message || typeof message !== "object" || typeof message.type !== "string") return null;
     // Without an id there is no one to answer (ink-bridge.ts checks the rest).
-    if (message.type === "recognizeInk" && typeof (message as { id?: unknown }).id !== "string") return null;
+    if ((message.type === "recognizeInk" || message.type === "ai") && typeof (message as { id?: unknown }).id !== "string") return null;
     return message;
   } catch {
     return null;
@@ -70,6 +75,9 @@ export function bridgeScript(options: {
   scanner?: boolean;
   windows?: boolean;
   inkRecognition?: boolean;
+  // iOS: Apple's on-device model (modules/flowplan-ai; availability() says
+  // whether it runs on this device).
+  ai?: boolean;
   // iOS: the app keeps the offline copy (src/offline/loader.ts).
   offline?: boolean;
 }) {
@@ -114,6 +122,42 @@ export function bridgeScript(options: {
     post({ type: "recognizeInk", id: String((request && request.id) || "").slice(0, 200), width: request ? Number(request.width ?? NaN) : NaN, height: request ? Number(request.height ?? NaN) : NaN, strokes });
   };`
       : ""
+  }${
+    options.ai
+      ? `
+  // On-device AI (src/ai-bridge.ts): the contract of lib/ai/device.ts in
+  // Flowplan, the same as window.FlowplanDesktop.ai. Calls wait for the
+  // event "flowplan:ai" { id, kind: "done" | "chunk" | "error", … }; one
+  // call per id at a time.
+  const aiPending = new Map();
+  let aiCount = 0;
+  const aiError = (code, message) => Object.assign(new Error(String(message || code)), { code: String(code) });
+  addEventListener("flowplan:ai", (event) => {
+    const detail = event.detail || {};
+    const entry = aiPending.get(detail.id);
+    if (!entry) return;
+    if (detail.kind === "chunk") {
+      if (entry.onChunk && typeof detail.text === "string") try { entry.onChunk(detail.text); } catch (e) {}
+      return;
+    }
+    aiPending.delete(detail.id);
+    if (detail.kind === "error") entry.reject(aiError(detail.code || "error", detail.message));
+    else entry.resolve(detail.result);
+  });
+  const aiCall = (op, id, request, onChunk) => new Promise((resolve, reject) => {
+    if (!id || aiPending.has(id)) return reject(aiError(id ? "busy" : "error", id ? "busy" : "id"));
+    aiPending.set(id, { resolve, reject, onChunk: typeof onChunk === "function" ? onChunk : null });
+    post({ type: "ai", op, id, request });
+  });
+  const aiId = (request) => String((request && request.id) || "").slice(0, 100);
+  const ai = Object.freeze({
+    version: 1,
+    availability: () => aiCall("availability", "#a" + ++aiCount, undefined),
+    generate: (request) => aiCall("generate", aiId(request), request),
+    stream: (request, onChunk) => aiCall("stream", aiId(request), request && { ...request, schema: undefined }, onChunk),
+    cancel: (id) => post({ type: "ai", op: "cancel", id: String(id || "").slice(0, 100) }),
+  });`
+      : ""
   }
   window.FlowplanApp = Object.freeze({
     platform: ${JSON.stringify(options.platform)},
@@ -127,7 +171,7 @@ export function bridgeScript(options: {
         ? `
     scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`
         : ""
-    }${options.inkRecognition ? `\n    recognizeInk,` : ""}
+    }${options.inkRecognition ? `\n    recognizeInk,` : ""}${options.ai ? `\n    ai,` : ""}
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${options.offline ? `\n    offline,` : ""}${

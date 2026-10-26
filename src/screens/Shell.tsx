@@ -25,6 +25,7 @@ import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../mod
 import { addBackProgressListener, setPredictiveBack } from "../../modules/flowplan-android/src";
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
+import { deviceAiAvailability, deviceAiCancel, deviceAiGenerate, deviceAiLinked, deviceAiStream, DeviceAiError } from "../../modules/flowplan-ai/src";
 import { afterAnswer, backAction, parseBackProgress, previewsBack } from "../back";
 import {
   backProgressScript,
@@ -41,6 +42,7 @@ import {
 } from "../bridge-script";
 import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
+import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
 import { originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
@@ -88,6 +90,7 @@ type Props = {
 const version = Application.nativeApplicationVersion || "1.0.0";
 // Checked once: Vision's text recognition does not come and go.
 const inkRecognition = inkRecognitionAvailable();
+const deviceAi = deviceAiLinked();
 const FADE = 14;
 
 function luminance(color: string) {
@@ -484,6 +487,30 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       });
   };
 
+  // On-device AI (ai-bridge.ts): the module runs one request at a time and
+  // refuses others as "busy"; answers and the streamed text go only to the
+  // instance's page.
+  const handleAi = (message: Extract<PageMessage, { type: "ai" }>) => {
+    const call = aiCall(message);
+    if (!call) return;
+    const answer = (detail: AiDetail) => {
+      if (onServer()) run(aiScript(detail));
+    };
+    const failed = (error: unknown) => answer(aiFailure(call.id, error instanceof DeviceAiError ? error.code : "error"));
+    switch (call.op) {
+      case "availability":
+        return void deviceAiAvailability().then((result) => answer({ id: call.id, kind: "done", result }));
+      case "cancel":
+        return deviceAiCancel(call.id);
+      case "failed":
+        return answer(aiFailure(call.id, call.code));
+      case "generate":
+        return void deviceAiGenerate(call.request).then((result) => answer({ id: call.id, kind: "done", result }), failed);
+      case "stream":
+        return void deviceAiStream(call.request, (text) => answer({ id: call.id, kind: "chunk", text })).then((result) => answer({ id: call.id, kind: "done", result }), failed);
+    }
+  };
+
   const handleMessage = (event: WebViewMessageEvent) => {
     // Only the instance's pages talk to the app.
     if (!fromInstance(event.nativeEvent.url)) return;
@@ -506,6 +533,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     } else if (message.type === "back") handleBackAnswer(message.handled);
     else if (message.type === "shortcuts") features.shortcuts(message.list);
     else if (message.type === "recognizeInk") handleInk(message);
+    else if (message.type === "ai") handleAi(message);
     else if (message.type === "openWindow") {
       if (!features.openWindow(message.url)) route(message.url, true, true);
     } else onMessage(message);
@@ -600,6 +628,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             scanner: scannerAvailable(),
             windows: features.windows,
             inkRecognition,
+            ai: deviceAi,
             offline: !!copy,
           })}
           injectedJavaScriptForMainFrameOnly
