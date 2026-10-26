@@ -1,7 +1,7 @@
 // Android pieces of the Flowplan app (Kotlin in android/): "Share" from other
 // apps, the app shortcuts on the launcher icon, the Material You palette for
-// the widgets and the "Quick capture" Quick Settings tile. Everything is a
-// no-op elsewhere.
+// the widgets, the "Quick capture" Quick Settings tile and the progress of the
+// predictive back gesture. Everything is a no-op elsewhere.
 import { Platform } from "react-native";
 import { requireOptionalNativeModule, type EventSubscription } from "expo";
 
@@ -24,7 +24,9 @@ type NativeModule = {
   materialColors(): MaterialPalette | null;
   canAddTile(): boolean;
   requestAddTile(label: string): boolean;
+  setPredictiveBack?(enabled: boolean): boolean;
   addListener(event: "onShare", listener: () => void): EventSubscription;
+  addListener(event: "onBackProgress", listener: (event: unknown) => void): EventSubscription;
 };
 
 const native = Platform.OS === "android" ? requireOptionalNativeModule<NativeModule>("FlowplanAndroid") : null;
@@ -61,3 +63,12 @@ export const materialColors = (): MaterialPalette | null => quiet(() => native?.
 
 export const canAddTile = () => quiet(() => native?.canAddTile() ?? false, false);
 export const requestAddTile = (label: string) => quiet(() => native?.requestAddTile(label) ?? false, false);
+
+// The predictive back gesture (Android 14+; the back button on older ones):
+// while on, back is the app's and its progress arrives as events – phase
+// "start", "progress" (0–1), then "cancel" or "commit" (the back itself),
+// with the edge the swipe began at. src/back.ts parseBackProgress checks them.
+export const setPredictiveBack = (enabled: boolean) => quiet(() => native?.setPredictiveBack?.(enabled) ?? false, false);
+export function addBackProgressListener(listener: (event: unknown) => void) {
+  return native ? native.addListener("onBackProgress", listener) : { remove() {} };
+}
