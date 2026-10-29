@@ -8,6 +8,8 @@
 
 [Flowplan](https://github.com/yannicschuller/flowplan) · [Flowplan Desktop](https://github.com/yannicschuller/flowplan-desktop) · [Documentation](https://docs.flowplan.org/offline-and-apps)
 
+**Beta for iPhone and iPad:** [join on TestFlight](https://testflight.apple.com/join/Yjy9aZAE) · Android: coming soon
+
 <img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, widgets, projects board, a document, a whiteboard and profiles">
 
 </div>
