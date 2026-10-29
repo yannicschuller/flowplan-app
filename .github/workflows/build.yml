@@ -139,7 +139,7 @@ jobs:
           [ -f ios/build/Flowplan-simulator.zip ] && cp ios/build/Flowplan-simulator.zip "out/Flowplan-$version-ios-simulator.zip" || true
       - uses: actions/upload-artifact@v7
         with:
-          name: flowplan-ios-${{ inputs.ref || github.sha }}
+          name: flowplan-ios-${{ inputs.release != '' && format('v{0}', inputs.release) || github.sha }}
           path: out/*
           retention-days: 14
       - name: Attach to the release
@@ -215,7 +215,7 @@ jobs:
           rm -f google-services.json
       - uses: actions/upload-artifact@v7
         with:
-          name: flowplan-android-${{ inputs.ref || github.sha }}
+          name: flowplan-android-${{ inputs.release != '' && format('v{0}', inputs.release) || github.sha }}
           path: out/*
           retention-days: 14
       - name: Attach to the release
