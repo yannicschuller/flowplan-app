@@ -21,6 +21,7 @@ import { pickLocale, setLocale } from "./i18n";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
 import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
 import { activeProfile, addProfile, removeProfile, renameProfile, switchProfile, type ProfileState } from "./profiles";
+import { checkAndroidUpdate } from "./android-update";
 import { store } from "./store";
 import { BACKGROUND } from "./ui";
 import { Cover, Lock } from "./screens/Lock";
@@ -106,6 +107,7 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
   const backgroundSince = useRef(0);
 
   useEffect(() => {
+    void checkAndroidUpdate();
     void SystemUI.setBackgroundColorAsync(BACKGROUND.light).catch(() => {});
     setUpNotifications();
     // The buttons on notifications, and (iOS) the session they act with.
@@ -233,6 +235,7 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
         void syncShortcuts(!!store.deviceToken());
       }
       if (state === "active") {
+        void checkAndroidUpdate();
         if (store.appLock() && backgroundSince.current && Date.now() - backgroundSince.current > LOCK_AFTER_MS) setLocked(true);
         backgroundSince.current = 0;
         const pending = consumePendingLink();

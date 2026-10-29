@@ -278,6 +278,10 @@ const de = {
   adminLastBackup: "Letzte Sicherung",
   adminDiskUsed: "Festplatte belegt",
   adminFullestShort: "Vollster Arbeitsbereich",
+  updateTitle: "Neue Version {version}",
+  updateText: "Eine neue Version der Flowplan-App ist da. Sie wird im Browser heruntergeladen; öffne danach die Datei, um sie zu installieren – deine Anmeldung und Daten bleiben erhalten.",
+  updateNow: "Herunterladen",
+  updateLater: "Später",
 };
 type Key = keyof typeof de;
 
@@ -552,6 +556,10 @@ const en: Record<Key, string> = {
   adminLastBackup: "Last backup",
   adminDiskUsed: "Disk used",
   adminFullestShort: "Fullest workspace",
+  updateTitle: "New version {version}",
+  updateText: "A new version of the Flowplan app is available. It downloads in the browser; then open the file to install it – your sign-in and data stay.",
+  updateNow: "Download",
+  updateLater: "Later",
 };
 
 const fr: Record<Key, string> = {
@@ -825,6 +833,10 @@ const fr: Record<Key, string> = {
   adminLastBackup: "Dernière sauvegarde",
   adminDiskUsed: "Disque utilisé",
   adminFullestShort: "Espace le plus plein",
+  updateTitle: "Nouvelle version {version}",
+  updateText: "Une nouvelle version de l’app Flowplan est disponible. Elle se télécharge dans le navigateur ; ouvre ensuite le fichier pour l’installer – ta connexion et tes données sont conservées.",
+  updateNow: "Télécharger",
+  updateLater: "Plus tard",
 };
 
 export const strings = { de, en, fr } as const;

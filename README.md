@@ -8,7 +8,7 @@
 
 [Flowplan](https://github.com/yannicschuller/flowplan) · [Flowplan Desktop](https://github.com/yannicschuller/flowplan-desktop) · [Documentation](https://docs.flowplan.org/offline-and-apps)
 
-**Beta for iPhone and iPad:** [join on TestFlight](https://testflight.apple.com/join/Yjy9aZAE) · Android: coming soon
+**Beta for iPhone and iPad:** [join on TestFlight](https://testflight.apple.com/join/Yjy9aZAE) · **Android:** [download the APK](https://flowplan.org/download/android.apk) (updates itself, see [Android without a store](#android-without-a-store-apk-download))
 
 <img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, widgets, projects board, a document, a whiteboard and profiles">
 
@@ -301,6 +301,14 @@ keytool -genkeypair -v -keystore flowplan-upload.jks -alias upload -keyalg RSA -
 
 Play App Signing keeps the actual signing key at Google. Keep the upload keystore and its passwords safe (password manager); if it is lost, Play support can reset the upload key. The Expo app uses the same IDs and keys as the earlier Capacitor app, so it updates installed apps.
 
+### Android without a store (APK download)
+
+Android is handed out as an APK, without Google Play: every release attaches the signed `Flowplan-<version>-android.apk`, and the website offers the latest one at **flowplan.org/download/android.apk** (`app/api/android` in flowplan-website reads the latest release of this repository with its `GITHUB_TOKEN` – a fine-grained token with read access to the contents of flowplan-app – and redirects to the file; while the repository is private, nothing else can reach it).
+
+- **Signing:** only `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` are needed (create the key as below). Without Play, this key *is* the app's signing key: Android installs an update only when it is signed with the same key, so keep it and its passwords safe – if it is lost, everybody has to uninstall and install the app again.
+- **Updates:** the app asks `flowplan.org/api/android` once a day (`src/android-update.ts`). When a newer version is out, it offers **Download**: the browser fetches the APK and Android's installer updates the app in place, sign-in and data stay. **Later** asks again for that version after a week.
+- **Store builds:** `FLOWPLAN_ANDROID_UPDATES=0` turns the check off (Play updates by itself). Apps from Play are signed with Google's key and cannot be updated with the APK, and the other way round.
+
 ## Releasing
 
 **Actions → Release → Run workflow** ([`release.yml`](.github/workflows/release.yml)), on the Mac:
@@ -310,7 +318,7 @@ Play App Signing keeps the actual signing key at Google. Keep the upload keystor
 3. with secrets, **upload** checked and the version that is released typed into **confirm** (e.g. `1.0.1`; the run stops before tagging when it does not match, so nothing goes to the stores by accident):
    - iOS goes to **TestFlight** (`fastlane ios beta`);
    - Android goes to Play's **internal testing** track (`fastlane android internal`);
-4. attaches the builds to a GitHub release and publishes it.
+4. attaches the builds to a GitHub release and publishes it – from then on the website offers the new APK and the Android app offers the update.
 
 If a build fails, run the workflow again with **rebuild** set to the version (e.g. `1.0.1`) and **build** raised (1, 2, …). Stores refuse a build number they have seen.
 

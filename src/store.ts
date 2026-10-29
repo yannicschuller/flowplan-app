@@ -24,6 +24,7 @@ const KEYS = {
   installation: "flowplan.installation",
   appLock: "flowplan.appLock",
   pushAsked: "flowplan.pushAsked",
+  updateCheck: "flowplan.updateCheck",
 } as const;
 
 function read(key: string) {
@@ -106,6 +107,11 @@ export const store = {
 
   pushAsked: () => read(KEYS.pushAsked) === "1",
   setPushAsked: () => write(KEYS.pushAsked, "1"),
+
+  // Android outside the stores: when the app last looked for an update and
+  // the version the person said "later" to (src/android-update.ts).
+  updateCheck: () => read(KEYS.updateCheck),
+  setUpdateCheck: (value: string) => write(KEYS.updateCheck, value),
 
   // A profile's registration with the push relay (by id: also read while
   // leaving it). The device token itself is not kept, only its hash.

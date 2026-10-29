@@ -139,3 +139,22 @@ test("Material You: the system's tones for the widgets' roles, Flowplan's colour
   const kotlin = readFileSync(join(root, "modules/flowplan-android/android/src/main/java/app/flowplan/androidshell/MaterialColors.kt"), "utf8");
   assert.deepEqual([...kotlin.matchAll(/"(\w+_\d+)" to/g)].map((m) => m[1]).sort(), Object.keys(palette).sort());
 });
+
+test("update check: the website's answer, when to ask, what is offered", async () => {
+  const { due, offer, parseCheckState, parseUpdateInfo } = await import("../src/android/update-check");
+  const info = parseUpdateInfo({ version: "1.2.0", versionCode: 1020000, url: "https://flowplan.org/download/android.apk" });
+  assert.deepEqual(info, { version: "1.2.0", versionCode: 1020000, url: "https://flowplan.org/download/android.apk" });
+  assert.equal(parseUpdateInfo({ version: "1.2", versionCode: 1, url: "https://x.y" }), null);
+  assert.equal(parseUpdateInfo({ version: "1.2.0", versionCode: 1020000, url: "http://flowplan.org/a.apk" }), null);
+  assert.equal(parseUpdateInfo(null), null);
+  const day = 24 * 60 * 60 * 1000;
+  assert.deepEqual(parseCheckState("nonsense"), { at: 0 });
+  assert.equal(due({ at: 0 }, day), true);
+  assert.equal(due({ at: day }, day + 1000), false);
+  // Newer only, and "later" holds for a week for that version.
+  assert.equal(offer(info!, 1020000, { at: 0 }, day), false);
+  assert.equal(offer(info!, 1010000, { at: 0 }, day), true);
+  assert.equal(offer(info!, 1010000, { at: 0, skipped: "1.2.0", skippedAt: day }, 3 * day), false);
+  assert.equal(offer(info!, 1010000, { at: 0, skipped: "1.2.0", skippedAt: day }, 9 * day), true);
+  assert.equal(offer(info!, 1010000, { at: 0, skipped: "1.1.0", skippedAt: day }, 2 * day), true);
+});

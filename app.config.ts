@@ -424,6 +424,10 @@ const config: ExpoConfig = {
     widgets: WIDGETS,
     // Push through the relay (src/native/push.ts).
     pushRelay: PUSH_RELAY,
+    // Android outside the stores: look for a newer APK on the website
+    // (src/android-update.ts); FLOWPLAN_ANDROID_UPDATES=0 for a store build.
+    androidUpdates: process.env.FLOWPLAN_ANDROID_UPDATES !== "0",
+    androidUpdateFeed: (process.env.ANDROID_UPDATE_FEED || "https://flowplan.org/api/android").trim(),
     apsEnvironment: APS_ENVIRONMENT,
     // Expo's push service – only for instances without the relay (README →
     // Push) – needs the project of the app.
