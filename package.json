@@ -75,5 +75,14 @@
     "store:images": "node scripts/store-images.mjs",
     "store:creative": "node scripts/creative-assets.mjs",
     "preview": "node scripts/preview-video.mjs"
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-notifications"
+        ]
+      }
+    }
   }
 }

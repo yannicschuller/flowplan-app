@@ -16,7 +16,9 @@ android {
 
 dependencies {
   // FlowplanMessagingService hands decrypted messages on to expo-notifications'
-  // service (channels, categories and their buttons, taps, badge).
+  // service (channels, categories and their buttons, taps, badge). Expo
+  // ships expo-notifications precompiled; package.json's
+  // expo.autolinking.android.buildFromSource keeps it a Gradle project here.
   implementation project(':expo-notifications')
   // The version expo-notifications 58.1 uses.
   implementation 'com.google.firebase:firebase-messaging:25.0.1'
