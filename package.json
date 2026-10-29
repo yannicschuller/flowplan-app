@@ -1,7 +1,7 @@
 {
   "name": "flowplan-app",
   "productName": "Flowplan",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Flowplan as an app for iPhone, iPad and Android",
   "private": true,
   "author": "Flowplan",
