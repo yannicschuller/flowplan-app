@@ -11,7 +11,9 @@
 // (useSharedState).
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 
-export type WindowProps = { flowplanWindow?: { scene?: string; url?: string } };
+export type WindowProps = {
+  flowplanWindow?: { scene?: string; url?: string; shortcut?: { id?: string; path?: string; link?: string } };
+};
 
 export function windowRegistry() {
   const open: string[] = [];

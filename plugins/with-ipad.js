@@ -7,8 +7,9 @@
 //   Mac app flowplan-desktop) and "app.flowplan.window" (asks for a new
 //   window with a page).
 // - SceneDelegate.swift (Expo's template): every window's root component
-//   gets { flowplanWindow: { scene, url } } – its id, and the page of a new
-//   window or of a page window iPadOS brings back.
+//   gets { flowplanWindow: { scene, url, shortcut } } – its id, the page of a
+//   new window or of a page window iPadOS brings back, and the quick action
+//   on the app icon that started the app.
 const { withDangerousMod, withInfoPlist } = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -36,6 +37,16 @@ const SCENE_CODE = `
               restored.userInfo?["window"] as? String == "page",
               let url = restored.userInfo?["url"] as? String {
       window["url"] = url
+    }
+    // A quick action on the app icon that starts the app: with scenes, iOS
+    // hands it to the scene, not to the launch options expo-quick-actions
+    // reads (src/native/actions.ts). Its id and parameters (path, link).
+    if let item = connectionOptions.shortcutItem {
+      var shortcut: [String: Any] = ["id": item.type]
+      for (key, value) in item.userInfo ?? [:] {
+        if let value = value as? String { shortcut[key] = value }
+      }
+      window["shortcut"] = shortcut
     }
     flowplanWindow = ["flowplanWindow": window]
     super.scene(scene, willConnectTo: session, options: connectionOptions)

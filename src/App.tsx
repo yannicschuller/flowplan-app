@@ -35,7 +35,7 @@ import { shortcutLinkOpened, syncShortcuts } from "./android/shortcuts";
 import { Scan } from "./screens/Scan";
 import { VoiceNote } from "./screens/VoiceNote";
 import { PageWindow } from "./screens/PageWindow";
-import { haptic, onQuickAction, saveFile, setQuickActions } from "./native/actions";
+import { haptic, onQuickAction, saveFile, setQuickActions, startAction, type QuickAction } from "./native/actions";
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
 import { cleanUpPushKeys, leavePush, onDeviceTokenChanged, pushFields, RELAY, relayRefusedBy } from "./native/push";
@@ -69,13 +69,17 @@ export default function App(props: WindowProps) {
   return (
     <SafeAreaProvider>
       <WindowContext.Provider value={appWindow}>
-        {appWindow.main ? <Root initialUrl={appWindow.url} /> : <PageWindow url={appWindow.url} />}
+        {appWindow.main ? (
+          <Root initialUrl={appWindow.url} shortcut={props.flowplanWindow?.shortcut} />
+        ) : (
+          <PageWindow url={appWindow.url} />
+        )}
       </WindowContext.Provider>
     </SafeAreaProvider>
   );
 }
 
-function Root({ initialUrl }: { initialUrl: string | null }) {
+function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: { id?: string; path?: string; link?: string } }) {
   // Shared with the other windows (windows.ts).
   const [profiles, setProfiles] = useSharedState<ProfileState>("profiles", () => store.profiles());
   const server = activeProfile(profiles)?.server ?? null;
@@ -97,7 +101,10 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
   // A window that became the main window keeps its page.
-  const pendingPath = useRef<string | null>(pathOn(initialUrl, server));
+  // The quick action that started the app (iOS): its page opens as the
+  // first one, its link (capture) once the app is there.
+  const started = useRef<QuickAction | null>(startAction(shortcut));
+  const pendingPath = useRef<string | null>(pathOn(initialUrl, server) ?? ((server && started.current?.path) || null));
   const registered = useRef<string | null>(null);
   // The registration last sent to the page, and whether the push relay
   // waits for its answer (push.ts → pushFields: pending).
@@ -180,7 +187,11 @@ function Root({ initialUrl }: { initialUrl: string | null }) {
     const opened = onNotificationOpened(open);
     const received = onNotificationReceived(() => void refresh());
     const buttons = onNotificationButton();
-    const actions = onQuickAction(({ id, path, link }) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path)));
+    const quickAction = ({ id, path, link }: QuickAction) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path));
+    const first = started.current;
+    started.current = null;
+    if (first && (first.id === "server" || first.link)) quickAction(first);
+    const actions = onQuickAction(quickAction);
     const takeAndShow = () => void takeShare().then((shared) => shared && share(shared));
     takeAndShow();
     const shares = addShareListener(takeAndShow);

@@ -48,7 +48,17 @@ export function setQuickActions(signedIn: boolean) {
   void QuickActions.setItems(items).catch(() => {});
 }
 
-export function onQuickAction(listener: (action: { id: string; path: string; link: string }) => void) {
+export type QuickAction = { id: string; path: string; link: string };
+
+// The quick action that started the app (iOS: from the scene,
+// plugins/with-ipad.js) – null without one.
+export function startAction(shortcut: { id?: unknown; path?: unknown; link?: unknown } | undefined): QuickAction | null {
+  if (!shortcut || typeof shortcut.id !== "string" || !shortcut.id) return null;
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return { id: shortcut.id, path: text(shortcut.path), link: text(shortcut.link) };
+}
+
+export function onQuickAction(listener: (action: QuickAction) => void) {
   const handle = (action: QuickActions.Action) =>
     listener({ id: action.id, path: String(action.params?.path ?? ""), link: String(action.params?.link ?? "") });
   if (QuickActions.initial) handle(QuickActions.initial);

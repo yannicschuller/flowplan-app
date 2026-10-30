@@ -169,6 +169,9 @@ class SceneDelegate: ExpoAppSceneDelegate {
   assert.match(patched, /override var initialProperties/);
   assert.match(patched, /super\.scene\(scene, willConnectTo: session, options: connectionOptions\)/);
   assert.match(patched, /@objc\(stateRestorationActivityForScene:\)/);
+  // A quick action that starts the app reaches the main window (scenes get it, not the launch options).
+  assert.match(patched, /if let item = connectionOptions\.shortcutItem \{/);
+  assert.match(patched, /window\["shortcut"\] = shortcut/);
   // The extension point stays for other plugins; a second run changes nothing.
   assert.match(patched, /\/\/ Extension point for config plugins\./);
   assert.equal(patchSceneDelegate(patched), patched);
