@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkServer, isFlowplanHealth, normalizeServer, originOf, type HttpResponse } from "../src/server";
+import { checkServer, isFlowplanHealth, isPlainHttp, localKind, normalizeServer, originOf, plainHttpAllowed, type HttpResponse } from "../src/server";
 import { pickLocale, strings, t } from "../src/i18n";
 
 test("addresses are normalised to an origin", () => {
@@ -14,12 +14,107 @@ test("addresses are normalised to an origin", () => {
   assert.equal(originOf("nonsense"), null);
 });
 
-test("plain HTTP, other schemes and nonsense are refused", () => {
+test("plain HTTP to public addresses, other schemes and nonsense are refused", () => {
   assert.throws(() => normalizeServer(""), { code: "empty" });
   assert.throws(() => normalizeServer("http://flowplan.example.com"), { code: "https" });
+  assert.throws(() => normalizeServer("http://example.com"), { code: "https" });
+  assert.throws(() => normalizeServer("http://8.8.8.8"), { code: "https" });
   assert.throws(() => normalizeServer("ftp://flowplan.example.com"), { code: "invalid" });
   assert.throws(() => normalizeServer("javascript://alert(1)"), { code: "invalid" });
   assert.throws(() => normalizeServer("https://exa mple.com"), { code: "invalid" });
+});
+
+test("local network addresses are told from public ones", () => {
+  const local: [string, string][] = [
+    ["127.0.0.1", "ip"],
+    ["127.1.2.3", "ip"],
+    ["10.0.2.2", "ip"],
+    ["10.255.255.255", "ip"],
+    ["172.16.0.1", "ip"],
+    ["172.31.255.254", "ip"],
+    ["192.168.1.20", "ip"],
+    ["169.254.10.1", "ip"],
+    ["100.64.0.1", "ip"],
+    ["100.127.255.255", "ip"],
+    ["[::1]", "ip"],
+    ["[fc00::1]", "ip"],
+    ["[fd12:3456:789a::1]", "ip"],
+    ["[fe80::1]", "ip"],
+    ["[febf::1]", "ip"],
+    ["localhost", "name"],
+    ["nas", "name"],
+    ["NAS", "name"],
+    ["flowplan.local", "local"],
+    ["flowplan.lan", "domain"],
+    ["flowplan.home.arpa", "domain"],
+    ["flowplan.internal", "domain"],
+    ["app.localhost", "domain"],
+  ];
+  for (const [host, kind] of local) assert.equal(localKind(host), kind, host);
+  const public_ = [
+    "172.15.255.255",
+    "172.32.0.1",
+    "100.63.255.255",
+    "100.128.0.1",
+    "192.169.1.1",
+    "192.167.1.1",
+    "169.253.1.1",
+    "11.0.0.1",
+    "8.8.8.8",
+    "0.0.0.0",
+    "[2001:db8::1]",
+    "[2a00:1450::1]",
+    "[fec0::1]",
+    "[::ffff:c0a8:101]",
+    "example.com",
+    "flowplan.example.com",
+    "nas.ts.net",
+    "flowplan.tail1234.ts.net",
+    "local.example.com",
+    "lan.example.com",
+    "nas.",
+    "",
+  ];
+  for (const host of public_) assert.equal(localKind(host), null, host);
+  // iOS (App Transport Security) lets only IPs, names without a dot and .local through.
+  assert.ok(plainHttpAllowed("flowplan.lan", "android"));
+  assert.ok(!plainHttpAllowed("flowplan.lan", "ios"));
+  assert.ok(plainHttpAllowed("flowplan.local", "ios"));
+  assert.ok(plainHttpAllowed("nas", "ios"));
+  assert.ok(plainHttpAllowed("[fd00::1]", "ios"));
+  assert.ok(!plainHttpAllowed("example.com", "android"));
+});
+
+test("plain HTTP is accepted in the local network only, HTTPS everywhere", () => {
+  assert.equal(normalizeServer("http://192.168.1.20:3000/login"), "http://192.168.1.20:3000");
+  assert.equal(normalizeServer("http://nas"), "http://nas");
+  assert.equal(normalizeServer("http://NAS:8080", "ios"), "http://nas:8080");
+  assert.equal(normalizeServer("http://flowplan.local", "ios"), "http://flowplan.local");
+  assert.equal(normalizeServer("http://[fd00::5]:3000"), "http://[fd00::5]:3000");
+  assert.equal(normalizeServer("http://100.100.1.2"), "http://100.100.1.2");
+  // The URL parser's other spellings of an IPv4 address count as that address.
+  assert.equal(normalizeServer("http://3232235796"), "http://192.168.1.20");
+  assert.throws(() => normalizeServer("http://172.32.0.1"), { code: "https" });
+  assert.throws(() => normalizeServer("http://100.63.1.1"), { code: "https" });
+  assert.throws(() => normalizeServer("http://192.169.1.1"), { code: "https" });
+  assert.throws(() => normalizeServer("http://nas.tail1234.ts.net"), { code: "https" });
+  assert.throws(() => normalizeServer("http://example.com", "ios"), { code: "https" });
+  // Android takes home-network suffixes, iOS explains why not.
+  assert.equal(normalizeServer("http://flowplan.lan"), "http://flowplan.lan");
+  assert.equal(normalizeServer("http://flowplan.home.arpa", "android"), "http://flowplan.home.arpa");
+  assert.throws(() => normalizeServer("http://flowplan.lan", "ios"), { code: "httpName" });
+  assert.throws(() => normalizeServer("http://dev.localhost", "ios"), { code: "httpName" });
+  // HTTPS is fine for any address, local or public.
+  for (const host of ["example.com", "8.8.8.8", "nas", "flowplan.lan", "nas.tail1234.ts.net", "192.168.1.20"])
+    for (const platform of ["ios", "android"] as const) assert.equal(normalizeServer(`https://${host}`, platform), `https://${host}`);
+  // An address without a scheme means HTTPS – never silently plain HTTP.
+  assert.equal(normalizeServer("192.168.1.20:3000"), "https://192.168.1.20:3000");
+  // The setup screen warns for what will connect without encryption.
+  assert.ok(isPlainHttp("http://192.168.1.20:3000"));
+  assert.ok(!isPlainHttp("https://192.168.1.20"));
+  assert.ok(!isPlainHttp("http://example.com"));
+  assert.ok(!isPlainHttp("http://flowplan.lan", "ios"));
+  assert.ok(!isPlainHttp("http://"));
 });
 
 test("the health check must name Flowplan", () => {

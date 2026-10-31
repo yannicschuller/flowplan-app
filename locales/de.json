@@ -6,7 +6,8 @@
     "NSPhotoLibraryUsageDescription": "Flowplan öffnet deine Fotos, wenn du Bilder für eine Seite auswählst.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan sichert Bilder in deinen Fotos, wenn du es möchtest.",
     "NSFaceIDUsageDescription": "Flowplan nutzt Face ID, um die App zu entsperren, wenn die App-Sperre an ist.",
-    "NSSpeechRecognitionUsageDescription": "Flowplan wandelt deine Sprachnotizen auf diesem Gerät in Text um."
+    "NSSpeechRecognitionUsageDescription": "Flowplan wandelt deine Sprachnotizen auf diesem Gerät in Text um.",
+    "NSLocalNetworkUsageDescription": "Flowplan verbindet sich mit deiner Flowplan-Instanz, wenn sie in deinem lokalen Netz läuft."
   },
   "android": {
     "share_label": "In Flowplan speichern",

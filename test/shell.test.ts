@@ -29,6 +29,19 @@ test("pages of the instance stay in the app, other sites go to the system", () =
   assert.deepEqual(nav("flowplan://sign-in?x"), { kind: "appLink", url: "flowplan://sign-in?x" });
 });
 
+test("an instance over plain HTTP in the local network is the app's own site too", () => {
+  const local = "http://192.168.1.20:3000";
+  const state = navigationState();
+  const at = (url: string, extra: Partial<Parameters<typeof decide>[1]> = {}) => decide(url, { server: local, mainFrame: true, state, now: 1000, ...extra });
+  assert.deepEqual(at(`${local}/#inbox`), { kind: "allow" });
+  assert.deepEqual(at(`${local}/share/x`, { newWindow: true }), { kind: "open", url: `${local}/share/x` });
+  assert.ok(mayStay(`${local}/page`, local, state, 1000));
+  // The same host over HTTPS or on another port is another site.
+  assert.equal(at("https://192.168.1.20:3000/").kind, "external");
+  assert.equal(at("http://192.168.1.20:3001/").kind, "external");
+  assert.equal(at("http://192.168.1.21:3000/").kind, "external");
+});
+
 test("passkey and SSO sign-in leave the web view; sign-in in the window may pass the identity provider", () => {
   assert.deepEqual(nav(`${server}/api/auth/desktop`), { kind: "signIn", via: null });
   assert.deepEqual(nav(`${server}/api/auth/desktop?via=sso`), { kind: "signIn", via: "sso" });

@@ -6,7 +6,8 @@
     "NSPhotoLibraryUsageDescription": "Flowplan ouvre tes photos quand tu choisis des images à ajouter à une page.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan enregistre des images dans tes photos quand tu le demandes.",
     "NSFaceIDUsageDescription": "Flowplan utilise Face ID pour déverrouiller l’app quand le verrouillage est activé.",
-    "NSSpeechRecognitionUsageDescription": "Flowplan convertit tes notes vocales en texte sur cet appareil."
+    "NSSpeechRecognitionUsageDescription": "Flowplan convertit tes notes vocales en texte sur cet appareil.",
+    "NSLocalNetworkUsageDescription": "Flowplan se connecte à ton instance Flowplan lorsqu’elle tourne sur ton réseau local."
   },
   "android": {
     "share_label": "Enregistrer dans Flowplan",

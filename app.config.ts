@@ -128,6 +128,17 @@ const config: ExpoConfig = {
       // Voice notes of the page become text on the phone itself
       // (modules/flowplan-speech, on-device only).
       NSSpeechRecognitionUsageDescription: "Flowplan turns your voice notes into text on this device.",
+      // An instance in the local network (#62): iOS asks before the app
+      // reaches it (local network privacy), over HTTPS or HTTP.
+      NSLocalNetworkUsageDescription: "Flowplan connects to your Flowplan instance when it runs in your local network.",
+      // Plain HTTP only in the local network (src/server.ts → plainHttpAllowed):
+      // App Transport Security lets IP addresses, names without a dot and
+      // .local names through, nothing else (no NSAllowsArbitraryLoads).
+      // Fully qualified names like nas.lan or nas.home.arpa stay HTTPS-only
+      // on iOS – ATS has no exception for a whole suffix (an exception
+      // domain names one domain and its subdomains, not a top-level domain
+      // like "lan"), so the app refuses them with a clear message.
+      NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
       UIViewControllerBasedStatusBarAppearance: true,
     },
     privacyManifests: {
@@ -197,7 +208,12 @@ const config: ExpoConfig = {
       "expo-build-properties",
       {
         ios: { deploymentTarget: "16.4" },
-        android: { minSdkVersion: 26 },
+        // Plain HTTP (cleartext) is allowed for the app as a whole – a
+        // network security config cannot name address ranges; the app
+        // itself only accepts it for instances in the local network
+        // (src/server.ts → plainHttpAllowed, #62), and the web view keeps
+        // mixed content out of HTTPS pages.
+        android: { minSdkVersion: 26, usesCleartextTraffic: true },
       },
     ],
     [

@@ -2,18 +2,22 @@
 // an optional name, suggesting app.flowplan.org (or the address a managed
 // installation configured), and only accepts a real Flowplan instance. With
 // profiles saved, they are listed on top to switch with one tap; an address
-// that already has a profile switches to it.
+// that already has a profile switches to it. A plain-http address of the
+// local network (#62) gets a warning before connecting.
 import React, { useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { t } from "../i18n";
 import { findByServer, MAX_PROFILES, ProfileError, type ProfileState } from "../profiles";
-import { checkServer, DEFAULT_SERVER, normalizeServer, ServerError, shortServer, timeoutSignal, type HttpRequest } from "../server";
+import { checkServer, DEFAULT_SERVER, isPlainHttp, normalizeServer, ServerError, shortServer, timeoutSignal, type HttpRequest } from "../server";
 import { Button, Logo, Screen, styles, usePalette } from "../ui";
 import { ProfileList } from "./Profiles";
 
 // React Native follows redirects by itself; the final address tells whether
 // one went to another site.
+// iOS lets fewer local names through without HTTPS (src/server.ts).
+const PLATFORM = Platform.OS === "ios" ? "ios" : "android";
+
 const request: HttpRequest = async ({ url }) => {
   const response = await fetch(url, { headers: { Accept: "application/json" }, signal: timeoutSignal(8000) });
   const final = response.url ? new URL(response.url) : null;
@@ -42,13 +46,14 @@ export function Setup({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const plainHttp = isPlainHttp(value, PLATFORM);
 
   async function connect() {
     setError("");
     setBusy(true);
     let origin = "";
     try {
-      origin = normalizeServer(value);
+      origin = normalizeServer(value, PLATFORM);
       // Already a profile: switch to it, no second one for the same instance.
       const existing = findByServer(profiles, origin);
       if (existing) return onSwitch(existing.id);
@@ -115,6 +120,12 @@ export function Setup({
             spellCheck={false}
             style={[styles.input, { color: p.text, backgroundColor: p.field, borderColor: error ? p.error : p.line }]}
           />
+          {plainHttp ? (
+            <View accessible accessibilityLiveRegion="polite" style={{ marginTop: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: p.line, backgroundColor: p.card }}>
+              <Text style={[styles.small, { color: p.text, fontWeight: "600" }]}>{t("httpWarningTitle")}</Text>
+              <Text style={[styles.small, { color: p.muted, marginTop: 4 }]}>{t("httpWarning")}</Text>
+            </View>
+          ) : null}
           <Text nativeID="name-label" style={[styles.label, { color: p.text }]}>
             {t("nameLabel")}
           </Text>

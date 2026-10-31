@@ -12,7 +12,12 @@ const de = {
   cancel: "Abbrechen",
   empty: "Bitte die Adresse deiner Flowplan-Instanz eingeben.",
   invalid: "Das ist keine gültige Adresse.",
-  https: "Nur HTTPS-Adressen sind erlaubt (HTTP nur für localhost).",
+  https: "Ohne HTTPS geht es nur im lokalen Netz – mit einer Adresse wie http://192.168.1.20:3000, http://nas oder http://nas.local. Jede andere Adresse braucht HTTPS.",
+  httpName:
+    "Auf iPhone und iPad lässt iOS ohne HTTPS nur IP-Adressen, Namen ohne Punkt (nas) und .local-Namen zu. Gib die IP-Adresse der Instanz ein, z. B. http://192.168.1.20:3000 – oder richte HTTPS ein.",
+  httpWarningTitle: "Verbindung ohne Verschlüsselung",
+  httpWarning:
+    "Passwörter und alle Inhalte gehen unverschlüsselt durchs Netz – das ist nur in einem Netz in Ordnung, dem du vertraust. Ohne HTTPS fehlen außerdem Passkeys, verschlüsselte Bereiche, Sprachnotizen auf Seiten und auf Android die Offline-Kopie; Mitteilungen kommen von einer Instanz im lokalen Netz meist nicht an. Für den echten Betrieb richte bitte HTTPS ein.",
   unreachable: "Unter {server} ist nichts erreichbar. Prüfe die Adresse und deine Internetverbindung.",
   redirect: "{server} leitet auf {detail} weiter. Gib bitte diese Adresse ein.",
   notFlowplan: "Unter {server} läuft kein Flowplan.",
@@ -296,7 +301,12 @@ const en: Record<Key, string> = {
   cancel: "Cancel",
   empty: "Please enter the address of your Flowplan instance.",
   invalid: "This is not a valid address.",
-  https: "Only HTTPS addresses are allowed (HTTP only for localhost).",
+  https: "Without HTTPS, only addresses in your local network work – like http://192.168.1.20:3000, http://nas or http://nas.local. Every other address needs HTTPS.",
+  httpName:
+    "On iPhone and iPad, iOS allows plain HTTP only for IP addresses, names without a dot (nas) and .local names. Enter the instance’s IP address, e.g. http://192.168.1.20:3000 – or set up HTTPS.",
+  httpWarningTitle: "Connection without encryption",
+  httpWarning:
+    "Passwords and all content cross the network unencrypted – fine only on a network you trust. Without HTTPS there are also no passkeys, encrypted spaces, voice notes on pages or, on Android, the offline copy; notifications from an instance in the local network usually don’t arrive. For real use, please set up HTTPS.",
   unreachable: "Nothing answers at {server}. Check the address and your internet connection.",
   redirect: "{server} redirects to {detail}. Please enter that address.",
   notFlowplan: "There is no Flowplan running at {server}.",
@@ -573,7 +583,12 @@ const fr: Record<Key, string> = {
   cancel: "Annuler",
   empty: "Saisis l’adresse de ton instance Flowplan.",
   invalid: "Cette adresse n’est pas valide.",
-  https: "Seules les adresses HTTPS sont autorisées (HTTP uniquement pour localhost).",
+  https: "Sans HTTPS, seules les adresses de ton réseau local fonctionnent – par exemple http://192.168.1.20:3000, http://nas ou http://nas.local. Toute autre adresse a besoin de HTTPS.",
+  httpName:
+    "Sur iPhone et iPad, iOS n’autorise le HTTP simple que pour les adresses IP, les noms sans point (nas) et les noms en .local. Saisis l’adresse IP de l’instance, par exemple http://192.168.1.20:3000 – ou configure HTTPS.",
+  httpWarningTitle: "Connexion sans chiffrement",
+  httpWarning:
+    "Les mots de passe et tout le contenu passent en clair sur le réseau – acceptable uniquement sur un réseau de confiance. Sans HTTPS, pas non plus de passkeys, d’espaces chiffrés, de notes vocales dans les pages ni, sur Android, de copie hors ligne ; les notifications d’une instance du réseau local n’arrivent généralement pas. Pour un usage réel, configure HTTPS.",
   unreachable: "Rien ne répond à {server}. Vérifie l’adresse et ta connexion Internet.",
   redirect: "{server} redirige vers {detail}. Saisis plutôt cette adresse.",
   notFlowplan: "Aucun Flowplan ne tourne à {server}.",
