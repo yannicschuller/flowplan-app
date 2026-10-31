@@ -128,7 +128,7 @@ export function utf8(base64: string): string {
 export type CopyDocument = { html: string; scripts: string[]; styles: string[] };
 
 // The page of the copy, or null when it cannot work (the sign-in page, a
-// script of the page missing from the copy).
+// script or style sheet of the page missing from the copy).
 export async function offlineDocument(html: string, policy: string | null | undefined, lookup: Lookup): Promise<CopyDocument | null> {
   if (!/<head[\s>]/i.test(html) || html.includes('data-signed-out=""')) return null;
   const scripts: string[] = [];
@@ -175,6 +175,10 @@ export async function offlineDocument(html: string, policy: string | null | unde
       if (!path) continue;
       const found = await lookup(path);
       if (!found) {
+        // A style sheet of the app missing from the copy (one of another
+        // build): the page would show without its styles (#61 in Flowplan).
+        // Only fonts.css may be missing – the fonts fall back.
+        if (path.startsWith("/_next/static/")) return null;
         replacements.set(tag, neutral);
         continue;
       }

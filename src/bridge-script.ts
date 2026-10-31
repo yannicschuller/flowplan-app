@@ -54,7 +54,9 @@ export type PageMessage =
   // A call to the offline copy (src/offline/messages.ts checks it), and the
   // stored page that may give way to the live one (returnScript).
   | { type: "offline"; id: number; op: string; cache?: string | null; key?: string; entry?: unknown }
-  | { type: "offlineReturn" };
+  | { type: "offlineReturn" }
+  // The page's files did not load: a copy of an older build (src/offline/stale.ts).
+  | { type: "staleCopy"; build?: unknown; clear?: unknown; copy?: unknown };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {

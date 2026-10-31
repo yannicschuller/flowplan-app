@@ -59,8 +59,15 @@ test("the window offers the copy, answers its calls and falls back to it", () =>
   assert.match(shell, /else void showCopy\(\);/);
   assert.match(shell, /if \(!html\) \{\s*setOffline\(true\);/);
   assert.match(shell, /setSource\(\{ html, baseUrl: `\$\{server\}\/\$\{hash\}` \}\)/);
-  // Back online: reached, then the live page once nobody types.
-  assert.match(shell, /run\(reachedScript\);\s*run\(returnScript\);/);
+  // Back online: reached, then the live page once nobody types – at once
+  // when the instance runs another build (src/offline/stale.ts, #61).
+  assert.match(shell, /run\(reachedScript\);\s*if \(copyOnReach\(copyBuild\.current, answer\.build\) === "now"\) goLive\(\);\s*else run\(returnScript\);/);
+  assert.match(shell, /copyBuild\.current = pageBuild\(html\);/);
+  // The page's report of files that did not load, and no stale page from
+  // Android's HTTP cache.
+  assert.match(shell, /message\.type === "staleCopy"[\s\S]*handleStale\(stale\)/);
+  assert.match(shell, /cacheMode="LOAD_DEFAULT"/);
+  assert.match(shell, /source=\{webSource\}/);
   const app = read("src/App.tsx");
   assert.match(app, /void wipeOfflineCopy\(current\.id\);/);
   assert.match(app, /wipeOrphanCopies\(/);

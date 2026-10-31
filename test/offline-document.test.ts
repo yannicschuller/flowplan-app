@@ -61,6 +61,11 @@ test("no stored page that cannot work", async () => {
   const missing = { ...files };
   delete missing["/_next/static/chunks/turbopack-2c3mg3r-05n1w.js"];
   assert.equal(await offlineDocument(PAGE, POLICY, lookup(missing)), null);
+  // Nor one without the app's style sheet (#61 in Flowplan: a white page
+  // with plain buttons).
+  const noStyles = { ...files };
+  delete noStyles["/_next/static/chunks/0di51li1lhids.css"];
+  assert.equal(await offlineDocument(PAGE, POLICY, lookup(noStyles)), null);
   assert.equal(await offlineDocument(PAGE.replace("<body>", '<body data-signed-out="">'), POLICY, lookup()), null);
   assert.equal(await offlineDocument("not html", POLICY, lookup()), null);
   // A style sheet the copy lacks stays inert; without a policy no meta.

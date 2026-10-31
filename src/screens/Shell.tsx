@@ -8,8 +8,9 @@
 // Without a connection the window shows the profile's offline copy (iOS,
 // src/offline/): the instance's page as it was last stored, at the
 // instance's address, its files from the copy. Back online it gives way to
-// the live page once nobody is typing. Only without a copy does the app's
-// own offline screen show.
+// the live page once nobody is typing – at once when the instance runs
+// another build than the copy's (src/offline/stale.ts). Only without a copy
+// does the app's own offline screen show.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Keyboard, Linking, Platform, StyleSheet, View } from "react-native";
 import * as Network from "expo-network";
@@ -54,6 +55,7 @@ import { refreshScript, reachedScript, returnScript } from "../offline/loader";
 import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
 import { offlineCopy } from "../offline/native";
 import { setOfflineRefreshHook } from "../offline/refresh-hook";
+import { answerBuild, copyOnReach, forgetCopyPage, pageBuild, parseStaleMessage, staleAction, type StaleMessage } from "../offline/stale";
 
 export type ShellHandle = {
   // Opens a path of the instance ("/#inbox"); in the open page when possible.
@@ -103,18 +105,26 @@ const transparent = (color: string) => color.replace(/^rgba?\(([^,]+),([^,]+),([
 // Whether the network lets the instance be tried at all.
 const connected = (state: Network.NetworkState) => !!state.isConnected && state.isInternetReachable !== false;
 
-// Whether the instance answers (its health check, without cookies).
-async function reachable(server: string) {
+// Whether the instance answers (its health check, without cookies), and
+// the build it runs (null on older instances).
+async function reachable(server: string): Promise<{ ok: boolean; build: string | null }> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 6000);
   try {
-    return (await fetch(`${server}/api/health`, { cache: "no-store", credentials: "omit", signal: abort.signal })).ok;
+    const response = await fetch(`${server}/api/health`, { cache: "no-store", credentials: "omit", signal: abort.signal });
+    return { ok: response.ok, build: answerBuild(response.headers) };
   } catch {
-    return false;
+    return { ok: false, build: null };
   } finally {
     clearTimeout(timer);
   }
 }
+
+// Android: the main document always asks the instance (or its service
+// worker) – never a stale page from the web view's HTTP cache, even behind a
+// proxy that drops the instance's "no-store" (#61 in Flowplan). The app's
+// files (/_next/static, immutable) stay cacheable.
+const FRESH_DOCUMENT = { "Cache-Control": "no-cache" };
 
 export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
   const palette = usePalette();
@@ -128,6 +138,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const [showingCopy, setShowingCopy] = useState(false);
   const showingCopyRef = useRef(false);
   showingCopyRef.current = showingCopy;
+  // The build the stored page belongs to (src/offline/stale.ts).
+  const copyBuild = useRef<string | null>(null);
   // A new key loads the page again even when the address stays the same.
   const [attempt, setAttempt] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -167,6 +179,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         return;
       }
       const hash = pageUrl.current.includes("#") ? pageUrl.current.slice(pageUrl.current.indexOf("#")) : "";
+      copyBuild.current = pageBuild(html);
       setOffline(false);
       setShowingCopy(true);
       setSource({ html, baseUrl: `${server}/${hash}` });
@@ -324,31 +337,40 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
 
   // The stored copy is showing: once the network is back and the instance
   // answers, the page hears it (it sends what was changed offline) and the
-  // live page follows (returnScript waits until nobody types).
+  // live page follows (returnScript waits until nobody types). A copy of
+  // another build than the instance runs gives way at once: what was changed
+  // offline is kept by the page (IndexedDB, the queue of record changes) and
+  // sent by the live one. Checked once right away as well – the network's
+  // state at the start may have been wrong.
   useEffect(() => {
     if (!showingCopy) return;
     let checking = false;
+    let stopped = false;
     const check = async () => {
       if (checking) return;
       checking = true;
       try {
-        if (await reachable(server)) {
+        const answer = await reachable(server);
+        if (answer.ok && !stopped) {
           run(reachedScript);
-          run(returnScript);
+          if (copyOnReach(copyBuild.current, answer.build) === "now") goLive();
+          else run(returnScript);
         }
       } finally {
         checking = false;
       }
     };
+    void check();
     const subscription = Network.addNetworkStateListener((state) => {
       if (connected(state)) void check();
     });
     const foreground = AppState.addEventListener("change", (state) => state === "active" && void check());
     return () => {
+      stopped = true;
       subscription.remove();
       foreground.remove();
     };
-  }, [showingCopy, server, run]);
+  }, [showingCopy, server, run, goLive]);
 
   // Back in the foreground: the page brings its copy up to date (it asks
   // the instance only for what changed); the background task asks too.
@@ -525,6 +547,11 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       if (showingCopyRef.current) goLive();
       return;
     }
+    if (message.type === "staleCopy") {
+      const stale = parseStaleMessage(message);
+      if (stale) void handleStale(stale);
+      return;
+    }
     if (message.type === "edges") handleEdges(message);
     else if (message.type === "signedOut") signedOut.current?.();
     else if (message.type === "backState") {
@@ -537,6 +564,21 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "openWindow") {
       if (!features.openWindow(message.url)) route(message.url, true, true);
     } else onMessage(message);
+  };
+
+  // The page's files did not load (lib/stale-copy.ts in Flowplan): a copy of
+  // an older build. The live page reloads itself; the stored one is replaced
+  // by the live page, or by the offline screen without a connection.
+  const handleStale = async (message: StaleMessage) => {
+    const showing = showingCopyRef.current;
+    const reached = showing ? (await reachable(server)).ok : true;
+    const action = staleAction(message, showing, reached);
+    // iOS: memory and fetch cache only – its disk files would include the
+    // page's IndexedDB and localStorage (what was changed offline).
+    if (action.clearWebCache) web.current?.clearCache?.(Platform.OS === "android");
+    if (action.forgetCopyPage && copy) await forgetCopyPage(copy).catch(() => {});
+    if (action.next === "live") goLive();
+    else if (action.next === "offline") setOffline(true);
   };
 
   // Where a navigation goes (navigation.ts); true lets the web view load it.
@@ -589,6 +631,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   };
 
   const fallback = palette.background;
+  const webSource = useMemo(() => ("uri" in source && Platform.OS === "android" ? { ...source, headers: FRESH_DOCUMENT } : source), [source]);
   const statusStyle = luminance(bars.top) < 0.5 ? "light" : "dark";
   const navigationStyle = luminance(bars.bottom) < 0.5 ? "light" : "dark";
 
@@ -615,7 +658,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         <WebView<object>
           key={attempt}
           ref={web}
-          source={source}
+          source={webSource}
           style={{ flex: 1, backgroundColor: fallback }}
           containerStyle={{ backgroundColor: fallback }}
           // The instance shows the app's sign-in (passkeys and SSO through the
@@ -705,6 +748,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
           automaticallyAdjustContentInsets={false}
           pullToRefreshEnabled={false}
           textZoom={100}
+          // The default, said out loud: HTTP caching as the instance asks for
+          // it (its pages "no-store", its files immutable) – never
+          // LOAD_CACHE_ELSE_NETWORK, which would open a page of an old build.
+          cacheMode="LOAD_DEFAULT"
           webviewDebuggingEnabled={__DEV__}
           // Everything passes the native filter: route() and bounceForeign()
           // decide. (A list of origins here would make the web view hand the
