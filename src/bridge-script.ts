@@ -21,11 +21,17 @@
 //   the stored page without a connection (src/offline/loader.ts);
 // - the colours at the page's top and bottom edge, so status bar and home
 //   indicator / navigation bar run into the page's header and footer;
+// - Android: the safe areas the web view reports, and whether the page keeps
+//   clear of the system bars itself (src/safe-areas.ts; the attribute
+//   data-app-safe-areas="page" on <html>) or the app does;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
 import { offlineScript } from "./offline/loader";
 
 export type PageMessage =
-  | { type: "edges"; top: string; bottom: string; scrolls: boolean; atTop: boolean; atBottom: boolean; background: string; cover?: boolean }
+  // insets: what the web view reports as env(safe-area-inset-*); safeAreas:
+  // who keeps the page clear of the system bars as the page has it now
+  // (both Android only, src/safe-areas.ts).
+  | { type: "edges"; top: string; bottom: string; scrolls: boolean; atTop: boolean; atBottom: boolean; background: string; cover?: boolean; insets?: unknown; safeAreas?: string }
   | { type: "refresh" }
   | { type: "saveFile"; name: string; base64: string; mime: string }
   | { type: "haptic"; kind: string }
@@ -211,10 +217,11 @@ export function bridgeScript(options: {
     for (const [color, count] of counts) if (count > most) { best = color; most = count; }
     return best;
   };
+${options.platform === "android" ? androidSafeAreas : ""}
   // Reported once per animation frame at most, and only when something
   // changed: elementFromPoint ×14 is the most expensive thing the app does.
   let frame = 0, last = "";
-  const report = () => {
+  const report = () => {${options.platform === "android" ? "\n    showSafeAreas();" : ""}
     const page = document.scrollingElement || document.documentElement;
     const base = opaque(getComputedStyle(document.body || page).backgroundColor) || opaque(getComputedStyle(page).backgroundColor);
     const message = JSON.stringify({
@@ -227,7 +234,11 @@ export function bridgeScript(options: {
       background: base,
       // The page keeps clear of the system bars itself (viewport-fit=cover):
       // the app shows it full screen.
-      cover: /viewport-fit\s*=\s*cover/.test(document.querySelector('meta[name="viewport"]')?.content || ""),
+      cover: /viewport-fit\s*=\s*cover/.test(document.querySelector('meta[name="viewport"]')?.content || ""),${
+        options.platform === "android" ? `
+      insets: safeInsets(),
+      safeAreas,` : ""
+      }
     });
     if (message === last) return;
     last = message;
@@ -248,6 +259,57 @@ export function bridgeScript(options: {
   changed();
 })();
 true;`;
+}
+
+// Android: who keeps the page clear of the system bars (src/safe-areas.ts).
+// The page's own insets count only with data-app-safe-areas="page" on <html>
+// (app/globals.css in Flowplan; an older instance ignores the attribute). The
+// app's last word holds for the next pages of this web view as well, so they
+// start the way the app shows them. The probe hangs at <html>, not in <body>,
+// whose children are watched for changes (measuring would report again).
+const androidSafeAreas = `
+  const SAFE_AREAS = "flowplan-app-safe-areas";
+  let safeAreas = "app";
+  try { if (sessionStorage.getItem(SAFE_AREAS) === "page") safeAreas = "page"; } catch (e) {}
+  // Again with every report: before the page's content the document may not
+  // have its <html> yet, and the app says nothing new when its decision
+  // stays the same.
+  const showSafeAreas = () => {
+    try {
+      const root = document.documentElement;
+      if (!root || root.hasAttribute("data-app-safe-areas") === (safeAreas === "page")) return;
+      if (safeAreas === "page") root.setAttribute("data-app-safe-areas", "page");
+      else root.removeAttribute("data-app-safe-areas");
+    } catch (e) {}
+  };
+  showSafeAreas();
+  addEventListener("flowplan:safe-areas", (event) => {
+    safeAreas = event.detail === "page" ? "page" : "app";
+    try { sessionStorage.setItem(SAFE_AREAS, safeAreas); } catch (e) {}
+    showSafeAreas();
+  });
+  // Not before the page's viewport (viewport-fit=cover) is known.
+  const safeInsets = () => {
+    const root = document.documentElement;
+    if (!root || document.readyState === "loading") return null;
+    try {
+      const probe = document.createElement("div");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)";
+      root.appendChild(probe);
+      const style = getComputedStyle(probe);
+      const px = (value) => Math.round(parseFloat(value) || 0);
+      const insets = { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) };
+      probe.remove();
+      return insets;
+    } catch (e) {
+      return null;
+    }
+  };`;
+
+// Who keeps the page clear of the system bars from now on (Android).
+export function safeAreasScript(mode: "app" | "page") {
+  return `window.dispatchEvent(new CustomEvent("flowplan:safe-areas", { detail: ${JSON.stringify(mode === "page" ? "page" : "app")} })); true;`;
 }
 
 // Registers this installation for the page's session (lib/mobile-devices.ts

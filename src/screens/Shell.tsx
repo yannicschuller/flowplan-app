@@ -36,6 +36,7 @@ import {
   parsePageMessage,
   pencilScript,
   registerScript,
+  safeAreasScript,
   signOutScript,
   unregisterScript,
   windowsScript,
@@ -47,6 +48,7 @@ import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
 import { originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
+import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
 import { Offline } from "./Offline";
@@ -144,6 +146,12 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const [attempt, setAttempt] = useState(0);
   const [offline, setOffline] = useState(false);
   const [keyboard, setKeyboard] = useState(0);
+  const keyboardRef = useRef(0);
+  keyboardRef.current = keyboard;
+  const insetsRef = useRef(insets);
+  insetsRef.current = insets;
+  // Who keeps the page clear of the system bars (src/safe-areas.ts).
+  const safeAreas = useRef<SafeAreaMode>("app");
   // Empty until the first page has loaded: paths wait for it.
   const pageUrl = useRef("");
   const signedOut = useRef<(() => void) | null>(null);
@@ -470,6 +478,21 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   }, []);
 
   const handleEdges = (message: Extract<PageMessage, { type: "edges" }>) => {
+    // iOS hands the safe areas to pages that draw edge to edge, Android only
+    // when its web view reports them (src/safe-areas.ts); older instances
+    // get the bars in their colours.
+    const mode = safeAreaMode({
+      platform: Platform.OS,
+      cover: message.cover === true,
+      measured: parseInsets(message.insets),
+      native: insetsRef.current,
+      keyboard: keyboardRef.current > 0,
+      previous: safeAreas.current,
+    });
+    safeAreas.current = mode;
+    // The page follows (its bridge reports what it has; Android only).
+    if (Platform.OS === "android" && message.safeAreas !== mode) run(safeAreasScript(mode));
+    const cover = mode === "page";
     setBars((previous) => {
       let top = message.top || message.background || palette.background;
       let bottom = message.bottom || message.background || palette.background;
@@ -479,9 +502,6 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         if (!message.atBottom) bottom = bottomSettled.current ? previous.bottom : message.background || bottom;
         else bottomSettled.current = true;
       }
-      // iOS hands the safe areas to pages that draw edge to edge; older
-      // instances get the bars in their colours.
-      const cover = Platform.OS === "ios" && message.cover === true;
       return { top, bottom, cover, fadeTop: !cover && message.scrolls && !message.atTop, fadeBottom: !cover && message.scrolls && !message.atBottom };
     });
   };
