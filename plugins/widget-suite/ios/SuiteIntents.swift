@@ -103,7 +103,7 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
   var count: Int
 
   static var parameterSummary: some ParameterSummary {
-    When(\.$source, .equalTo, .view) {
+    When(\FPTasksConfiguration.$source, .equalTo, .view) {
       Summary {
         \.$source
         \.$database
@@ -112,7 +112,7 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
         \.$count
       }
     } otherwise: {
-      When(\.$source, .equalTo, .page) {
+      When(\FPTasksConfiguration.$source, .equalTo, .page) {
         Summary {
           \.$source
           \.$page
@@ -215,7 +215,7 @@ struct FPPinnedConfiguration: FPSuiteConfiguration {
   var second: FPFieldEntity?
 
   static var parameterSummary: some ParameterSummary {
-    When(\.$mode, .equalTo, .page) {
+    When(\FPPinnedConfiguration.$mode, .equalTo, .page) {
       Summary {
         \.$mode
         \.$page
@@ -277,7 +277,7 @@ struct FPCounterConfiguration: FPSuiteConfiguration {
   var history: Bool
 
   static var parameterSummary: some ParameterSummary {
-    When(\.$aggregate, .equalTo, .count) {
+    When(\FPCounterConfiguration.$aggregate, .equalTo, FPAggregate.count) {
       Summary {
         \.$database
         \.$view
