@@ -1,0 +1,24 @@
+# Gitleaks findings checked by hand: published test vectors of the push
+# protocol (test/fixtures/push-test-vectors.json, generated keys, no real
+# secrets) and a Swift property declaration. Format: one fingerprint per line.
+a0ee2ff019fbed739bd439d011126facf96ce60e:modules/flowplan-push/ios/PushShared.swift:generic-api-key:80
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:10
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:12
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:14
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:18
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:29
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:31
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:37
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:48
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:50
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:52
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:56
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:70
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:77
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:84
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:91
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:98
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:105
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:112
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:127
+a0ee2ff019fbed739bd439d011126facf96ce60e:test/fixtures/push-test-vectors.json:generic-api-key:152

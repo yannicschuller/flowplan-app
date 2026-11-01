@@ -1,8 +1,8 @@
 # Every push and pull request: quick checks, no native build – tests,
 # TypeScript, the JavaScript bundle for iOS and Android, and the generated
-# native projects (all config plugins). Runs on the own Mac runner like the
-# builds (build.yml, release.yml), so it uses no paid Actions minutes; while
-# the Mac sleeps, the run waits in the queue.
+# native projects (all config plugins). The owner's own runs use the own
+# Mac like the builds (build.yml, release.yml); while the Mac sleeps, they
+# wait in the queue. Pull requests from others run on GitHub's macOS runners.
 name: CI
 
 on:
@@ -19,7 +19,12 @@ concurrency:
 
 jobs:
   check:
-    runs-on: [self-hosted, macOS]
+    # The own Mac only for the repository owner's own work: pushes and pull
+    # requests the owner opened from a branch of this repository. Everyone
+    # else – forks, collaborators, Dependabot, re-runs started by someone
+    # else – runs on GitHub's macOS runners (free for public repositories), so
+    # their code never reaches the Mac with the signing keychain.
+    runs-on: ${{ (github.actor == github.repository_owner && github.triggering_actor == github.repository_owner && (github.event_name != 'pull_request' || (github.event.pull_request.user.login == github.repository_owner && github.event.pull_request.head.repo.full_name == github.repository))) && fromJSON('["self-hosted","macOS"]') || 'macos-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
