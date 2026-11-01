@@ -10,7 +10,8 @@
 // instance's address, its files from the copy. Back online it gives way to
 // the live page once nobody is typing – at once when the instance runs
 // another build than the copy's (src/offline/stale.ts). Only without a copy
-// does the app's own offline screen show.
+// does the app's own offline screen show – with "Switch profile", also when
+// the address answers with an error page and no Flowplan behind it (#69).
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Keyboard, Linking, Platform, StyleSheet, View } from "react-native";
 import * as Network from "expo-network";
@@ -45,8 +46,8 @@ import {
 import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
-import { decide, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
-import { originOf } from "../server";
+import { decide, httpErrorNeedsCheck, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
+import { checkServer, fetchRequest, originOf } from "../server";
 import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
@@ -169,6 +170,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const bottomSettled = useRef(false);
 
   const onServer = () => originOf(pageUrl.current) === server;
+  // The profile's instance now (answers that arrive after a switch are old).
+  const serverRef = useRef(server);
+  serverRef.current = server;
   // A message of the instance's page – the live one, or the stored one the
   // app loaded itself (whose address some WebKit versions may report as
   // about:blank).
@@ -738,6 +742,20 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
               if (showingCopyRef.current) setOffline(true);
               else void showCopy();
             }
+          }}
+          // An error page instead of the instance (a proxy's 502 while it is
+          // down, a domain that serves something else now): when no Flowplan
+          // answers there, the offline screen (or the stored copy) – it has
+          // "Try again" and "Switch profile"; the error page has neither.
+          onHttpError={(event) => {
+            const { url, statusCode } = event.nativeEvent;
+            if (showingCopyRef.current || !httpErrorNeedsCheck(url, statusCode, server)) return;
+            void checkServer(server, fetchRequest).then(
+              () => {},
+              () => {
+                if (serverRef.current === server && !showingCopyRef.current && originOf(pageUrl.current || url) === server) void showCopy();
+              },
+            );
           }}
           onContentProcessDidTerminate={() => web.current?.reload()}
           onRenderProcessGone={() => web.current?.reload()}

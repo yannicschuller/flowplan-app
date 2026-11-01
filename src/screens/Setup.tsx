@@ -3,27 +3,21 @@
 // installation configured), and only accepts a real Flowplan instance. With
 // profiles saved, they are listed on top to switch with one tap; an address
 // that already has a profile switches to it. A plain-http address of the
-// local network (#62) gets a warning before connecting.
-import React, { useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+// local network (#62) gets a warning before connecting. The active profile,
+// when it was never signed in, can get another address or go (#69: the
+// sign-in pages' "Other server?" leads here); Cancel – and Android's back –
+// returns to its page.
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, BackHandler, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { t } from "../i18n";
-import { findByServer, MAX_PROFILES, ProfileError, type ProfileState } from "../profiles";
-import { checkServer, DEFAULT_SERVER, isPlainHttp, normalizeServer, ServerError, shortServer, timeoutSignal, type HttpRequest } from "../server";
+import { findByServer, MAX_PROFILES, ownName, profileLabel, ProfileError, type Profile, type ProfileState } from "../profiles";
+import { checkServer, DEFAULT_SERVER, fetchRequest as request, isPlainHttp, normalizeServer, ServerError, shortServer } from "../server";
 import { Button, Logo, Screen, styles, usePalette } from "../ui";
 import { ProfileList } from "./Profiles";
 
-// React Native follows redirects by itself; the final address tells whether
-// one went to another site.
 // iOS lets fewer local names through without HTTPS (src/server.ts).
 const PLATFORM = Platform.OS === "ios" ? "ios" : "android";
-
-const request: HttpRequest = async ({ url }) => {
-  const response = await fetch(url, { headers: { Accept: "application/json" }, signal: timeoutSignal(8000) });
-  const final = response.url ? new URL(response.url) : null;
-  if (final && final.origin !== new URL(url).origin) return { status: 302, headers: { location: final.href } };
-  return { status: response.status, data: await response.text() };
-};
 
 export function Setup({
   profiles,
@@ -31,12 +25,19 @@ export function Setup({
   onConnect,
   onSwitch,
   onCancel,
+  unsigned,
+  onReplace,
+  onRemove,
 }: {
   profiles: ProfileState;
   suggested: string | null;
   onConnect: (server: string, name: string) => void;
   onSwitch: (id: string) => void;
   onCancel?: () => void;
+  // The active profile when it was never signed in (profile-picker.ts).
+  unsigned?: Profile | null;
+  onReplace?: (id: string, server: string, name: string) => void;
+  onRemove?: (id: string) => void;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -47,6 +48,45 @@ export function Setup({
   const [busy, setBusy] = useState(false);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const plainHttp = isPlainHttp(value, PLATFORM);
+  // Changing the address of the profile never signed in (the form below
+  // edits it instead of adding one).
+  const [editing, setEditing] = useState<Profile | null>(null);
+  const fixable = unsigned && onReplace && onRemove ? unsigned : null;
+
+  const startEditing = (profile: Profile) => {
+    setEditing(profile);
+    setValue(shortServer(profile.server));
+    setName(ownName(profile));
+    setError("");
+    setTimeout(() => input.current?.focus(), 50);
+  };
+  const stopEditing = () => {
+    setEditing(null);
+    setValue("");
+    setName("");
+    setError("");
+  };
+  const remove = (profile: Profile) =>
+    Alert.alert(t("removeProfileTitle"), t("removeProfileConfirm", { name: profileLabel(profile) }), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("removeProfile"), style: "destructive", onPress: () => onRemove?.(profile.id) },
+    ]);
+
+  // Android's back: out of the address form, then back to the page.
+  const back = useRef<() => boolean>(() => false);
+  back.current = () => {
+    if (editing) {
+      stopEditing();
+      return true;
+    }
+    if (!onCancel) return false;
+    onCancel();
+    return true;
+  };
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => back.current());
+    return () => subscription.remove();
+  }, []);
 
   async function connect() {
     setError("");
@@ -54,12 +94,14 @@ export function Setup({
     let origin = "";
     try {
       origin = normalizeServer(value, PLATFORM);
-      // Already a profile: switch to it, no second one for the same instance.
+      // Already a profile: switch to it, no second one for the same instance
+      // (the same address when changing it: back to its page).
       const existing = findByServer(profiles, origin);
       if (existing) return onSwitch(existing.id);
-      if (profiles.profiles.length >= MAX_PROFILES) throw new ProfileError("tooMany");
+      if (!editing && profiles.profiles.length >= MAX_PROFILES) throw new ProfileError("tooMany");
       await checkServer(origin, request);
-      onConnect(origin, name);
+      if (editing) onReplace?.(editing.id, origin, name);
+      else onConnect(origin, name);
     } catch (e) {
       if (e instanceof ProfileError) setError(t("tooManyProfiles", { count: MAX_PROFILES }));
       else {
@@ -80,13 +122,30 @@ export function Setup({
           keyboardShouldPersistTaps="handled"
         >
           <Logo />
-          {adding ? (
+          {editing ? (
+            <>
+              <Text accessibilityRole="header" style={[styles.title, { color: p.text }]}>
+                {t("changeAddress")}
+              </Text>
+              <Text style={[styles.text, styles.centered, { color: p.muted }]}>{t("changeAddressText", { name: profileLabel(editing) })}</Text>
+            </>
+          ) : adding ? (
             <>
               <Text accessibilityRole="header" style={[styles.title, { color: p.text }]}>
                 {t("switchProfile")}
               </Text>
               <Text style={[styles.label, { color: p.text, marginTop: 4 }]}>{t("yourProfiles")}</Text>
               <ProfileList profiles={profiles.profiles} active={profiles.active} onSwitch={onSwitch} />
+              {fixable ? (
+                <View style={{ marginTop: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: p.card }}>
+                  <Text style={[styles.small, { color: p.text, fontWeight: "600" }]}>{t("notSignedInTitle", { name: profileLabel(fixable) })}</Text>
+                  <Text style={[styles.small, { color: p.muted, marginTop: 4 }]}>{t("notSignedInText")}</Text>
+                  <View style={[styles.row, { marginTop: 12 }]}>
+                    <Button title={t("changeAddress")} kind="secondary" onPress={() => startEditing(fixable)} style={{ flexGrow: 1 }} />
+                    <Button title={t("removeProfile")} kind="danger" onPress={() => remove(fixable)} style={{ flexGrow: 1 }} />
+                  </View>
+                </View>
+              ) : null}
               <Text accessibilityRole="header" style={[styles.label, { color: p.text, fontSize: 17, marginTop: 30, marginBottom: 6 }]}>
                 {t("addProfile")}
               </Text>
@@ -147,8 +206,12 @@ export function Setup({
             </Text>
           ) : null}
           {adding ? null : <Text style={[styles.small, styles.centered, { color: p.muted, marginTop: 18 }]}>{t("setupHint")}</Text>}
-          <Button title={busy ? t("connecting") : adding ? t("add") : t("connect")} busy={busy} onPress={connect} style={{ marginTop: 16 }} />
-          {onCancel ? <Button title={t("cancel")} kind="secondary" onPress={onCancel} style={{ marginTop: 10 }} /> : null}
+          <Button title={busy ? t("connecting") : editing ? t("save") : adding ? t("add") : t("connect")} busy={busy} onPress={connect} style={{ marginTop: 16 }} />
+          {editing ? (
+            <Button title={t("cancel")} kind="secondary" onPress={stopEditing} style={{ marginTop: 10 }} />
+          ) : onCancel ? (
+            <Button title={t("cancel")} kind="secondary" onPress={onCancel} style={{ marginTop: 10 }} />
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

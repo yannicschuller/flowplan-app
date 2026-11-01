@@ -186,5 +186,15 @@ export function timeoutSignal(ms: number) {
   return controller.signal;
 }
 
+// checkServer's requests through fetch (the setup, and the window when the
+// instance answers with an error). React Native follows redirects by
+// itself; the final address tells whether one went to another site.
+export const fetchRequest: HttpRequest = async ({ url }) => {
+  const response = await fetch(url, { headers: { Accept: "application/json" }, signal: timeoutSignal(8000) });
+  const final = response.url ? new URL(response.url) : null;
+  if (final && final.origin !== new URL(url).origin) return { status: 302, headers: { location: final.href } };
+  return { status: response.status, data: await response.text() };
+};
+
 // The address without "https://", for texts.
 export const shortServer = (origin: string) => origin.replace(/^https:\/\//, "");

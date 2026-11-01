@@ -20,7 +20,8 @@ import { deviceName } from "./device";
 import { pickLocale, setLocale } from "./i18n";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
 import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
-import { activeProfile, addProfile, removeProfile, renameProfile, switchProfile, type ProfileState } from "./profiles";
+import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile, switchProfile, type ProfileState } from "./profiles";
+import { profilesRequest, unsignedProfile } from "./profile-picker";
 import { checkAndroidUpdate } from "./android-update";
 import { store } from "./store";
 import { BACKGROUND } from "./ui";
@@ -128,6 +129,9 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     cleanUpPushKeys();
     // Offline copies of profiles removed while a write was running.
     void wipeOrphanCopies(store.profiles().profiles.map((p) => p.id));
+    // Signed in before the app kept track of it (#69).
+    const id = store.profiles().active;
+    if (id && store.deviceToken()) store.setEverSignedIn(id, true);
   }, []);
 
   const open = useCallback(
@@ -352,6 +356,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           const body = message.body as { deviceToken?: string; push?: boolean; pushAvailable?: boolean; pushRelay?: unknown } | null;
           if (message.status === 200 && body?.deviceToken) {
             store.setDeviceToken(body.deviceToken);
+            const id = store.profiles().active;
+            if (id) store.setEverSignedIn(id, true);
             syncButtonSession();
             // Without push from the instance, due tasks become reminders of
             // the phone itself (local-reminders.ts).
@@ -405,6 +411,16 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
         case "openSettings":
           setSettings(true);
           return;
+        // "Other server? Switch profile" on the sign-in pages (#69): the
+        // profiles; Cancel comes back to the page that asked (onPageLoaded).
+        case "openProfiles": {
+          const request = profilesRequest(message);
+          if (!request) return;
+          pendingPath.current = request.path;
+          setSettings(false);
+          setSetup(true);
+          return;
+        }
         case "scanDocument": {
           const request = pageScanRequest(message);
           if (request) setScan(request);
@@ -495,11 +511,43 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     await shell.current?.signOut();
     const next = removeProfile(store.profiles(), current.id);
     saveProfiles(next);
-    void forgetSuiteProfile(current.id);
-    // The offline copy of the instance's content goes with the profile.
-    void wipeOfflineCopy(current.id);
-    void refreshSuite({ force: true });
+    dropProfile(current.id);
     if (!next.active) setSetup(true);
+  };
+
+  // What the app keeps of a profile that is gone.
+  const dropProfile = (id: string) => {
+    store.setEverSignedIn(id, false);
+    void forgetSuiteProfile(id);
+    // The offline copy of the instance's content goes with the profile.
+    void wipeOfflineCopy(id);
+    void refreshSuite({ force: true });
+  };
+
+  // The profile screen (#69): the active profile, never signed in, gets
+  // another address – a new profile in its place – or goes. The profile
+  // screen stays for the next step (another profile, or a new one).
+  const replaceUnsigned = (id: string, origin: string, name: string) => {
+    const current = activeProfile(store.profiles());
+    if (!current || current.id !== id || store.everSignedIn(id)) return;
+    let next: ProfileState;
+    try {
+      next = replaceProfile(store.profiles(), id, { server: origin, name }).state;
+    } catch {
+      return;
+    }
+    leaveActive();
+    saveProfiles(next);
+    dropProfile(id);
+    setSetup(false);
+  };
+  const removeUnsigned = (id: string) => {
+    const current = activeProfile(store.profiles());
+    if (!current || current.id !== id || store.everSignedIn(id)) return;
+    leaveActive();
+    saveProfiles(removeProfile(store.profiles(), id));
+    dropProfile(id);
+    setSetup(true);
   };
 
   // Focus filters (iOS, native/intents.ts): the Focus's profile and
@@ -528,11 +576,17 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     <>
       {setup || !server ? (
         <Setup
+          // From the profiles to the first start (the last one removed): a
+          // fresh screen with the suggested address.
+          key={profiles.profiles.length ? "profiles" : "first"}
           profiles={profiles}
           suggested={server ? null : getManagedServer()}
           onConnect={connect}
           onSwitch={switchTo}
           onCancel={server ? () => setSetup(false) : undefined}
+          unsigned={unsignedProfile(profiles, store.everSignedIn)}
+          onReplace={replaceUnsigned}
+          onRemove={removeUnsigned}
         />
       ) : (
         <Shell

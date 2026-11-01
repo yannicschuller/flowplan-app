@@ -39,6 +39,8 @@ export function PageWindow({ url }: { url: string | null }) {
     if (message.type === "saveFile") void saveFile(message.name, message.base64, message.mime);
     else if (message.type === "haptic") haptic(message.kind);
     else if (message.type === "refresh" && store.deviceToken()) void refresh();
+    // The profiles are the main window's (like flowplan:// links).
+    else if (message.type === "openProfiles") void Linking.openURL("flowplan://change-server").catch(() => {});
   };
 
   if (!server || !profile) return <View style={{ flex: 1, backgroundColor: palette.background }} />;

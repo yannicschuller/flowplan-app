@@ -15,7 +15,10 @@
 //   "flowplan:ink-recognized"; on iOS with the on-device AI module
 //   (modules/flowplan-ai) window.FlowplanApp.ai – Apple's on-device model
 //   for the page's light AI actions (src/ai-bridge.ts), answering with the
-//   event "flowplan:ai";
+//   event "flowplan:ai"; and it opens the app's profiles (openProfiles: switch
+//   to or add another instance, or – for a profile never signed in – change
+//   its address; the sign-in pages' "Other server?", #69), with the page's
+//   path to come back to;
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
 //   page's offline module fills, kept by the app, and the loader that runs
 //   the stored page without a connection (src/offline/loader.ts);
@@ -36,6 +39,9 @@ export type PageMessage =
   | { type: "saveFile"; name: string; base64: string; mime: string }
   | { type: "haptic"; kind: string }
   | { type: "openSettings" }
+  // The app's profiles from the sign-in pages (#69): the path of the page
+  // to come back to (profile-picker.ts profilesRequest checks it).
+  | { type: "openProfiles"; path?: string }
   | { type: "registered"; status: number; body: unknown }
   | { type: "downloadFailed"; name: string }
   | { type: "signedOut" }
@@ -174,6 +180,7 @@ export function bridgeScript(options: {
     saveFile: (name, base64, mime) => post({ type: "saveFile", name: String(name), base64: String(base64), mime: String(mime || "") }),
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
+    openProfiles: () => post({ type: "openProfiles", path: String(location.pathname || "") + String(location.search || "") + String(location.hash || "") }),
     backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),${
       options.scanner
         ? `

@@ -10,8 +10,11 @@ import {
   loadProfiles,
   PROFILE_KEYS,
   PROFILES_KEY,
+  parseSignedIn,
   profileKey,
   serializeProfiles,
+  SIGNED_IN_KEY,
+  withSignedIn,
   type ProfileKey,
   type ProfileState,
 } from "./profiles";
@@ -119,6 +122,15 @@ export const store = {
   setPushRecord: (id: string, record: PushRecord | null) => write(profileKey(id, "push"), record ? JSON.stringify(record) : null),
   liveRecords: (id: string): LiveRecords => parseLiveRecords(read(profileKey(id, "livePush"))),
   setLiveRecords: (id: string, records: LiveRecords) => write(profileKey(id, "livePush"), Object.keys(records).length ? JSON.stringify(records) : null),
+
+  // Whether a profile has been signed in on this phone at least once (#69:
+  // one that never was can get another address from the profile screen).
+  everSignedIn: (id: string) => parseSignedIn(read(SIGNED_IN_KEY)).includes(id),
+  setEverSignedIn(id: string, signedIn: boolean) {
+    const list = parseSignedIn(read(SIGNED_IN_KEY));
+    const next = withSignedIn(list, id, signedIn);
+    if (next.join() !== list.join()) write(SIGNED_IN_KEY, next.length ? JSON.stringify(next) : null);
+  },
 
   // Leaving an instance (another profile, signing out, removing it): nothing
   // of it stays on the phone.

@@ -69,7 +69,10 @@ test("the window offers the copy, answers its calls and falls back to it", () =>
   assert.match(shell, /cacheMode="LOAD_DEFAULT"/);
   assert.match(shell, /source=\{webSource\}/);
   const app = read("src/App.tsx");
-  assert.match(app, /void wipeOfflineCopy\(current\.id\);/);
+  // A removed profile's copy goes (dropProfile: removed, or replaced by
+  // another address, #69).
+  assert.match(app, /void wipeOfflineCopy\(id\);/);
+  assert.match(app, /dropProfile\(current\.id\);/);
   assert.match(app, /wipeOrphanCopies\(/);
   assert.match(read("src/native/background.ts"), /requestOfflineRefresh\(\);/);
   // Android keeps its copy with the web view's service worker.

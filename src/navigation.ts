@@ -184,3 +184,20 @@ export function captureRequest(link: string): CaptureRequest | null {
   const target = url.searchParams.get("target");
   return { mode, ...(target && UUID.test(target) ? { target: target.toLowerCase() } : {}), ...(url.searchParams.get("record") === "1" ? { record: true } : {}) };
 }
+
+// The instance's page answered with an HTTP error (onHttpError, main frame
+// only): worth asking whether a Flowplan still answers there – a proxy's 502
+// while it is down, a parked domain – so the window can show the offline
+// screen with "Switch profile" instead of a foreign error page without a
+// way out (#69). Flowplan's own start page never answers 4xx; its other
+// pages' errors are Flowplan's own pages.
+export function httpErrorNeedsCheck(url: string, status: number, server: string | null) {
+  if (!server || originOf(url) !== server || !Number.isFinite(status)) return false;
+  if (status >= 500) return true;
+  if (status < 400) return false;
+  try {
+    return new URL(url).pathname === "/";
+  } catch {
+    return false;
+  }
+}

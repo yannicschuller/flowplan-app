@@ -153,3 +153,48 @@ export function profileLabel(profile: Profile) {
   const host = hostOf(profile.server);
   return profile.name === host ? host : `${profile.name} – ${host}`;
 }
+
+// Gives a profile another address (one that never signed in and has the
+// wrong one, #69): a new profile in its place, active – with a new id, so
+// nothing the app kept for the old address goes along. An address that
+// already has another profile is refused with that profile.
+export function replaceProfile(
+  state: ProfileState,
+  id: string,
+  input: { name?: string; server: string },
+  newProfileId = newId(),
+): { state: ProfileState; profile: Profile; previous: Profile } {
+  const index = state.profiles.findIndex((p) => p.id === id);
+  if (index < 0) throw new ProfileError("unknown");
+  const server = originOf(input.server);
+  if (!server || server !== input.server) throw new ProfileError("invalid");
+  const existing = findByServer(state, server);
+  if (existing && existing.id !== id) throw new ProfileError("duplicate", existing);
+  let next = newProfileId;
+  while (!ID.test(next) || state.profiles.some((p) => p.id === next)) next = newId();
+  const profile = { id: next, name: cleanName(input.name, server), server };
+  const profiles = state.profiles.map((p, i) => (i === index ? profile : p));
+  return { state: { profiles, active: next }, profile, previous: state.profiles[index] };
+}
+
+// The name to offer when the address changes: a name of its own stays, the
+// host (the name an empty field gives) goes with the address.
+export const ownName = (profile: Profile) => (profile.name === hostOf(profile.server) ? "" : profile.name);
+
+// The profiles that have been signed in on this phone at least once (their
+// ids, kept apart from PROFILE_KEYS, which go on every switch). One that
+// never was can get another address or go from the profile screen (#69).
+export const SIGNED_IN_KEY = "flowplan.signedInProfiles";
+export function parseSignedIn(raw: string | null): string[] {
+  try {
+    const list = JSON.parse(raw || "[]");
+    return Array.isArray(list) ? [...new Set(list.filter((id): id is string => typeof id === "string" && ID.test(id)))].slice(0, MAX_PROFILES * 2) : [];
+  } catch {
+    return [];
+  }
+}
+export function withSignedIn(list: string[], id: string, signedIn: boolean): string[] {
+  if (!ID.test(id)) return list;
+  const rest = list.filter((entry) => entry !== id);
+  return signedIn ? [...rest, id].slice(-MAX_PROFILES * 2) : rest;
+}
