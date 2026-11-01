@@ -34,4 +34,4 @@ By contributing you agree that your contributions are licensed under the [AGPL-3
 
 ## Continuous integration and releases
 
-Pull requests from collaborators and forks are checked on GitHub's macOS runners. Only work started by the maintainer runs on the project's own Mac, and only the maintainer can build signed apps or publish releases (**Actions → Build / Release**, see [README → Releasing](README.md#releasing)). Changes to `.github/` need the maintainer's review.
+Checks, builds and releases run on GitHub's runners. Only the maintainer can build signed apps or publish releases (**Actions → Build / Release**, see [README → Releasing](README.md#releasing)). Changes to `.github/` need the maintainer's review.

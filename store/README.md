@@ -101,7 +101,7 @@ The lines are in `scripts/creative-assets.mjs` (`TEXT`); a line that is too long
 
 ## One-click setup
 
-**Actions → iOS setup → Run workflow** ([`ios-setup.yml`](../.github/workflows/ios-setup.yml), `fastlane ios setup`) does on the own Mac everything the App Store Connect API key allows. Re-running it is safe: what exists is kept.
+**Actions → iOS setup → Run workflow** ([`ios-setup.yml`](../.github/workflows/ios-setup.yml), `fastlane ios setup`) does on GitHub's macOS runner everything the App Store Connect API key allows. Re-running it is safe: what exists is kept.
 
 1. Registers the App IDs `app.flowplan.mobile` (*App Groups*, *Push Notifications*), `app.flowplan.mobile.widgets`, `app.flowplan.mobile.share` and `app.flowplan.mobile.notifications` (*App Groups*). The app uses no Associated Domains, iCloud or Sign in with Apple.
 2. Creates or reuses the *Apple Distribution* certificate and the App Store profiles of all App IDs with **fastlane match**. They are stored encrypted in the private repository `yannicschuller/flowplan-certificates`. Only this workflow writes there; builds (`build.yml`, `release.yml`) read them when the match secrets exist. If a profile lacks the App Group or push, the setup renews it once.

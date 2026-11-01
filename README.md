@@ -246,15 +246,9 @@ The version lives in `package.json`; `app.config.ts` takes it for both platforms
 
 ## Build machine
 
-Every build runs **only by hand** on your own Mac, registered as a self-hosted runner of this repository with the labels `self-hosted` and `macOS`. Pushes and pull requests only run quick checks on GitHub's runners ([`ci.yml`](.github/workflows/ci.yml): tests, TypeScript, the JavaScript bundle and the generated native projects).
+Every build runs **only by hand** on GitHub's runners: iOS on `macos-latest`, Android on `ubuntu-latest` (free for public repositories; a private repository pays macOS minutes at ten times the Linux rate). Pushes and pull requests run quick checks on Linux ([`ci.yml`](.github/workflows/ci.yml): tests, TypeScript, the JavaScript bundle and the generated native projects). Nothing has to be installed: the workflows set up Node, Ruby (gems from `Gemfile.lock`, cached), the newest stable Xcode on the runner, Java and the Android SDK; npm, CocoaPods and Gradle downloads are cached between runs.
 
-Set up the Mac once:
-
-1. **Xcode** from the App Store (open it once, accept the license, install the iOS platform), then `xcode-select --install`.
-2. **Homebrew** and the tools: `brew install node@22 ruby watchman` (Ruby for fastlane and CocoaPods; the workflow installs the gems into `vendor/bundle`, pinned by `Gemfile.lock` – after `bundle update` commit the new lock). Java and the Android SDK come from the workflow (`setup-java`, `setup-android`).
-3. **Runner:** GitHub → this repository → Settings → Actions → Runners → **New self-hosted runner** → macOS, follow the commands, keep the default labels (`self-hosted`, `macOS`, `ARM64`), and install it as a service (`./svc.sh install && ./svc.sh start`) so it runs after a restart. The runner's user needs Homebrew's paths in its environment (`.env` file in the runner folder, e.g. `PATH=/opt/homebrew/opt/ruby/bin:/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`).
-
-Builds do not touch the Mac's own keychain: certificates from secrets go to a temporary keychain that is deleted afterwards, the Android upload key is deleted after the build.
+Builds never touch a keychain of their own beyond the run: certificates from match or secrets go to a temporary keychain that is deleted afterwards, the Android upload key is deleted after the build.
 
 **Actions → Build → Run workflow** ([`build.yml`](.github/workflows/build.yml)) builds the chosen branch: iOS, Android or both. Without secrets the builds are unsigned (an `.ipa` for inspection, a simulator app, debug and release APKs, an AAB); with them they are signed and, with **upload**, go to TestFlight and Play's internal testing track. The files are kept as artifacts for 14 days.
 

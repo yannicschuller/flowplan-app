@@ -1,6 +1,6 @@
 # Everything for the App Store that the App Store Connect API key can do, at
-# the push of a button: Actions → iOS setup → Run workflow, on the own Mac
-# (self-hosted runner, README → Build machine), only by the repository owner.
+# the push of a button: Actions → iOS setup → Run workflow, on GitHub's
+# macOS runner, only by the repository owner.
 # Safe to run again – what exists is kept (fastlane ios setup):
 #
 #   1. App IDs app.flowplan.mobile (App Groups, Push Notifications),
@@ -65,9 +65,9 @@ concurrency:
 
 jobs:
   setup:
-    # The own Mac runs only what the owner started.
+    # Only what the owner started.
     if: github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
     timeout-minutes: 45
     env:
       IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
@@ -105,10 +105,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Gems (fastlane)
-        run: |
-          bundle config set --local path vendor/bundle
-          bundle install --jobs 4
+      # Ruby, the gems from Gemfile.lock and their cache (fastlane, CocoaPods).
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
       - name: fastlane ios setup
         run: >-
           bundle exec fastlane ios setup

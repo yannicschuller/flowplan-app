@@ -1,6 +1,6 @@
 # A release at the push of a button: Actions → Release → Run workflow.
 # Raises the version in package.json (app.config.ts takes it from there),
-# tags v1.2.3, builds iOS and Android on the own Mac (build.yml) and attaches
+# tags v1.2.3, builds iOS and Android (build.yml) and attaches
 # the builds to a GitHub release. With the store secrets (README → Signing)
 # the builds are signed and – if "upload" is on and "confirm" names the version
 # that is released – go to TestFlight and Play's internal testing track. After
@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   version:
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -116,7 +116,7 @@ jobs:
 
   publish:
     needs: [version, build]
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:

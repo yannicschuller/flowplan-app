@@ -1,5 +1,5 @@
-# Builds the app on the own Mac (self-hosted runner with the labels
-# self-hosted and macOS, README → Build machine) – only by hand:
+# Builds the app on GitHub's runners (iOS on macOS, Android on Linux; free
+# for public repositories) – only by hand:
 # Actions → Build → Run workflow, from any branch. Without the store secrets
 # the builds are unsigned (an .ipa for inspection, a simulator app, APK and
 # AAB); with them they are signed and can go to TestFlight and Play's
@@ -53,7 +53,7 @@ concurrency:
 jobs:
   ios:
     if: inputs.platform == 'both' || inputs.platform == 'ios'
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
     timeout-minutes: 90
     env:
       FLOWPLAN_BUILD: ${{ inputs.build }}
@@ -68,26 +68,38 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
-      # No Actions cache: the own Mac keeps ~/.npm (and ~/.gradle) itself, and
-      # restoring the multi-GB cache from GitHub took longer than the build.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
       - run: npm ci
-      - name: Gems (fastlane, CocoaPods)
+      # Ruby, the gems from Gemfile.lock and their cache (fastlane, CocoaPods).
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      # The newest stable Xcode on the runner (betas are skipped).
+      - name: Select Xcode
         run: |
-          bundle config set --local path vendor/bundle
-          bundle install --jobs 4
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE 'beta|rc' | sort -V | tail -n 1)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
+          xcodebuild -version
       # iPhone Duo runs apps built with an SDK before iOS 27.1 in a
       # compatibility mode (not under its status bar and camera, a black
       # frame on the open display); Xcode 27.1 or newer builds edge to edge.
       - name: Xcode version
         run: |
-          xcodebuild -version
           sdk="$(xcrun --sdk iphoneos --show-sdk-version)"
           if awk -v v="$sdk" 'BEGIN { split(v, p, "."); exit !((p[1] * 100 + p[2]) < 2701) }'; then
             echo "::warning title=iOS SDK $sdk::On iPhone Duo this build runs in compatibility mode (not edge to edge). Build with Xcode 27.1 or newer."
           fi
+      # CocoaPods' download cache between runs (the pods themselves are
+      # generated fresh by prebuild).
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json', 'Gemfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
       - name: Xcode project
         run: |
           npx expo prebuild --clean --platform ios --no-install
@@ -150,7 +162,8 @@ jobs:
 
   android:
     if: inputs.platform == 'both' || inputs.platform == 'android'
-    runs-on: [self-hosted, macOS]
+    # Android builds on Linux: starts faster than macOS.
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       FLOWPLAN_BUILD: ${{ inputs.build }}
@@ -168,10 +181,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
+          cache: gradle
       - uses: android-actions/setup-android@v4
       - run: npm ci
       - name: Firebase configuration (push on Android)
@@ -181,11 +196,11 @@ jobs:
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json; else rm -f google-services.json; fi
       - name: Gradle project
         run: npx expo prebuild --clean --platform android --no-install
-      - name: Gems (fastlane)
-        if: env.SIGNED == 'true'
-        run: |
-          bundle config set --local path vendor/bundle
-          bundle install --jobs 4
+      - if: env.SIGNED == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
       - name: Signed bundle and APK${{ inputs.upload && ' and Play internal testing' || '' }}
         if: env.SIGNED == 'true'
         env:

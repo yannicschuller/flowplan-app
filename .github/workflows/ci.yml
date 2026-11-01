@@ -1,8 +1,6 @@
 # Every push and pull request: quick checks, no native build – tests,
 # TypeScript, the JavaScript bundle for iOS and Android, and the generated
-# native projects (all config plugins). The owner's own runs use the own
-# Mac like the builds (build.yml, release.yml); while the Mac sleeps, they
-# wait in the queue. Pull requests from others run on GitHub's macOS runners.
+# native projects (all config plugins). On GitHub's runners.
 name: CI
 
 on:
@@ -19,22 +17,17 @@ concurrency:
 
 jobs:
   check:
-    # The own Mac only for the repository owner's own work: pushes and pull
-    # requests the owner opened from a branch of this repository. Everyone
-    # else – forks, collaborators, Dependabot, re-runs started by someone
-    # else – runs on GitHub's macOS runners (free for public repositories), so
-    # their code never reaches the Mac with the signing keychain.
-    runs-on: ${{ (github.actor == github.repository_owner && github.triggering_actor == github.repository_owner && (github.event_name != 'pull_request' || (github.event.pull_request.user.login == github.repository_owner && github.event.pull_request.head.repo.full_name == github.repository))) && fromJSON('["self-hosted","macOS"]') || 'macos-latest' }}
+    # Linux is enough: no native build; prebuild generates both projects.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      # No Actions cache: the own Mac keeps ~/.npm (and ~/.gradle) itself, and
-      # restoring the multi-GB cache from GitHub took longer than the build.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
       - run: npm ci
       - name: Tests and TypeScript
         run: npm run check
