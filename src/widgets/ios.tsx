@@ -8,7 +8,6 @@ import { Button, Chart, Gauge, HStack, Image, Link, ProgressView, Spacer, Text, 
 import {
   accessibilityHidden,
   accessibilityLabel,
-  activityBackgroundTint,
   containerBackground,
   font,
   foregroundStyle,
@@ -21,7 +20,7 @@ import {
   tint,
   widgetURL,
 } from "@expo/ui/swift-ui/modifiers";
-import { createLiveActivity, createWidget, type LiveActivityEnvironment, type WidgetEnvironment } from "expo-widgets";
+import { createLiveActivity, createWidget, type WidgetEnvironment } from "expo-widgets";
 import type { Locale } from "../i18n";
 import {
   adminLiveWidget as liveProps,
@@ -464,7 +463,7 @@ function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironmen
 }
 
 // The running timer on the lock screen and in the Dynamic Island.
-function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) {
+function FlowplanTimer(props: TimerProps) {
   "widget";
   const brand = "#6f74ff";
   const since = new Date(props.start);
@@ -477,7 +476,7 @@ function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) 
   );
   return {
     banner: (
-      <HStack spacing={12} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8")]}>
+      <HStack spacing={12} modifiers={[padding({ all: 16 })]}>
         <Image systemName="timer" modifiers={[font({ size: 22 }), foregroundStyle(brand)]} />
         <VStack alignment="leading" spacing={2}>
           <Text modifiers={[font({ size: 15, weight: "semibold" }), lineLimit(1)]}>{props.title}</Text>
@@ -515,7 +514,7 @@ function FlowplanTimer(props: TimerProps, environment: LiveActivityEnvironment) 
 // buttons ("End", "Stop") reach the app (native/activities.ts); links open it.
 
 // Focus or break, counting down; "End" stops focus and its timer.
-function FlowplanFocus(props: FocusProps, environment: LiveActivityEnvironment) {
+function FlowplanFocus(props: FocusProps) {
   "widget";
   const accent = props.phase === "break" ? "#2f9e6e" : "#6f74ff";
   const icon = props.phase === "break" ? "cup.and.saucer.fill" : "scope";
@@ -526,7 +525,7 @@ function FlowplanFocus(props: FocusProps, environment: LiveActivityEnvironment) 
   const stop = <Button label={props.stopLabel} systemImage="stop.fill" target="stop" modifiers={[tint(accent), accessibilityLabel(props.stopLabel)]} />;
   return {
     banner: (
-      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), widgetURL(props.url)]}>
         <HStack spacing={12}>
           <Image systemName={icon} modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
           <VStack alignment="leading" spacing={2}>
@@ -563,7 +562,7 @@ function FlowplanFocus(props: FocusProps, environment: LiveActivityEnvironment) 
 }
 
 // The meeting now: its title, the time left, "Open notes".
-function FlowplanMeeting(props: MeetingProps, environment: LiveActivityEnvironment) {
+function FlowplanMeeting(props: MeetingProps) {
   "widget";
   const accent = "#6f74ff";
   const ends = new Date(props.end);
@@ -580,7 +579,7 @@ function FlowplanMeeting(props: MeetingProps, environment: LiveActivityEnvironme
   );
   return {
     banner: (
-      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), widgetURL(props.url)]}>
         <HStack spacing={12}>
           <Image systemName="person.2.fill" modifiers={[font({ size: 20 }), foregroundStyle(accent), accessibilityHidden(true)]} />
           <VStack alignment="leading" spacing={2}>
@@ -618,7 +617,7 @@ function FlowplanMeeting(props: MeetingProps, environment: LiveActivityEnvironme
 }
 
 // An import or export: name, what, a bar (moving stripes without an estimate).
-function FlowplanJobs(props: JobsProps, environment: LiveActivityEnvironment) {
+function FlowplanJobs(props: JobsProps) {
   "widget";
   const accent = props.status === "failed" || props.status === "interrupted" ? "#d14343" : props.status === "done" ? "#2f9e6e" : "#6f74ff";
   const icon = props.status === "done" ? "checkmark.circle.fill" : props.status === "running" ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle.fill";
@@ -626,7 +625,7 @@ function FlowplanJobs(props: JobsProps, environment: LiveActivityEnvironment) {
   const percent = props.progress >= 0 ? `${Math.round(props.progress * 100)} %` : props.statusLabel;
   return {
     banner: (
-      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 }), widgetURL(props.url)]}>
         <HStack spacing={12}>
           <Image systemName={icon} modifiers={[font({ size: 20 }), foregroundStyle(accent), accessibilityHidden(true)]} />
           <VStack alignment="leading" spacing={2}>
@@ -661,13 +660,13 @@ function FlowplanJobs(props: JobsProps, environment: LiveActivityEnvironment) {
 }
 
 // An incident of the instance (administrators), only while it lasts.
-function FlowplanIncident(props: IncidentProps, environment: LiveActivityEnvironment) {
+function FlowplanIncident(props: IncidentProps) {
   "widget";
   const accent = props.level === "critical" ? "#d14343" : "#c27c0e";
   const icon = props.level === "critical" ? "xmark.octagon.fill" : "exclamationmark.triangle.fill";
   return {
     banner: (
-      <HStack spacing={12} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+      <HStack spacing={12} modifiers={[padding({ all: 16 }), widgetURL(props.url)]}>
         <Image systemName={icon} modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
         <VStack alignment="leading" spacing={2}>
           <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(accent)]}>{`${props.title} · ${props.levelLabel}`}</Text>
@@ -692,7 +691,7 @@ function FlowplanIncident(props: IncidentProps, environment: LiveActivityEnviron
 }
 
 // A voice memo being recorded in the app: the running time, "Stop".
-function FlowplanRecording(props: RecordingProps, environment: LiveActivityEnvironment) {
+function FlowplanRecording(props: RecordingProps) {
   "widget";
   const accent = "#e5484d";
   const since = new Date(props.start);
@@ -702,7 +701,7 @@ function FlowplanRecording(props: RecordingProps, environment: LiveActivityEnvir
   const stop = <Button label={props.stopLabel} systemImage="stop.fill" target="stop" modifiers={[tint(accent), accessibilityLabel(props.stopLabel)]} />;
   return {
     banner: (
-      <HStack spacing={12} modifiers={[padding({ all: 16 }), activityBackgroundTint(environment.colorScheme === "dark" ? "#16151b" : "#fcfbf8"), widgetURL(props.url)]}>
+      <HStack spacing={12} modifiers={[padding({ all: 16 }), widgetURL(props.url)]}>
         <Image systemName="mic.fill" modifiers={[font({ size: 22 }), foregroundStyle(accent), accessibilityHidden(true)]} />
         <VStack alignment="leading" spacing={2}>
           <Text modifiers={[font({ size: 15, weight: "semibold" })]}>{props.title}</Text>
