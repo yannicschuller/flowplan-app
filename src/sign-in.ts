@@ -57,6 +57,42 @@ export function signInUrl(server: string, challenge: string, via: string | null)
   return url.href;
 }
 
+// Opens the sign-in (step 2). iOS: ASWebAuthenticationSession, which hands the
+// result back directly. Android: a Custom Tab; the result arrives as the
+// flowplan://sign-in app link (App.tsx). expo-web-browser's auth-session
+// stand-in for Android was not used: it refuses to start while it believes an
+// earlier tab is still open, and the error went unnoticed (#109). If no Custom
+// Tab opens, the default browser; if nothing opens, the caller says so.
+export type SignInOpeners = {
+  platform: string;
+  authSession: (url: string, redirect: string) => Promise<{ type: string; url?: string }>;
+  customTab: (url: string) => Promise<unknown>;
+  browser: (url: string) => Promise<unknown>;
+};
+export type OpenOutcome = { opened: true; link: string | null } | { opened: false; error: string };
+export async function openSignIn(url: string, open: SignInOpeners): Promise<OpenOutcome> {
+  const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  if (open.platform === "ios") {
+    try {
+      const result = await open.authSession(url, "flowplan://sign-in");
+      return { opened: true, link: result.type === "success" && result.url ? result.url : null };
+    } catch (e) {
+      return { opened: false, error: reason(e) };
+    }
+  }
+  try {
+    await open.customTab(url);
+    return { opened: true, link: null };
+  } catch (first) {
+    try {
+      await open.browser(url);
+      return { opened: true, link: null };
+    } catch (second) {
+      return { opened: false, error: `${reason(first)}; ${reason(second)}` };
+    }
+  }
+}
+
 export type SignInResult = { code: string; verifier: string } | { error: "foreign" } | null;
 
 // flowplan://sign-in?server=…&challenge=…&code=… → what to redeem.

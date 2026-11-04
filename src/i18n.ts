@@ -40,6 +40,8 @@ const de = {
   signInImpossible: "Anmeldung nicht möglich",
   signInForeign:
     "Diese Anmeldung wurde nicht in dieser App gestartet oder gehört zu einer anderen Instanz. Starte sie bitte noch einmal über „Mit Passkey anmelden“ oder „Mit SSO anmelden“.",
+  signInNoBrowser:
+    "Der Browser für die Anmeldung ließ sich nicht öffnen. Prüfe, ob ein Browser installiert und aktiviert ist, und versuche es noch einmal.",
   signInFailed: "Anmeldung fehlgeschlagen",
   signInAgain: "Bitte erneut anmelden.",
   settingsTitle: "App-Einstellungen",
@@ -336,6 +338,7 @@ const en: Record<Key, string> = {
   signInImpossible: "Sign-in not possible",
   signInForeign:
     "This sign-in was not started in this app or belongs to another instance. Please start it again with “Sign in with a passkey” or “Sign in with SSO”.",
+  signInNoBrowser: "The browser for signing in could not be opened. Check that a browser is installed and enabled, then try again.",
   signInFailed: "Sign-in failed",
   signInAgain: "Please sign in again.",
   settingsTitle: "App settings",
@@ -625,6 +628,8 @@ const fr: Record<Key, string> = {
   signInImpossible: "Connexion impossible",
   signInForeign:
     "Cette connexion n’a pas été lancée dans cette app ou appartient à une autre instance. Relance-la avec « Se connecter avec une clé d’accès » ou « Se connecter avec SSO ».",
+  signInNoBrowser:
+    "Impossible d’ouvrir le navigateur pour la connexion. Vérifie qu’un navigateur est installé et activé, puis réessaie.",
   signInFailed: "Échec de la connexion",
   signInAgain: "Merci de te reconnecter.",
   settingsTitle: "Réglages de l’app",

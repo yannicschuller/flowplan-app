@@ -48,7 +48,7 @@ import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } fro
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, httpErrorNeedsCheck, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
 import { checkServer, fetchRequest, originOf } from "../server";
-import { acceptSignIn, base64Url, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
+import { acceptSignIn, base64Url, openSignIn, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
@@ -271,12 +271,18 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       });
       const challenge = digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
       pending.current.add(challenge, verifier);
-      try {
-        const result = await WebBrowser.openAuthSessionAsync(signInUrl(server, challenge, via), "flowplan://sign-in", {
-          preferEphemeralSession: false,
-        });
-        if (result.type === "success" && result.url) signInLink(result.url);
-      } catch {}
+      const outcome = await openSignIn(signInUrl(server, challenge, via), {
+        platform: Platform.OS,
+        authSession: (url, redirect) => WebBrowser.openAuthSessionAsync(url, redirect, { preferEphemeralSession: false }),
+        // Without waiting for the tab to close: the result comes as an app link.
+        customTab: (url) => WebBrowser.openBrowserAsync(url, { showTitle: true, createTask: false }).then(() => undefined),
+        browser: (url) => Linking.openURL(url),
+      });
+      if (outcome.opened && outcome.link) signInLink(outcome.link);
+      else if (!outcome.opened) {
+        console.warn("sign-in could not open", outcome.error);
+        Alert.alert(t("signInImpossible"), t("signInNoBrowser"));
+      }
     },
     [server, signInLink],
   );
