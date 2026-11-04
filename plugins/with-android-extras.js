@@ -4,7 +4,7 @@
 // share sheet's name "Save to Flowplan" also for sharing several files
 // (SEND_MULTIPLE; plugins/with-managed-config.js names the SEND filters).
 // Texts and icons are modules/flowplan-android's resources (de, en, fr).
-const { AndroidConfig, withAndroidManifest, withDangerousMod } = require("expo/config-plugins");
+const { AndroidConfig, withAndroidManifest, withDangerousMod, withGradleProperties } = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -40,6 +40,15 @@ ${items}
 const withAndroidExtras = (config) => {
   const packageName = config.android?.package;
   if (!packageName) throw new Error("with-android-extras: android.package is missing");
+  // Gradle's memory: Expo's 2 GB ran out while bundletool packed the Play
+  // bundle of the release build ("Java heap space" in packageReleaseBundle).
+  // The runners have 16 GB.
+  config = withGradleProperties(config, (config) => {
+    const props = config.modResults.filter((item) => !(item.type === "property" && item.key === "org.gradle.jvmargs"));
+    props.push({ type: "property", key: "org.gradle.jvmargs", value: "-Xmx4096m -XX:MaxMetaspaceSize=1024m" });
+    config.modResults = props;
+    return config;
+  });
   config = withDangerousMod(config, [
     "android",
     (config) => {
