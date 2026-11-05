@@ -96,8 +96,8 @@ const withSuiteProject = (config) =>
     }
     for (const lang of LANGS) {
       const groupName = `${name}/Supporting/${lproj(lang)}.lproj`;
-      const lproj = IOSConfig.XcodeUtils.ensureGroupRecursively(project, groupName);
-      if (lproj?.children.some(({ comment }) => comment === "AppShortcuts.strings")) continue;
+      const folder = IOSConfig.XcodeUtils.ensureGroupRecursively(project, groupName);
+      if (folder?.children.some(({ comment }) => comment === "AppShortcuts.strings")) continue;
       IOSConfig.XcodeUtils.addResourceFileToGroup({ filepath: `${lproj(lang)}.lproj/AppShortcuts.strings`, groupName, project, isBuildFile: true, verbose: true });
     }
     return config;
