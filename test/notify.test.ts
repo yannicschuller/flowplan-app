@@ -165,13 +165,13 @@ test("the page opens the browser and asks for voice notes through FlowplanApp", 
 });
 
 test("the texts exist in every language, and the Swift side knows the same buttons", () => {
-  for (const lang of ["en", "fr"] as const) assert.deepEqual(Object.keys(notifyStrings[lang]).sort(), Object.keys(notifyStrings.de).sort());
+  for (const lang of ["en", "fr", "zh"] as const) assert.deepEqual(Object.keys(notifyStrings[lang]).sort(), Object.keys(notifyStrings.de).sort());
   const swift = readFileSync(join(import.meta.dirname, "..", "modules/flowplan-notify/ios/NotificationActions.swift"), "utf8");
   for (const [identifier, action] of Object.entries(BUTTONS)) assert.ok(swift.includes(`"${identifier}": "${action}"`), identifier);
   // The speech permission text is in the Info.plist and translated.
   const config = readFileSync(join(import.meta.dirname, "..", "app.config.ts"), "utf8");
   assert.match(config, /NSSpeechRecognitionUsageDescription/);
-  for (const lang of ["de", "en", "fr"]) {
+  for (const lang of ["de", "en", "fr", "zh"]) {
     const locale = JSON.parse(readFileSync(join(import.meta.dirname, "..", `locales/${lang}.json`), "utf8")) as { ios: Record<string, string> };
     assert.ok(locale.ios.NSSpeechRecognitionUsageDescription, lang);
   }

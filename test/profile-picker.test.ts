@@ -125,8 +125,8 @@ test("an error page instead of the instance is checked; Flowplan's own errors ar
   assert.equal(httpErrorNeedsCheck(`${server}/`, 500, null), false);
 });
 
-test("the texts of the profile screen exist in German, English and French", () => {
-  for (const locale of ["de", "en", "fr"] as const) {
+test("the texts of the profile screen exist in German, English, French and Chinese", () => {
+  for (const locale of ["de", "en", "fr", "zh"] as const) {
     setLocale(locale);
     for (const key of ["changeAddress", "changeAddressText", "notSignedInTitle", "notSignedInText", "removeProfile", "removeProfileTitle", "removeProfileConfirm"] as const) {
       const text = t(key, { name: "Work – a.example" });

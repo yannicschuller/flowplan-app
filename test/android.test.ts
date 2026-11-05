@@ -87,11 +87,11 @@ test("app shortcuts: the recently opened pages first, per profile; signed out on
   assert.equal(shortcutOfLink("flowplan://open?path=%2F%23settings", "p1"), null);
 });
 
-test("static shortcuts: the app's links, texts and icons in German, English and French", () => {
+test("static shortcuts: the app's links, texts and icons in German, English, French and Chinese", () => {
   const xml = shortcutsXml("app.flowplan.mobile");
   assert.match(xml, /android:targetClass="app\.flowplan\.mobile\.MainActivity"/);
   assert.deepEqual(STATIC_SHORTCUTS.map((s) => s.link), ["flowplan://capture?mode=note", "flowplan://quick-capture"]);
-  for (const dir of ["values", "values-de", "values-fr"]) {
+  for (const dir of ["values", "values-de", "values-fr", "values-b+zh+Hans"]) {
     const strings = readFileSync(join(res, dir, "strings.xml"), "utf8");
     for (const s of STATIC_SHORTCUTS) {
       assert.match(strings, new RegExp(`name="${s.label}"`), `${dir}: ${s.label}`);

@@ -81,10 +81,13 @@ enum FPNotificationContent {
   }
 
   static func placeholderText() -> String {
-    let language = Locale.preferredLanguages.first?.prefix(2).lowercased() ?? "en"
+    let preferred = Locale.preferredLanguages.first?.lowercased() ?? "en"
+    let language = preferred.prefix(2)
     switch language {
     case "de": return "Neue Mitteilung"
     case "fr": return "Nouvelle notification"
+    // Simplified Chinese only; Traditional (zh-Hant) stays English, as the app.
+    case "zh" where preferred.hasPrefix("zh-hans"): return "新通知"
     default: return "New notification"
     }
   }

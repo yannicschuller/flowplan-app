@@ -1,5 +1,5 @@
-// Store screenshots from the real Flowplan web UI, in German, English and
-// French: starts a Flowplan development server per language (fresh data,
+// Store screenshots from the real Flowplan web UI, in German, English,
+// French and Simplified Chinese: starts a Flowplan development server per language (fresh data,
 // the demo workspace in that language), adds a little more made-up content,
 // and drives the pages with Playwright in the screen sizes of the store
 // devices. Saves each page area (between status bar and home indicator)
@@ -12,7 +12,7 @@
 //   npm run screenshots -- --locales fr --only iphone-69,ipad-13 --shots 01-home
 //
 // Needs the Flowplan repository next to this one (--flowplan ../flowplan)
-// with its dependencies installed. Writes store/.cache/raw/<de|en|fr>/<device>/.
+// with its dependencies installed. Writes store/.cache/raw/<de|en|fr|zh>/<device>/.
 // Options: --port 3150, --chromium <path to a Chromium binary>, --keep (keep
 // the data directories in store/.cache/data-<locale>-<port>).
 import { chromium } from "playwright";
@@ -25,7 +25,7 @@ import { settingsScreen, widgetsScreen } from "./store-mockups.mjs";
 
 const { values: args } = parseArgs({
   options: {
-    locales: { type: "string", default: "de,en,fr" },
+    locales: { type: "string", default: "de,en,fr,zh" },
     flowplan: { type: "string", default: "../flowplan" },
     port: { type: "string", default: "3150" },
     only: { type: "string", default: "" },

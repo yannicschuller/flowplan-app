@@ -10,7 +10,8 @@
 //   FlowplanNative module) → the extension; its bundle gets
 //   FlowplanSuiteWidgets next to expo-widgets' widgets;
 // - plugins/widget-suite/app/*.swift and WidgetShared.swift → the app;
-// - AppShortcuts.strings (Siri phrases) in German, English and French.
+// - AppShortcuts.strings (Siri phrases) in German, English, French and
+//   Simplified Chinese.
 //
 // Listed before expo-widgets in app.config.ts: mods run last-added first,
 // so this runs after expo-widgets has (re)written the extension's folder.
@@ -19,7 +20,7 @@
 const { IOSConfig, withDangerousMod, withXcodeProject } = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
-const { phrases, LANGS } = require("./widget-suite/strings");
+const { phrases, LANGS, lproj } = require("./widget-suite/strings");
 
 const TARGET = "ExpoWidgetsTarget";
 const SUITE = path.join(__dirname, "widget-suite");
@@ -61,7 +62,7 @@ const withSuiteFiles = (config) =>
       }
       for (const file of appFiles()) fs.copyFileSync(source("app", file), path.join(root, project, file));
       for (const lang of LANGS) {
-        const dir = path.join(root, project, "Supporting", `${lang}.lproj`);
+        const dir = path.join(root, project, "Supporting", `${lproj(lang)}.lproj`);
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, "AppShortcuts.strings"), shortcutStrings(lang));
       }
@@ -94,10 +95,10 @@ const withSuiteProject = (config) =>
       IOSConfig.XcodeUtils.addBuildSourceFileToGroup({ filepath, groupName: name, project, targetUuid: appTarget });
     }
     for (const lang of LANGS) {
-      const groupName = `${name}/Supporting/${lang}.lproj`;
+      const groupName = `${name}/Supporting/${lproj(lang)}.lproj`;
       const lproj = IOSConfig.XcodeUtils.ensureGroupRecursively(project, groupName);
       if (lproj?.children.some(({ comment }) => comment === "AppShortcuts.strings")) continue;
-      IOSConfig.XcodeUtils.addResourceFileToGroup({ filepath: `${lang}.lproj/AppShortcuts.strings`, groupName, project, isBuildFile: true, verbose: true });
+      IOSConfig.XcodeUtils.addResourceFileToGroup({ filepath: `${lproj(lang)}.lproj/AppShortcuts.strings`, groupName, project, isBuildFile: true, verbose: true });
     }
     return config;
   });

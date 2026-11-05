@@ -7,8 +7,9 @@
 //
 //   npm run store:creative
 //   npm run store:creative -- --guides <folder>   (also copies with the safe areas drawn in)
+//   npm run store:creative -- --locales zh        (only these languages)
 //
-// Writes store/app-store/creative/<de-DE|en-US|fr-FR>/{header,search-results}.png:
+// Writes store/app-store/creative/<de-DE|en-US|fr-FR|zh-Hans>/{header,search-results}.png:
 //   header          21:9, 3840×1646
 //   search-results  3:2,  3840×2560 (Apple: 1920×1280 up to 3840×2560)
 // PNG, sRGB, no alpha (Apple: no alpha channels or transparency). The
@@ -20,16 +21,17 @@ import sharp from "sharp";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { DEVICES } from "./devices.mjs";
-import { FONTS, PAPER, esc, headline } from "./store-style.mjs";
+import { FONTS, PAPER, STORE_LOCALES, esc, headline, htmlLang } from "./store-style.mjs";
 
 const { values: args } = parseArgs({
   options: {
     guides: { type: "string", default: "" },
+    locales: { type: "string", default: Object.keys(STORE_LOCALES).join(",") },
     chromium: { type: "string", default: process.env.CHROMIUM_PATH || "" },
   },
 });
 const root = new URL("..", import.meta.url).pathname;
-const LOCALES = { de: "de-DE", en: "en-US", fr: "fr-FR" };
+const LOCALES = Object.fromEntries(Object.entries(STORE_LOCALES).map(([short, { appStore }]) => [short, appStore]));
 
 const SIZES = { header: [3840, 1646], "search-results": [3840, 2560] };
 // What stays visible on every device and orientation, centred (Apple's
@@ -41,11 +43,13 @@ const TEXT = {
     de: ["Notizen und Projekte im Fluss.", "Open Source, für dich und dein Team"],
     en: ["Notes and projects that flow.", "Open source, for you and your team"],
     fr: ["Notes et projets en toute fluidité.", "Open source, pour toi et ton équipe"],
+    zh: ["笔记与项目，流畅自如。", "开源，为你和你的团队而生"],
   },
   "search-results": {
     de: ["Notizen, Aufgaben und Projekte in einer App."],
     en: ["Notes, tasks and projects in one app."],
     fr: ["Notes, tâches et projets dans une seule app."],
+    zh: ["笔记、任务和项目，尽在一个应用。"],
   },
 };
 
@@ -85,7 +89,7 @@ function device(shot, width, style) {
 }
 
 // The text block, shrunk until it fits its box (page script below).
-const page = (width, height, body) => `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
+const page = (width, height, body, lang) => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>${FONTS}
   *{box-sizing:border-box}html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden}
   body{background:${PAPER};background-size:100% 100%;color:#1d1c22;position:relative;font-family:"Instrument Sans",system-ui,sans-serif}
   .device{position:absolute}
@@ -116,7 +120,7 @@ function header(short, shots) {
     ${device(shots.board, 1060, `left:60px;top:430px;transform:rotate(-4deg);transform-origin:50% 100%`)}
     ${device(shots.document, 470, `left:3240px;top:560px;transform:rotate(5deg);transform-origin:50% 100%`)}
     ${device(shots.home, 540, `left:2870px;top:330px`)}
-    ${textBlock(TEXT.header[short], box, 150)}`);
+    ${textBlock(TEXT.header[short], box, 150)}`, htmlLang(short));
 }
 
 // Search results: the line in the upper half of the safe area, below it the
@@ -130,7 +134,7 @@ function searchResults(short, shots) {
     ${device(shots.board, 1480, `left:${(W - 1480) / 2 - 36}px;top:1240px`)}
     ${device(shots.home, 600, `left:620px;top:1420px;transform:rotate(-3deg);transform-origin:50% 100%`)}
     ${device(shots.widgets, 600, `left:2620px;top:1420px;transform:rotate(3deg);transform-origin:50% 100%`)}
-    ${textBlock(TEXT["search-results"][short], [x + 40, y, w - 80, 420], 190)}`);
+    ${textBlock(TEXT["search-results"][short], [x + 40, y, w - 80, 420], 190)}`, htmlLang(short));
 }
 
 // PNG for App Store Connect: sRGB, no alpha, a 256-colour palette with
@@ -149,6 +153,7 @@ const browser = await chromium.launch(args.chromium ? { executablePath: args.chr
 const tab = await browser.newPage({ deviceScaleFactor: 1 });
 const icon = (await sharp(`${root}store/icons/app-store-1024.png`).resize(264).png().toBuffer()).toString("base64");
 for (const [short, locale] of Object.entries(LOCALES)) {
+  if (!args.locales.split(",").includes(short)) continue;
   const shots = {
     icon,
     home: await cut(locale, "01-home", "iphone-69"),

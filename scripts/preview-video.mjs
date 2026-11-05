@@ -6,14 +6,14 @@
 // cross-fades. 886×1920 (the App Store's size for 6.9" and 6.5" iPhones),
 // 30 fps, H.264 with a silent AAC track, 15–30 s.
 //
-//   npm run preview                         (German, English and French)
+//   npm run preview                         (German, English, French, Chinese)
 //   npm run preview -- --locales fr
 //
 // Like scripts/screenshots.mjs it starts a Flowplan development server per
 // language (--flowplan ../flowplan, --port 3151). Needs ffmpeg. Writes
-// store/app-store/preview/<de-DE|en-US|fr-FR>/flowplan-preview-iphone.mp4
+// store/app-store/preview/<de-DE|en-US|fr-FR|zh-Hans>/flowplan-preview-iphone.mp4
 // (also usable as Google Play's promo video on YouTube) and
-// store/preview/flowplan-<de|en|fr>.gif; --stills <folder> also saves a few
+// store/preview/flowplan-<de|en|fr|zh>.gif; --stills <folder> also saves a few
 // frames of each video for review.
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
@@ -21,13 +21,13 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { homeIndicator, statusBar } from "./frame.mjs";
-import { CAPTIONS, FONTS, PAPER, headline } from "./store-style.mjs";
+import { CAPTIONS, FONTS, PAPER, STORE_LOCALES, headline, htmlLang } from "./store-style.mjs";
 import { acceptLanguage, hideOnLoad, LOCALE_TAGS, recent, userAgent, withFlowplan } from "./store-flowplan.mjs";
 import { settingsScreen, widgetsScreen } from "./store-mockups.mjs";
 
 const { values: args } = parseArgs({
   options: {
-    locales: { type: "string", default: "de,en,fr" },
+    locales: { type: "string", default: "de,en,fr,zh" },
     flowplan: { type: "string", default: "../flowplan" },
     port: { type: "string", default: "3151" },
     chromium: { type: "string", default: process.env.CHROMIUM_PATH || "" },
@@ -54,15 +54,15 @@ const cardStyle = `${FONTS}
   .dot{color:#f0663a}
   p{font-weight:500;color:#5e5a66;text-align:center;text-wrap:balance;line-height:1.3}`;
 
-function card([title, subtitle]) {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${cardStyle}
+function card([title, subtitle], lang) {
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>${cardStyle}
     h1{margin:0 60px;font:400 82px/1.05 "Instrument Serif",Georgia,serif;letter-spacing:-.012em;text-align:center;text-wrap:balance}
     p{margin:26px 80px 0;font-size:34px}
   </style></head><body><h1>${headline(title)}</h1><p>${esc(subtitle)}</p></body></html>`;
 }
 
-function endCard(tagline, icon) {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${cardStyle}
+function endCard(tagline, icon, lang) {
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>${cardStyle}
     img{width:200px;height:200px;border-radius:46px;box-shadow:0 18px 50px rgba(44,40,92,.2)}
     h1{margin:44px 0 0;font:400 108px/1 "Instrument Serif",Georgia,serif}
     p{margin:24px 90px 0;font-size:34px}
@@ -72,6 +72,7 @@ const TAGLINE = {
   de: "Für iPhone und iPad – mit app.flowplan.org oder deinem eigenen Server.",
   en: "For iPhone and iPad – with app.flowplan.org or your own server.",
   fr: "Pour iPhone et iPad – avec app.flowplan.org ou ton propre serveur.",
+  zh: "适用于 iPhone 和 iPad——使用 app.flowplan.org 或你自己的服务器。",
 };
 
 // ---- Recording ----
@@ -202,7 +203,7 @@ async function scenes(browser, locale, { base, state, ids, dataDir }, work) {
   };
   const clips = [];
   const scene = async (name, make) => {
-    clips.push(await still(browser, work, `${name}-card`, card(CAPTIONS[name][locale]), CARD));
+    clips.push(await still(browser, work, `${name}-card`, card(CAPTIONS[name][locale], htmlLang(locale)), CARD));
     clips.push(await make());
     console.log(`${locale} ${name}`);
   };
@@ -290,7 +291,7 @@ async function scenes(browser, locale, { base, state, ids, dataDir }, work) {
     }),
   );
   const icon = `data:image/png;base64,${readFileSync(`${root}store/icons/app-store-1024.png`).toString("base64")}`;
-  clips.push(await still(browser, work, "end", endCard(TAGLINE[locale], icon), 1.8));
+  clips.push(await still(browser, work, "end", endCard(TAGLINE[locale], icon, htmlLang(locale)), 1.8));
   return clips;
 }
 
@@ -326,7 +327,7 @@ for (const locale of args.locales.split(",")) {
   mkdirSync(work, { recursive: true });
   const options = { flowplan, port: args.port, distDir: ".next/store-preview", locale, browser };
   const clips = await withFlowplan(options, (server) => scenes(browser, locale, server, work));
-  const out = `${root}store/app-store/preview/${LOCALE_TAGS[locale]}`;
+  const out = `${root}store/app-store/preview/${STORE_LOCALES[locale].appStore}`;
   mkdirSync(out, { recursive: true });
   mkdirSync(`${root}store/preview`, { recursive: true });
   const mp4 = `${out}/flowplan-preview-iphone.mp4`;
@@ -336,7 +337,7 @@ for (const locale of args.locales.split(",")) {
   ffmpeg("-i", mp4, "-vf", "fps=10,scale=320:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle", gif);
   if (args.stills) {
     mkdirSync(args.stills, { recursive: true });
-    for (const at of [0.6, 6, 10, 18]) ffmpeg("-ss", String(at), "-i", mp4, "-frames:v", "1", `${args.stills}/preview-${LOCALE_TAGS[locale]}-${String(at).replace(".", "_")}s.png`);
+    for (const at of [0.6, 6, 10, 18]) ffmpeg("-ss", String(at), "-i", mp4, "-frames:v", "1", `${args.stills}/preview-${STORE_LOCALES[locale].appStore}-${String(at).replace(".", "_")}s.png`);
   }
   rmSync(work, { recursive: true, force: true });
   console.log(`${mp4.replace(root, "")} (${seconds.toFixed(1)} s)\n${gif.replace(root, "")}`);

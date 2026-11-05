@@ -17,6 +17,7 @@ const { IOSConfig, withDangerousMod, withXcodeProject } = require("expo/config-p
 const fs = require("node:fs");
 const path = require("node:path");
 const { phrases, LANGS } = require("./intents/strings");
+const { lproj } = require("./widget-suite/strings");
 
 const TARGET = "ExpoWidgetsTarget";
 const DIR = path.join(__dirname, "intents");
@@ -43,8 +44,8 @@ const withIntentFiles = (config) =>
       }
       for (const file of swiftIn("app")) fs.copyFileSync(path.join(DIR, "app", file), path.join(root, project, file));
       for (const lang of LANGS) {
-        const file = path.join(root, project, "Supporting", `${lang}.lproj`, "AppShortcuts.strings");
-        if (!fs.existsSync(file)) throw new Error(`with-intents: ${lang}.lproj/AppShortcuts.strings is missing (list this plugin before with-widget-suite)`);
+        const file = path.join(root, project, "Supporting", `${lproj(lang)}.lproj`, "AppShortcuts.strings");
+        if (!fs.existsSync(file)) throw new Error(`with-intents: ${lproj(lang)}.lproj/AppShortcuts.strings is missing (list this plugin before with-widget-suite)`);
         const current = fs.readFileSync(file, "utf8");
         const missing = shortcutLines(lang).filter((line) => !current.includes(line.split(" = ")[0] + " = "));
         if (missing.length) fs.writeFileSync(file, current + missing.join("\n") + "\n");

@@ -9,13 +9,18 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 
 const root = new URL("..", import.meta.url).pathname;
-export const LOCALE_TAGS = { de: "de-DE", en: "en-US", fr: "fr-FR" };
+export const LOCALE_TAGS = { de: "de-DE", en: "en-US", fr: "fr-FR", zh: "zh-CN" };
 export const acceptLanguage = (locale) => `${LOCALE_TAGS[locale]},${locale};q=0.9`;
 // Hidden: the development overlay, the demo banner, and the editing
 // affordances touch screens always show (cover buttons, block handles).
 export const HIDE_CSS = "nextjs-portal,.demo-banner,.cover-change,.add-cover,.block-handle-layer,.block-manager-trigger{display:none!important}";
 export async function hideOnLoad(page) {
   await page.addInitScript((css) => {
+    // The web app's "Flowplan is an app, too" sheet (components/app-promo.tsx)
+    // never shows inside the app; here it counts as seen.
+    try {
+      localStorage.setItem("flowplan-app-promo", "1");
+    } catch {}
     document.addEventListener("DOMContentLoaded", () => document.head.append(Object.assign(document.createElement("style"), { textContent: css })));
   }, HIDE_CSS);
 }
@@ -60,7 +65,7 @@ async function waitForServer() {
 
 // ---- Content: the demo workspace plus a few things that make it look used ----
 
-export const say = (locale) => (de, en, fr) => ({ de, en, fr })[locale];
+export const say = (locale) => (de, en, fr, zh) => ({ de, en, fr, zh })[locale];
 const PEOPLE = [
   ["Mara Klein", "mara@example.com"],
   ["Jonas Weber", "jonas@example.com"],
@@ -87,7 +92,7 @@ export function seed(dataDir, locale) {
   };
 
   db.prepare("UPDATE users SET name=? WHERE id=?").run("Alex Morgan", user);
-  db.prepare("UPDATE workspaces SET name=? WHERE id=?").run(s("Mein Arbeitsbereich", "My workspace", "Mon espace de travail"), workspace);
+  db.prepare("UPDATE workspaces SET name=? WHERE id=?").run(s("Mein Arbeitsbereich", "My workspace", "Mon espace de travail", "我的工作区"), workspace);
   const people = PEOPLE.map(([name, email]) => {
     const id = randomUUID();
     db.prepare("INSERT INTO users(id,subject,name,email) VALUES(?,?,?,?)").run(id, `store:${id}`, name, email);
@@ -99,35 +104,37 @@ export function seed(dataDir, locale) {
 
   // A kick-off document with a bit of everything.
   const kickoff = randomUUID();
-  const title = s("Kickoff Website-Relaunch", "Website relaunch kickoff", "Lancement de la refonte du site");
+  const title = s("Kickoff Website-Relaunch", "Website relaunch kickoff", "Lancement de la refonte du site", "网站改版启动会");
   const mention = (person) => `<span data-mention="${person.id}" class="mention">@${person.name}</span>`;
   const task = (text, checked = false) => `<li data-type="taskItem" data-checked="${checked}"><label><input type="checkbox"></label><div><p>${text}</p></div></li>`;
   const cells = (row, tag = "td") => `<tr>${row.map((cell) => `<${tag}><p>${cell}</p></${tag}>`).join("")}</tr>`;
   const html =
-    s("<h2>Ziel</h2>", "<h2>Goal</h2>", "<h2>Objectif</h2>") +
+    s("<h2>Ziel</h2>", "<h2>Goal</h2>", "<h2>Objectif</h2>", "<h2>目标</h2>") +
     s(
       "<p>Bis Ende November geht die neue Website live – schneller, klarer und auf jedem Gerät gut lesbar.</p>",
       "<p>The new website goes live by the end of November – faster, clearer and easy to read on every device.</p>",
       "<p>Le nouveau site sera en ligne fin novembre : plus rapide, plus clair et lisible sur tous les appareils.</p>",
+      "<p>新网站将在 11 月底上线——更快、更清晰，在任何设备上都易于阅读。</p>",
     ) +
     s(
       '<aside data-callout="tip"><p>Entscheidungen und offene Fragen sammeln wir direkt auf dieser Seite.</p></aside>',
       '<aside data-callout="tip"><p>We collect decisions and open questions right on this page.</p></aside>',
       '<aside data-callout="tip"><p>Les décisions et les questions ouvertes sont réunies sur cette page.</p></aside>',
+      '<aside data-callout="tip"><p>决定和待解决的问题都直接记录在这个页面上。</p></aside>',
     ) +
-    s("<h2>Nächste Schritte</h2>", "<h2>Next steps</h2>", "<h2>Prochaines étapes</h2>") +
+    s("<h2>Nächste Schritte</h2>", "<h2>Next steps</h2>", "<h2>Prochaines étapes</h2>", "<h2>后续步骤</h2>") +
     '<ul data-type="taskList">' +
-    task(s("Interviews auswerten", "Analyse the interviews", "Analyser les entretiens"), true) +
-    task(s("Sitemap abstimmen", "Agree on the sitemap", "Valider l’arborescence"), true) +
-    task(`${s("Texte für die Startseite", "Copy for the home page", "Textes de la page d’accueil")} ${mention(people[0])}`) +
-    task(`${s("Entwürfe präsentieren", "Present the designs", "Présenter les maquettes")} ${mention(people[2])}`) +
+    task(s("Interviews auswerten", "Analyse the interviews", "Analyser les entretiens", "分析访谈结果"), true) +
+    task(s("Sitemap abstimmen", "Agree on the sitemap", "Valider l’arborescence", "确定网站地图"), true) +
+    task(`${s("Texte für die Startseite", "Copy for the home page", "Textes de la page d’accueil", "首页文案")} ${mention(people[0])}`) +
+    task(`${s("Entwürfe präsentieren", "Present the designs", "Présenter les maquettes", "展示设计稿")} ${mention(people[2])}`) +
     "</ul>" +
-    s("<h2>Zeitplan</h2>", "<h2>Schedule</h2>", "<h2>Calendrier</h2>") +
+    s("<h2>Zeitplan</h2>", "<h2>Schedule</h2>", "<h2>Calendrier</h2>", "<h2>时间安排</h2>") +
     "<table><tbody>" +
-    cells(s(["Phase", "Wer", "Bis"], ["Phase", "Who", "Due"], ["Phase", "Qui", "Échéance"]), "th") +
-    cells([s("Konzept", "Concept", "Concept"), "Mara", s("6. Nov.", "Nov 6", "6 nov.")]) +
-    cells([s("Design", "Design", "Design"), "Aylin", s("13. Nov.", "Nov 13", "13 nov.")]) +
-    cells([s("Umsetzung", "Build", "Développement"), "Jonas", s("27. Nov.", "Nov 27", "27 nov.")]) +
+    cells(s(["Phase", "Wer", "Bis"], ["Phase", "Who", "Due"], ["Phase", "Qui", "Échéance"], ["阶段", "负责人", "截止"]), "th") +
+    cells([s("Konzept", "Concept", "Concept", "方案"), "Mara", s("6. Nov.", "Nov 6", "6 nov.", "11月6日")]) +
+    cells([s("Design", "Design", "Design", "设计"), "Aylin", s("13. Nov.", "Nov 13", "13 nov.", "11月13日")]) +
+    cells([s("Umsetzung", "Build", "Développement", "开发"), "Jonas", s("27. Nov.", "Nov 27", "27 nov.", "11月27日")]) +
     "</tbody></table>";
   db.prepare("INSERT INTO pages(id,workspace_id,space_id,parent_id,title,kind,created_by,position,icon,cover) VALUES(?,?,?,?,?,?,?,?,?,?)").run(
     kickoff, workspace, space, null, title, "document", user, -1, "🎯", "",
@@ -139,7 +146,7 @@ export function seed(dataDir, locale) {
   const inbox = [
     [people[0], `${people[0].name} hat dich in „${title}“ erwähnt`, kickoff, "mention", 0.3, false],
     [people[1], `${people[1].name} kommentiert „${pages.find((p) => p.id === ids.projects).title}“`, ids.projects, "comment", 1.2, false],
-    [people[2], `${people[2].name} hat dir eine Aufgabe in „${title}“ gegeben: ${s("Entwürfe präsentieren", "Present the designs", "Présenter les maquettes")}`, kickoff, "mention", 3, false],
+    [people[2], `${people[2].name} hat dir eine Aufgabe in „${title}“ gegeben: ${s("Entwürfe präsentieren", "Present the designs", "Présenter les maquettes", "展示设计稿")}`, kickoff, "mention", 3, false],
     [people[0], `${people[0].name} hat „${pages.find((p) => p.id === ids.whiteboard).title}“ geändert`, ids.whiteboard, "change", 20, true],
     [people[1], `${people[1].name} hat „${pages.find((p) => p.id === ids.team).title}“ mit dir geteilt`, ids.team, "share", 28, true],
   ];

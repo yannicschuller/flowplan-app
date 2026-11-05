@@ -1,0 +1,17 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Flowplan",
+    "NSCameraUsageDescription": "当你为页面或白板拍照，或扫描文稿时，Flowplan 会使用相机。",
+    "NSMicrophoneUsageDescription": "当你为页面录制语音笔记或视频时，Flowplan 会使用麦克风。",
+    "NSPhotoLibraryUsageDescription": "当你选择要添加到页面的图片时，Flowplan 会打开你的照片。",
+    "NSPhotoLibraryAddUsageDescription": "Flowplan 会在你要求时将图片存储到你的照片中。",
+    "NSFaceIDUsageDescription": "开启应用锁后，Flowplan 会使用 Face ID 解锁应用。",
+    "NSSpeechRecognitionUsageDescription": "Flowplan 会在此设备上将你的语音笔记转换为文字。",
+    "NSLocalNetworkUsageDescription": "当你的 Flowplan 实例运行在本地网络中时，Flowplan 会连接到它。"
+  },
+  "android": {
+    "share_label": "保存到 Flowplan",
+    "restriction_server_title": "Flowplan 实例",
+    "restriction_server_description": "首次启动时建议的地址，例如 https://flowplan.example.com"
+  }
+}

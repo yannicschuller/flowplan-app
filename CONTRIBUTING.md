@@ -27,7 +27,7 @@ npm run ios          # or: npm run android
 - Match the surrounding code: naming, comment density, no new dependencies without a reason.
 - Add or update tests in `test/*.test.ts` for logic you change.
 - Run `npm run check` (TypeScript and tests) before you push; CI also builds the JavaScript bundle and runs `expo prebuild`.
-- New texts go into `src/i18n.ts` (and `locales/` for store and system texts) in German, English and French.
+- New texts go into `src/i18n.ts` (and `locales/` for store and system texts) in German, English, French and Simplified Chinese (`zh`).
 - Update the documentation ([flowplan-docs](https://github.com/yannicschuller/flowplan-docs), page "Offline and apps") when behaviour changes.
 
 By contributing you agree that your contributions are licensed under the [AGPL-3.0](LICENSE).

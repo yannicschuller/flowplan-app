@@ -33,13 +33,14 @@ const nulls = (value: unknown, path = "props"): string[] =>
         : [];
 
 test("signed out and non-administrators get a line instead of data", () => {
-  for (const lang of ["de", "en", "fr"] as const) {
+  for (const lang of ["de", "en", "fr", "zh"] as const) {
     assert.equal(adminStatusWidget(null, lang).state, "signedOut");
     assert.equal(adminLiveWidget({ kind: "notAdmin" }, lang).state, "notAdmin");
   }
   assert.equal(adminStatusWidget({ kind: "notAdmin" }, "de").message, "Nur für Administratoren");
   assert.equal(adminStorageWidget({ kind: "notAdmin" }, "en").message, "Administrators only");
   assert.equal(adminLiveWidget({ kind: "notAdmin" }, "fr").message, "Réservé aux administrateurs");
+  assert.equal(adminLiveWidget({ kind: "notAdmin" }, "zh").message, "仅限管理员");
   assert.equal(adminStatusWidget(null, "en").message, "Open Flowplan to sign in");
 });
 
@@ -111,7 +112,7 @@ test("storage: size, disk and the fullest quota", () => {
 
 test("no null in any state, in any language", () => {
   const states: AdminState[] = [null, { kind: "notAdmin" }, data(), data({ live: null, update: null }), data({ storage: { ...base.storage, disk: null, fullestQuota: null } })];
-  for (const lang of ["de", "en", "fr"] as const)
+  for (const lang of ["de", "en", "fr", "zh"] as const)
     for (const state of states) {
       assert.deepEqual(nulls(adminStatusWidget(state, lang, now)), []);
       assert.deepEqual(nulls(adminLiveWidget(state, lang)), []);
@@ -166,7 +167,7 @@ test("an administrator's widgets never say \"sign in\" while the summary answers
   assert.deepEqual(nextAdminState(null, known), known);
   assert.deepEqual(nextAdminState(null, null), { kind: "pending" });
   assert.deepEqual(nextAdminState(undefined, { kind: "notAdmin" }), { kind: "pending" });
-  for (const lang of ["de", "en", "fr"] as const) {
+  for (const lang of ["de", "en", "fr", "zh"] as const) {
     const live = adminLiveWidget({ kind: "pending" }, lang);
     assert.equal(live.state, "pending");
     assert.notEqual(live.message, adminLiveWidget(null, lang).message);

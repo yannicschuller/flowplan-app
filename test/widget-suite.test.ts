@@ -136,7 +136,7 @@ const options = { locale: "en" as const, today, signedIn: true, now: Date.parse(
 
 test("every kind maps its answer to a view without null, also the samples", () => {
   for (const kind of SUITE_KINDS)
-    for (const locale of ["de", "en", "fr"] as const) {
+    for (const locale of ["de", "en", "fr", "zh"] as const) {
       const config = normalizeConfig(kind, kind === "counter" || kind === "forms" ? { pageId: PAGE } : {});
       const view = suiteView(kind, config, sampleResult(kind, locale, today, options.now), { ...options, locale });
       assert.notEqual(view.state, "closed", `${kind} ${locale}`);
@@ -228,11 +228,12 @@ test("time, counter, capture and mentions details", () => {
   assert.equal(pageLink(42), "flowplan://open?path=%2F");
 });
 
-test("every text of the app exists in German, English and French", () => {
+test("every text of the app exists in German, English, French and Chinese", () => {
   const keys = Object.keys(strings.de).sort();
   assert.deepEqual(Object.keys(strings.en).sort(), keys);
   assert.deepEqual(Object.keys(strings.fr).sort(), keys);
-  for (const lang of ["de", "en", "fr"] as const)
+  assert.deepEqual(Object.keys(strings.zh).sort(), keys);
+  for (const lang of ["de", "en", "fr", "zh"] as const)
     for (const key of keys) {
       const text = strings[lang][key as keyof typeof strings.de];
       assert.ok(text.trim(), `${lang}.${key} is empty`);

@@ -1,6 +1,6 @@
 // The texts of the notification buttons, the local reminders and the voice
-// note screen, in the app's languages (German, English, French; the language
-// is the one src/i18n.ts chose).
+// note screen, in the app's languages (German, English, French, Simplified
+// Chinese; the language is the one src/i18n.ts chose).
 import { locale, type Locale } from "./i18n";
 
 const de = {
@@ -91,7 +91,37 @@ const fr: Record<Key, string> = {
   voiceFile: "Note-vocale-{stamp}.m4a",
 };
 
-export const notifyStrings = { de, en, fr } as const;
+const zh: Record<Key, string> = {
+  actionDone: "完成",
+  actionTomorrow: "明天",
+  actionReply: "回复",
+  actionReplySend: "发送",
+  actionReplyPlaceholder: "你的回复…",
+  actionRead: "标记为已读",
+  actionFailedTitle: "操作未成功",
+  actionFailedBody: "请打开 Flowplan 重试。",
+  reminderDueToday: "今天到期",
+  channelReminders: "提醒",
+  channelRemindersText: "今天到期的任务（在实例不发送通知时）。",
+  voiceTitle: "语音笔记",
+  voiceStart: "开始录音",
+  voiceStop: "停止录音",
+  voiceLimit: "最长 {minutes} 分钟",
+  voiceText: "以文字插入",
+  voiceOnDevice: "在此设备上使用 Apple 的语音识别，录音不会因此离开设备。",
+  voiceOnServer: "使用你的实例的转写功能。",
+  voiceSummarize: "然后用 AI 总结",
+  voiceInsert: "插入",
+  voiceDiscard: "放弃",
+  voiceTranscribing: "正在转换为文字…",
+  voiceSpeechDenied: "未获得语音识别权限，录音将不带文字插入。",
+  voiceSpeechFailed: "语音识别未成功，录音将不带文字插入。",
+  voiceFailed: "无法传递录音。",
+  // The file name stays ASCII, like the other languages' names.
+  voiceFile: "Voice-note-{stamp}.m4a",
+};
+
+export const notifyStrings = { de, en, fr, zh } as const;
 
 export function tn(key: Key, params: Record<string, string | number> = {}, lang: Locale = locale()) {
   const text = notifyStrings[lang]?.[key] ?? en[key] ?? key;

@@ -32,7 +32,7 @@ final class FPSShareModel: ObservableObject {
   init(session: FPSSession?, done: @escaping @MainActor (Bool) -> Void) {
     self.session = session
     self.done = done
-    if let lang = session?.lang, ["de", "en", "fr"].contains(lang) {
+    if let lang = session?.lang, ["de", "en", "fr", "zh"].contains(lang) {
       FPSStrings.lang = lang
     }
   }

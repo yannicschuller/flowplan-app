@@ -54,7 +54,7 @@ test("widgets get finished texts and links into the app", () => {
   assert.equal(tasks.unreadLabel, "3 unread");
   assert.equal(tasks.timer?.title, "Write offer");
   // The overview, not "Tasks": that is the widget that checks off.
-  assert.deepEqual((["de", "en", "fr"] as const).map((lang) => tasksWidget(summary, lang).title), ["Übersicht", "Overview", "Aperçu"]);
+  assert.deepEqual((["de", "en", "fr", "zh"] as const).map((lang) => tasksWidget(summary, lang).title), ["Übersicht", "Overview", "Aperçu", "概览"]);
   const signedOut = tasksWidget(null, "de");
   assert.equal(signedOut.title, "Übersicht");
   assert.equal(signedOut.signedIn, false);
@@ -104,7 +104,7 @@ const nulls = (value: unknown, path = "props"): string[] =>
         : [];
 
 test("widget props carry no null in any state", () => {
-  for (const lang of ["de", "en", "fr"] as const)
+  for (const lang of ["de", "en", "fr", "zh"] as const)
     for (const state of [summary, { ...summary, timer: null }, null, sampleSummary(lang)]) {
       assert.deepEqual(nulls(tasksWidget(state, lang)), []);
       assert.deepEqual(nulls(inboxWidget(state, lang)), []);

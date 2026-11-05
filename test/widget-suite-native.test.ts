@@ -6,17 +6,19 @@ import config from "../app.config";
 import { SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
 import { configFor, forgetProfile, parseConfigState, removeWidget, setConfig } from "../src/widgets/widget-config";
 
-const { strings, phrases, gallery, galleryStrings, localizable } = require("../plugins/widget-suite/strings") as {
-  strings: Record<string, { de: string; fr: string }>;
-  phrases: Record<string, { de: string; fr: string }>;
+const { strings, phrases, gallery, galleryStrings, localizable, LANGS, lproj } = require("../plugins/widget-suite/strings") as {
+  LANGS: string[];
+  lproj: (lang: string) => string;
+  strings: Record<string, { de: string; fr: string; zh: string }>;
+  phrases: Record<string, { de: string; fr: string; zh: string }>;
   gallery: Record<string, { label: string[]; description: string[] }>;
   galleryStrings: (lang: string) => Record<string, string>;
-  localizable: (table: Record<string, { de: string; fr: string }>, lang: string) => Record<string, string>;
+  localizable: (table: Record<string, { de: string; fr: string; zh: string }>, lang: string) => Record<string, string>;
 };
 // The App Shortcuts provider also lists plugins/intents' shortcuts, whose
 // texts and phrases are in its own table.
 const intents = require("../plugins/intents/strings") as {
-  phrases: Record<string, { de: string; fr: string }>;
+  phrases: Record<string, { de: string; fr: string; zh: string }>;
   localizable: (lang: string) => Record<string, string>;
 };
 const { swiftKeys, shortcutPhrases } = require("../plugins/widget-suite/swift-keys") as {
@@ -35,7 +37,7 @@ test("every text of the Swift sources is translated, with the same placeholders"
   const missing: string[] = [];
   for (const file of swiftFiles)
     for (const key of swiftKeys(readFileSync(file, "utf8"))) {
-      for (const lang of ["de", "en", "fr"]) {
+      for (const lang of ["de", "en", "fr", "zh"]) {
         const table = { ...localizable(strings, lang), ...intents.localizable(lang) };
         if (!table[key]) missing.push(`${lang}: ${key} (${file.split("/").pop()})`);
         else assert.deepEqual(placeholders(table[key]), placeholders(key), `${lang}: ${key}`);
@@ -43,28 +45,29 @@ test("every text of the Swift sources is translated, with the same placeholders"
     }
   assert.deepEqual(missing, []);
   for (const [key, value] of Object.entries(strings)) {
-    assert.ok(value.de?.trim() && value.fr?.trim(), key);
+    assert.ok(value.de?.trim() && value.fr?.trim() && value.zh?.trim(), key);
     assert.deepEqual(placeholders(value.de), placeholders(key), `de: ${key}`);
     assert.deepEqual(placeholders(value.fr), placeholders(key), `fr: ${key}`);
+    assert.deepEqual(placeholders(value.zh), placeholders(key), `zh: ${key}`);
   }
 });
 
-test("Siri phrases exist in German, English and French and name the app", () => {
+test("Siri phrases exist in German, English, French and Chinese and name the app", () => {
   const source = readFileSync(join(root, "plugins/widget-suite/app/FlowplanAppIntents.swift"), "utf8");
   const used = shortcutPhrases(source);
   assert.ok(used.size >= 6);
   const all = { ...phrases, ...intents.phrases };
   for (const phrase of used) {
     assert.ok(all[phrase], `phrase without translation: ${phrase}`);
-    for (const lang of ["de", "fr"] as const) assert.ok(all[phrase][lang].includes("${applicationName}"), `${lang}: ${phrase}`);
+    for (const lang of ["de", "fr", "zh"] as const) assert.ok(all[phrase][lang].includes("${applicationName}"), `${lang}: ${phrase}`);
   }
   assert.deepEqual(Object.keys(all).sort(), [...used].sort());
 });
 
-test("every widget has a gallery name and description in three languages", () => {
+test("every widget has a gallery name and description in every language", () => {
   const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
   assert.deepEqual(Object.keys(gallery).sort(), [...names].sort());
-  for (const lang of ["de", "en", "fr"]) {
+  for (const lang of ["de", "en", "fr", "zh"]) {
     const android = galleryStrings(lang);
     for (const name of names) {
       assert.ok(android[`widget_label_${name.toLowerCase()}`], `${lang} ${name}`);
@@ -76,13 +79,21 @@ test("every widget has a gallery name and description in three languages", () =>
   }
 });
 
+test("every language has its .lproj: the app's and the extensions' localizations and the config's locales", () => {
+  const folders = LANGS.map(lproj);
+  assert.deepEqual(folders, ["de", "en", "fr", "zh-Hans"]);
+  assert.deepEqual(config.ios?.infoPlist?.CFBundleLocalizations, folders);
+  assert.deepEqual(Object.keys(config.locales ?? {}), folders);
+  assert.match(readFileSync(join(root, "plugins/with-capture.js"), "utf8"), /CFBundleLocalizations: \["de", "en", "fr", "zh-Hans"\]/);
+});
+
 test("the overview is not called a tasks widget and points to the one that checks off", () => {
-  ["de", "en", "fr"].forEach((lang, i) => {
+  ["de", "en", "fr", "zh"].forEach((lang, i) => {
     const ios = localizable(strings, lang);
     const overview = ios[gallery.FlowplanTasks.label[1]];
     const tasks = ios[gallery.FlowplanTaskList.label[1]];
-    assert.equal(overview, ["Übersicht", "Overview", "Aperçu"][i]);
-    assert.equal(tasks, ["Aufgaben", "Tasks", "Tâches"][i]);
+    assert.equal(overview, ["Übersicht", "Overview", "Aperçu", "概览"][i]);
+    assert.equal(tasks, ["Aufgaben", "Tasks", "Tâches", "任务"][i]);
     assert.equal(tasks, gallery.FlowplanTaskList.label[i]);
     assert.ok(gallery.FlowplanTasks.description[i].includes(tasks), `${lang}: the overview's description names "${tasks}"`);
   });
@@ -154,7 +165,7 @@ test("the settings of the expo-widgets widgets are translated", () => {
     }
   }
   assert.ok(texts.length > 10);
-  for (const lang of ["de", "fr"]) {
+  for (const lang of ["de", "fr", "zh"]) {
     const table = localizable(strings, lang);
     for (const text of texts) assert.ok(table[text] && table[text] !== "", `${lang}: ${text}`);
   }
