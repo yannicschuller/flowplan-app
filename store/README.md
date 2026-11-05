@@ -150,7 +150,7 @@ Actions → **iOS setup** → Run workflow, from `main`, with the default inputs
 | `listing` | on | Texts, age rating, review information |
 | `screenshots` | on | … and the screenshots; replaces those in App Store Connect |
 | `creative` | off | Product page header and search results image onto the version (iOS 27) |
-| `submit` | off | Submit the version for review; needs a processed build of that version in TestFlight |
+| `submit` | off | Submit the version for review; needs a processed build of that version in TestFlight. Once Apple approves it, it is released to everyone automatically |
 
 ### What stays in the browser
 

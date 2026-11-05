@@ -1,9 +1,7 @@
-The first version of Flowplan for iPhone and iPad:
-• Connects to app.flowplan.org or your own Flowplan instances, several of them as profiles
-• Push notifications with the number of unread ones on the app icon
-• Widgets with settings of their own: tasks to check off, today, favorites, counters, journal and habits, time, mentions, forms, quick capture – for administrators state, live numbers and storage
-• Live Activities: timer, focus, the meeting now, imports, voice memo
-• Siri, Shortcuts, Control Center and the Action button: note, timer, voice memo, focus, “What's on today?”
-• Sign in with a passkey or SSO, app lock with Face ID
-• Quick actions: inbox, my tasks, search, new note, voice memo
-• Apple Pencil on whiteboards: pressure, eraser, double-tap and squeeze; fingers move the board
+New in this version:
+• Switch profiles right on the sign-in page; a profile you never signed in with can be changed or removed
+• Instances in your local network now also work over HTTP, with a clear warning
+• Outdated copies of the page no longer stay on screen – the app loads the current version
+• Quick actions on the app icon also work when the app was closed
+• Live Activities on the lock screen use the system's background
+• Smaller improvements and fixes
