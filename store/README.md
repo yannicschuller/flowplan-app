@@ -1,6 +1,6 @@
 # Store material
 
-Everything for the App Store and Google Play listings, in German (`de-DE`), English (`en-US`) and French (`fr-FR`). The folders follow the layout fastlane reads:
+Everything for the App Store and Google Play listings, in German (`de-DE`), English (`en-US`), French (`fr-FR`) and Simplified Chinese (App Store `zh-Hans`, Google Play `zh-CN` – the names `deliver` and `supply` use for it). The folders follow the layout fastlane reads:
 
 - `app-store/` for `deliver` (`fastlane ios metadata`);
 - `google-play/` for `supply` (`fastlane android metadata`).
@@ -20,11 +20,20 @@ So texts and images can be uploaded with one command or copied into App Store Co
 | Phone (1080×1920), 7" tablet (1200×1920), 10" tablet (1600×2560) | `google-play/<locale>/images/{phone,sevenInch,tenInch}Screenshots/N.png` |
 | Feature graphic 1024×500, icon 512×512 | `google-play/<locale>/images/featureGraphic.png`, `icon.png` |
 | App icon 1024×1024 (App Store, no transparency) and 512×512 (Play) | `icons/` |
-| Preview GIFs (README, website) | `preview/flowplan-{de,en,fr}.gif` |
+| Preview GIFs (README, website) | `preview/flowplan-{de,en,fr}.gif` (Chinese: none yet, see [Preview video](#preview-video)) |
 
 All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too (below and the main README).
 
-`npm test` (part of `npm run check`) checks the listing: App Store and Play limits for every language (name and subtitle 30 characters, keywords 100 bytes without spaces after commas, promotional text 170, descriptions 4000, Play short description 80, changelogs 500), no other apps' names, and every screenshot's size, PNG without alpha and count ([`test/store.test.ts`](../test/store.test.ts)).
+`npm test` (part of `npm run check`) checks the listing: the language folders of both stores, App Store and Play limits for every language (name and subtitle 30 characters, keywords 100 bytes without spaces after commas, promotional text 170, descriptions 4000, Play short description 80, changelogs 500; characters counted as Unicode code points), no other apps' names, and every screenshot's size, PNG without alpha and count ([`test/store.test.ts`](../test/store.test.ts)). The keywords are checked in bytes, the stricter reading of Apple's limit: a Chinese character is 3 bytes in UTF-8, so the Chinese keywords hold about 30 characters (`zh-Hans/keywords.txt`: 90 bytes).
+
+## Simplified Chinese
+
+The listing has a Simplified Chinese localization: `app-store/zh-Hans/` (App Store Connect: *Chinese (Simplified)*, *Chinesisch (vereinfacht)*) and `google-play/zh-CN/` (Play Console: *Chinese (Simplified) – zh-CN*). The app speaks it too (main README → Languages); Traditional Chinese devices get the English app, and there is no Traditional Chinese (`zh-Hant`, `zh-TW`, `zh-HK`) listing.
+
+- **App Store.** `fastlane ios metadata` (or iOS setup with *listing*) creates the `zh-Hans` localization of the version and its texts and screenshots like any other language; `fastlane ios creative` places `creative/zh-Hans/`. Which localization a storefront shows depends on the storefront's languages and the device's language – check App Store Connect Help → *App Store localizations*: where a storefront (e.g. Taiwan, Hong Kong, Macao) lists only Traditional Chinese, readers there may see the English listing until a `zh-Hant` localization exists.
+- **Mainland China stays excluded.** An app in the App Store of China mainland needs an ICP filing number, which Flowplan does not have. Availability is set **by hand**, fastlane does not touch it: App Store Connect → the app → *Pricing and Availability* (*Preise und Verfügbarkeit*) → *Country or Region Availability* → *Edit* → untick **China mainland** (*China (Festland)*) → *Done* → *Save*. Check it again when "all countries or regions" is chosen anew (One-click setup → What stays in the browser, step 6). Taiwan, Hong Kong, Macao, Singapore and every other country stay on.
+- **Google Play** is not offered in mainland China, so nothing is excluded there. `fastlane android metadata` uploads `google-play/zh-CN/` (Play Console → *Grow users → Store presence → Main store listing → Manage translations* shows it); Play shows it to people whose device language is Simplified Chinese.
+- **Not in Chinese yet:** the App Store preview video and the preview GIF (`npm run preview -- --locales zh` makes them – see [Preview video](#preview-video); upload the video by hand) and Play's promo video (`google-play/zh-CN/video.txt` is empty like the others).
 
 ## Screenshots
 
@@ -43,7 +52,7 @@ Eight frames per device and language, the same order everywhere: a headline of a
 
 The app's screens are the real Flowplan web app (its demo workspace, in the listing's language, plus a few made-up pages, people and notifications – no real persons or companies). The widgets and the settings are native and cannot be driven by Playwright; [`scripts/store-mockups.mjs`](../scripts/store-mockups.mjs) draws them after `plugins/widget-suite/ios/SuiteViews.swift` (with the widget gallery's sample data and texts) and `src/screens/Settings.tsx`.
 
-To make them again, with the Flowplan repository next to this one and its dependencies installed:
+To make them again, with the Flowplan repository next to this one and its dependencies installed (and, for the Chinese images, a font with Simplified Chinese glyphs: Instrument Serif and Sans have none, so the pages are set with `lang="zh-Hans"` and the system's CJK fonts take over – PingFang SC and Songti SC on macOS, on Linux `fonts-noto-cjk` (Noto Sans/Serif CJK SC); without one, Chromium falls back to whatever CJK font it finds or draws boxes):
 
 ```sh
 npm run screenshots          # starts a Flowplan dev server per language, writes store/.cache/raw/
@@ -52,7 +61,7 @@ npm run store:images -- --contact /tmp/review   # also contact-<locale>.png, all
 npm test                     # sizes, alpha, counts
 ```
 
-`npm run screenshots -- --locales fr --only iphone-69,ipad-13 --shots 02-widgets` redoes a part (then run `store:images` again). Captions are in `scripts/store-images.mjs` (`CAPTIONS`), the made-up content in `scripts/screenshots.mjs` (`seed`). Dates on the screens are relative to the day they are made. `CHROMIUM_PATH` (or `--chromium`) points Playwright to another Chromium. The PNGs are written with a 256-colour palette (sharp), about 150–250 KB each.
+`npm run screenshots -- --locales fr --only iphone-69,ipad-13 --shots 02-widgets` redoes a part (then run `store:images` again; `npm run store:images -- --locales fr` and `npm run store:creative -- --locales fr` redo only that language). Captions are in `scripts/store-images.mjs` (`CAPTIONS`), the made-up content in `scripts/screenshots.mjs` (`seed`). Dates on the screens are relative to the day they are made. `CHROMIUM_PATH` (or `--chromium`) points Playwright to another Chromium. The PNGs are written with a 256-colour palette (sharp), about 150–250 KB each.
 
 ## Preview video
 
@@ -63,7 +72,7 @@ npm run preview                                  # all languages; needs ffmpeg a
 npm run preview -- --locales fr --stills /tmp/review   # one language, a few frames to look at
 ```
 
-It also writes `preview/flowplan-<de|en|fr>.gif`. fastlane does not upload videos: in App Store Connect, open the version, choose the language and drag the file into *App Previews* for the 6.9″ iPhone (it is used for 6.5″ too). The same file can go to YouTube for Google Play's promo video (`google-play/<locale>/video.txt`).
+It also writes `preview/flowplan-<de|en|fr|zh>.gif`. fastlane does not upload videos: in App Store Connect, open the version, choose the language and drag the file into *App Previews* for the 6.9″ iPhone (it is used for 6.5″ too). The same file can go to YouTube for Google Play's promo video (`google-play/<locale>/video.txt`).
 
 ## Creative assets
 
@@ -93,7 +102,7 @@ The lines are in `scripts/creative-assets.mjs` (`TEXT`); a line that is too long
 **By hand** (App Store Connect; German labels where known, Apple's English ones from its help in brackets), for each language:
 
 1. *Apps* → Flowplan → in the sidebar the iOS version in preparation.
-2. Top right, choose the language (*Deutsch*, *Englisch (USA)*, *Französisch*).
+2. Top right, choose the language (*Deutsch*, *Englisch (USA)*, *Französisch*, *Chinesisch (vereinfacht)*).
 3. Under the product page information the tab **Kopfzeile und Suchergebnisse** (*Header and Search Results*) → **Kopfzeile** (*Header*): drag `app-store/creative/<locale>/header.png` into the field – or, if the run already uploaded it, *Browse Assets* and choose `Flowplan header <locale> …` → Save.
 4. **Suchergebnisse** (*Search Results*): the same with `search-results.png`. Leave *Use header asset in search results* off – it only works with a universal 16:9 asset.
 5. *Preview* shows both on iPhone and iPad, in both orientations; check that the line is not cut off.
@@ -182,8 +191,8 @@ Actions → **iOS setup** → Run workflow, from `main`, with the default inputs
 5. **Age rating, newer questions.** `app_rating_config.json` answers every content question with "None". It also answers "No" for advertising, age assurance, parental controls, health/wellness, gambling and unrestricted web access. Two questions are left to you in App Information → Age Rating:
    - *Messaging and Chat*;
    - *User-Generated Content*. Flowplan has comments, shared pages and public share links, so the honest answer is probably *Yes*.
-6. **Pricing and Availability:** price **Free** (USD 0.00), all countries or regions.
-7. **App preview video** (`app-store/preview/<locale>/`, German, English, French): fastlane does not upload videos; drag each into App Previews of its language.
+6. **Pricing and Availability:** price **Free** (USD 0.00), all countries or regions **except China mainland** (no ICP filing; see [Simplified Chinese](#simplified-chinese)).
+7. **App preview video** (`app-store/preview/<locale>/`, German, English, French; none in Chinese yet): fastlane does not upload videos; drag each into App Previews of its language.
 8. **Submit:** choose the build on the version page and press *Add for Review* → *Submit*, or run iOS setup with *submit* on.
 
 ## App Review: demo account and contact
@@ -301,7 +310,8 @@ Apple and Google, however, count the data that the developer's own service recei
    - **Widgets** (add each from the gallery – it shows sample data): *Flowplan* and *Flowplan Inbox* show *Open Flowplan to sign in* until you have signed in, then your tasks and inbox, and follow changes within seconds; as an administrator *Flowplan Instance*, *Flowplan Live* and *Flowplan Storage* show the instance (others see *Administrators only*), each opens its page of the administration; edit each one's setting (Live: error rate → the lock screen gauge);
    - **Configurable widgets**: add each of the nine without changing anything (it works with its defaults; *Database counter* and *Form responses* ask for a page), then edit its settings (iOS: long press → Edit Widget, lists come from the instance; Android: long press → settings). Check off a task, a habit, mark a mention read, start and stop the timer – on the home screen, without opening the app. Sign out in the page: every widget says *Open Flowplan to sign in* and keeps its settings; sign in again: they fill at once. Switch profiles: nothing of the other instance stays;
    - **Live Activities / ongoing notifications**: start focus (Control Center or quick action), a meeting in a calendar view that runs now (*Open notes*), an import (indeterminate bar), a voice memo (lock the screen, *Stop* from the lock screen); as an administrator an incident (e.g. a failed backup) appears and ends when it is fixed;
-   - **Siri / Shortcuts** in German, English, French: "Notiz zu Flowplan hinzufügen", "Was steht heute in Flowplan an", "Timer in Flowplan starten"; Control Center controls and the Action button (iOS 18); Android Quick Settings tile *New note*;
+   - **Siri / Shortcuts** in German, English, French, Simplified Chinese: "Notiz zu Flowplan hinzufügen", "Was steht heute in Flowplan an", "Timer in Flowplan starten", "在 Flowplan 中添加笔记", "Flowplan 今天有什么安排";
+   - **Simplified Chinese** (iPhone set to 简体中文, Android to 中文（简体）): the app's screens, widgets, notifications, share sheet and permission prompts are Chinese; set to 繁體中文 they are English; Control Center controls and the Action button (iOS 18); Android Quick Settings tile *New note*;
    - **Back**: the swipe from the left edge (iOS) and Android's back close an open dialog or menu first, then go from a record to its database, from a settings section to the overview and from a page to the previous one; on the start page the iOS gesture is off and Android's back leaves the app;
    - sharing into Flowplan (Android);
    - dark mode.
@@ -310,7 +320,7 @@ Apple and Google, however, count the data that the developer's own service recei
    - choose the build;
    - fill App Privacy (above) and the age rating;
    - upload the preview video by hand for each language (App Previews; fastlane does not upload videos, see [Preview video](#preview-video));
-   - set pricing *Free* and availability;
+   - set pricing *Free* and availability (without China mainland);
    - **Submit for Review**.
 5. **Play Console:**
    - complete Store listing, Data safety, Content rating, Target audience, Ads (no) and App access (with the demo account);
@@ -322,7 +332,7 @@ Apple and Google, however, count the data that the developer's own service recei
 - **Background audio (iOS) and the microphone foreground service (Android).** Voice memos keep recording when the screen locks (`UIBackgroundModes: audio`, expo-audio's `enableBackgroundRecording`); the recording shows as Live Activity / ongoing notification with *Stop*. In App Review's notes and in Play Console (App content → **Foreground service permissions** → `FOREGROUND_SERVICE_MICROPHONE`: "user-initiated voice memo recording that continues with the screen off") explain this, with a short screen recording for Play.
 - **Camera (Android).** expo-image-picker brings the `CAMERA` permission for "Take a photo" on the capture screen; Play's Data safety needs no extra entry (the photo is uploaded as user content).
 - **Live Activities** are started only by the person's own actions or what runs for them (focus, meeting, import, voice memo; incidents only for administrators), never for marketing.
-- **Siri phrases** exist in German, English and French (`AppShortcuts.strings`); Apple checks that each names the app.
+- **Siri phrases** exist in German, English, French and Simplified Chinese (`AppShortcuts.strings`); Apple checks that each names the app.
 
 ### Screenshots of the widgets
 
@@ -330,7 +340,7 @@ The store set has a drawn home screen with the widgets (`02-widgets`, above). Sc
 
 1. Sign in on a simulator (iPhone 6.9″, iPad 13″) or the Pixel emulator with an account that has tasks with due dates, a journal with a habits database, a recent timer and a form with responses (seed them by hand; the screenshot script does not create them).
 2. Add from the gallery, from top left: *Tasks* (medium, filter *Due today*), *Today* (small), *Database counter* (small, the roadmap database), *Journal and habits* (medium), *Time this week* (small) and on the lock screen *Tasks* (rectangular) and *Database counter* (circular). Start focus from Control Center for the Dynamic Island.
-3. Light and dark, German, English and French. To use one instead of the drawn frame, save it (the whole screen, at the device's size in points times its scale) as `store/.cache/raw/<de|en|fr>/<device>/02-widgets.png` with `{"full": true}` in `02-widgets.json`, then run `npm run store:images`.
+3. Light and dark, German, English, French and Simplified Chinese. To use one instead of the drawn frame, save it (the whole screen, at the device's size in points times its scale) as `store/.cache/raw/<de|en|fr|zh>/<device>/02-widgets.png` with `{"full": true}` in `02-widgets.json`, then run `npm run store:images`.
 
 ### What the review notes say
 

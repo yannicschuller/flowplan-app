@@ -5,28 +5,30 @@
 //
 //   npm run store:images
 //   npm run store:images -- --contact <folder>   (also one contact sheet per language)
+//   npm run store:images -- --locales zh        (only these languages)
 //
 // Writes the layout fastlane reads:
-//   store/app-store/screenshots/<de-DE|en-US|fr-FR>/NN-name-<device>.png
-//   store/google-play/<de-DE|en-US|fr-FR>/images/{phoneScreenshots,sevenInchScreenshots,tenInchScreenshots}/N.png
-//   store/google-play/<de-DE|en-US|fr-FR>/images/{featureGraphic.png,icon.png}
+//   store/app-store/screenshots/<de-DE|en-US|fr-FR|zh-Hans>/NN-name-<device>.png
+//   store/google-play/<de-DE|en-US|fr-FR|zh-CN>/images/{phoneScreenshots,sevenInchScreenshots,tenInchScreenshots}/N.png
+//   store/google-play/<de-DE|en-US|fr-FR|zh-CN>/images/{featureGraphic.png,icon.png}
+// A language whose raw screenshots are missing is left as it is.
 import { chromium } from "playwright";
 import sharp from "sharp";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { DEVICES } from "./devices.mjs";
 import { dataUrl, screen } from "./frame.mjs";
-import { CAPTIONS, FONTS, PAPER, esc, headline } from "./store-style.mjs";
+import { CAPTIONS, FONTS, PAPER, STORE_LOCALES, esc, headline, htmlLang } from "./store-style.mjs";
 
 const { values: args } = parseArgs({
   options: {
     contact: { type: "string", default: "" },
+    locales: { type: "string", default: Object.keys(STORE_LOCALES).join(",") },
     chromium: { type: "string", default: process.env.CHROMIUM_PATH || "" },
   },
 });
 const root = new URL("..", import.meta.url).pathname;
 const raw = `${root}store/.cache/raw`;
-const LOCALES = { de: "de-DE", en: "en-US", fr: "fr-FR" };
 
 // Output size per device (the stores' required pixel sizes).
 const OUTPUT = {
@@ -43,6 +45,7 @@ const FEATURE = {
   de: "Notizen, Projekte und dein Team – auf deinem Server.",
   en: "Notes, projects and your team – on your own server.",
   fr: "Notes, projets et ton équipe – sur ton serveur.",
+  zh: "笔记、项目和你的团队——在你自己的服务器上。",
 };
 
 // A modern device: thin dark bezel, a light metal edge, a soft shadow.
@@ -57,7 +60,7 @@ function device(dev, meta, shot, screenWidth) {
     <div style="border-radius:${radius}px;overflow:hidden;transform:translateZ(0)">${inner}</div></div>`;
 }
 
-function poster(width, height, dev, shot, meta, [title, subtitle]) {
+function poster(width, height, dev, shot, meta, [title, subtitle], lang) {
   const tablet = dev.tablet;
   const title1 = Math.round(width * (tablet ? 0.062 : 0.086));
   const sub = Math.round(width * (tablet ? 0.024 : 0.036));
@@ -69,7 +72,7 @@ function poster(width, height, dev, shot, meta, [title, subtitle]) {
   // The device is as large as fits, running a little off the bottom edge.
   const bleed = height * (tablet ? 0.05 : 0.07);
   const screenWidth = Math.round(Math.min(width * (tablet ? 0.8 : 0.82), ((height - textHeight + bleed) * dev.width) / dev.height));
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>${FONTS}
     *{box-sizing:border-box}html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden}
     body{background:${PAPER};color:#1d1c22;display:flex;flex-direction:column;align-items:center;font-family:"Instrument Sans",system-ui,sans-serif}
     h1{margin:${top}px ${Math.round(width * 0.07)}px 0;font:400 ${title1}px/1.04 "Instrument Serif",Georgia,serif;letter-spacing:-.012em;text-align:center;text-wrap:balance}
@@ -81,9 +84,9 @@ function poster(width, height, dev, shot, meta, [title, subtitle]) {
   <div class="device">${device(dev, meta, shot, screenWidth)}</div></body></html>`;
 }
 
-function featureGraphic(shot, meta, tagline) {
+function featureGraphic(shot, meta, tagline, lang) {
   const dev = DEVICES["android-phone"];
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>${FONTS}
     html,body{margin:0;width:1024px;height:500px;overflow:hidden}
     body{background:${PAPER};font-family:"Instrument Sans",system-ui,sans-serif;color:#1d1c22;position:relative}
     .text{position:absolute;left:64px;top:138px;width:540px}
@@ -112,7 +115,8 @@ async function render(html, [width, height], file) {
   await writePng(await page.screenshot({ type: "png" }), file);
 }
 
-for (const [short, locale] of Object.entries(LOCALES)) {
+for (const [short, { appStore: locale, play }] of Object.entries(STORE_LOCALES)) {
+  if (!args.locales.split(",").includes(short)) continue;
   if (!existsSync(`${raw}/${short}`)) {
     console.log(`No screenshots for ${short} – run npm run screenshots -- --locales ${short}`);
     continue;
@@ -121,7 +125,7 @@ for (const [short, locale] of Object.entries(LOCALES)) {
   rmSync(appStore, { recursive: true, force: true });
   mkdirSync(appStore, { recursive: true });
   for (const folder of Object.values(PLAY_FOLDER)) {
-    const dir = `${root}store/google-play/${locale}/images/${folder}`;
+    const dir = `${root}store/google-play/${play}/images/${folder}`;
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
   }
@@ -138,8 +142,8 @@ for (const [short, locale] of Object.entries(LOCALES)) {
       const meta = JSON.parse(readFileSync(`${dir}/${name}.json`, "utf8"));
       const caption = CAPTIONS[dev.width >= 760 && CAPTIONS[`${name}-wide`] ? `${name}-wide` : name][short];
       n++;
-      const out = dev.platform === "ios" ? `${appStore}/${name}-${key}.png` : `${root}store/google-play/${locale}/images/${PLAY_FOLDER[key]}/${n}.png`;
-      await render(poster(size[0], size[1], dev, `${dir}/${file}`, meta, caption), size, out);
+      const out = dev.platform === "ios" ? `${appStore}/${name}-${key}.png` : `${root}store/google-play/${play}/images/${PLAY_FOLDER[key]}/${n}.png`;
+      await render(poster(size[0], size[1], dev, `${dir}/${file}`, meta, caption, htmlLang(short)), size, out);
       row.push(out);
       console.log(out.replace(root, ""));
     }
@@ -147,8 +151,8 @@ for (const [short, locale] of Object.entries(LOCALES)) {
   }
   const home = `${raw}/${short}/android-phone/01-home`;
   if (existsSync(`${home}.png`)) {
-    const images = `${root}store/google-play/${locale}/images`;
-    await render(featureGraphic(`${home}.png`, JSON.parse(readFileSync(`${home}.json`, "utf8")), FEATURE[short]), [1024, 500], `${images}/featureGraphic.png`);
+    const images = `${root}store/google-play/${play}/images`;
+    await render(featureGraphic(`${home}.png`, JSON.parse(readFileSync(`${home}.json`, "utf8")), FEATURE[short], htmlLang(short)), [1024, 500], `${images}/featureGraphic.png`);
     copyFileSync(`${root}store/icons/google-play-512.png`, `${images}/icon.png`);
     console.log(`${images.replace(root, "")}/featureGraphic.png`);
   }

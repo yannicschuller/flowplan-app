@@ -9,11 +9,12 @@
 // screen; each page fills the whole device screen, status bar included.
 import { createRequire } from "node:module";
 import { homeIndicator, statusBar } from "./frame.mjs";
+import { htmlLang } from "./store-style.mjs";
 
 const require = createRequire(import.meta.url);
 const { strings } = require("../plugins/widget-suite/strings.js");
 
-// The widget texts: English is the key, German and French the translation.
+// The widget texts: English is the key, the other languages the translation.
 const widgetText = (lang) => (english) => (lang === "en" ? english : strings[english]?.[lang] ?? english);
 
 // What the settings screen says (src/i18n.ts).
@@ -78,6 +79,26 @@ const SETTINGS = {
     work: "Travail",
     personal: "Perso",
   },
+  zh: {
+    settingsTitle: "应用设置",
+    done: "完成",
+    profiles: "账户",
+    profilesText: "通知、小组件和计时器都属于当前使用的账户。",
+    addProfile: "添加账户",
+    active: "当前",
+    rename: "重命名",
+    notifications: "通知",
+    notificationsOn: "新的提及、评论和提醒会以通知的形式显示，并在应用图标上显示数字。",
+    appLock: "应用锁",
+    appLockText: "打开应用时使用 Face ID、Touch ID 或密码解锁 Flowplan。",
+    liveActivitiesTitle: "实时活动",
+    ongoingTitle: "进行中的活动",
+    activityMeeting: "正在进行的会议",
+    activityJobs: "导入和导出进度",
+    activitiesText: "专注、语音备忘录和计时器在运行时总会显示。",
+    work: "工作",
+    personal: "个人",
+  },
 };
 
 // SF Symbols, redrawn as outlines.
@@ -118,7 +139,7 @@ function addDays(date, days) {
 // The widgets of the gallery with their sample data, in one language.
 function widgets(lang, now, android) {
   const L = widgetText(lang);
-  const locale = { de: "de-DE", en: "en-US", fr: "fr-FR" }[lang];
+  const locale = { de: "de-DE", en: "en-US", fr: "fr-FR", zh: "zh-CN" }[lang];
   const time = (hour, minute = 0) => new Date(2026, 0, 5, hour, minute).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
   const shortDate = (date) => date.toLocaleDateString(locale, { day: "numeric", month: "short" });
   const due = (days) => (days === 0 ? [L("Today"), false] : days === 1 ? [L("Tomorrow"), false] : days === -1 ? [L("Yesterday"), true] : [shortDate(addDays(now, days)), days < 0]);
@@ -234,7 +255,7 @@ export function widgetsScreen(device, lang, now = new Date()) {
   const live = island
     ? `<div class="island"><span>${icon("timer", 15, "#8f93ff", 2.4)}</span><span class="t">47:12</span></div>`
     : "";
-  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="${htmlLang(lang)}"><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}html,body{margin:0;width:${device.width}px;height:${device.height}px;overflow:hidden}
     body{font-family:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;position:relative;
       background:radial-gradient(90% 55% at 15% 8%,#8d90ff 0%,rgba(141,144,255,0) 70%),radial-gradient(80% 60% at 100% 55%,#f3b59c 0%,rgba(243,181,156,0) 65%),radial-gradient(90% 60% at 10% 100%,#c9c2f2 0%,rgba(201,194,242,0) 70%),linear-gradient(170deg,#5d61e8 0%,#9a8ff0 45%,#e9c6c0 100%)}
@@ -284,7 +305,7 @@ export function settingsScreen(device, lang) {
       </div>
     </div>`;
   const sheetTop = device.top + (device.tablet ? 60 : 10);
-  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="${htmlLang(lang)}"><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}html,body{margin:0;width:${device.width}px;height:${device.height}px;overflow:hidden}
     body{font-family:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;color:#1d1c22;background:${sheet ? (device.tablet ? "#8f8c95" : "#1d1c22") : "#fcfbf8"};position:relative}
     .page{position:absolute;inset:${sheet ? `${sheetTop}px ${device.tablet ? 156 : 0}px ${device.tablet ? 60 : 0}px` : `${device.top}px 0 ${device.bottom}px`};background:#fcfbf8;border-radius:${sheet ? (device.tablet ? "14px" : "12px 12px 0 0") : 0};overflow:hidden}
