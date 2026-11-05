@@ -171,14 +171,22 @@ test("redirects within the instance are followed", async () => {
   assert.equal(seen.length, 2);
 });
 
-test("the app speaks German, English and French", () => {
+test("the app speaks German, English, French and Simplified Chinese", () => {
   assert.equal(pickLocale(["de-AT", "en"]), "de");
   assert.equal(pickLocale(["fr-CA"]), "fr");
   assert.equal(pickLocale(["es-ES", "fr"]), "fr");
   assert.equal(pickLocale(["ja", null]), "en");
   assert.equal(pickLocale(["de_DE"]), "de");
+  // Simplified Chinese: iOS names the script, Android often only the region.
+  for (const tag of ["zh-Hans-CN", "zh-Hans", "zh-CN", "zh_CN", "zh-SG", "zh-Hans-HK", "zh"]) assert.equal(pickLocale([tag, "en"]), "zh", tag);
+  // Traditional Chinese is not "zh": the next language, else English.
+  for (const tag of ["zh-Hant-TW", "zh-Hant-HK", "zh-Hant", "zh-TW", "zh-HK", "zh-MO", "zh_TW"]) {
+    assert.equal(pickLocale([tag]), "en", tag);
+    assert.equal(pickLocale([tag, "de-DE"]), "de", tag);
+  }
+  assert.equal(pickLocale(["constructor"]), "en");
   assert.equal(t("redirect", { server: "a", detail: "b" }, "de"), "a leitet auf b weiter. Gib bitte diese Adresse ein.");
-  for (const lang of ["de", "fr"] as const) {
+  for (const lang of ["de", "fr", "zh"] as const) {
     assert.deepEqual(Object.keys(strings[lang]).sort(), Object.keys(strings.en).sort(), `${lang} misses texts`);
     for (const [key, text] of Object.entries(strings[lang]))
       assert.deepEqual(

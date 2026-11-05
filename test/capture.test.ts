@@ -57,6 +57,8 @@ test("scan titles and recognition languages follow the person's language", () =>
   assert.equal(scanTitle("fr", date), "Numérisation 2026-10-24 09.05");
   assert.deepEqual(scanLanguages("fr"), ["fr-FR", "de-DE", "en-US"]);
   assert.deepEqual(scanLanguages("en"), ["en-US", "de-DE", "fr-FR"]);
+  assert.equal(scanTitle("zh", date), "扫描 2026-10-24 09.05");
+  assert.deepEqual(scanLanguages("zh"), ["zh-Hans", "en-US"]);
 });
 
 test("a scan is sent as multipart with its text, appended to the page", async () => {
@@ -134,13 +136,13 @@ test("a Spotlight result's link opens its path (as the Swift side encodes it)", 
   assert.match(swift, /abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-\._~\//);
 });
 
-test("the share extension speaks German, English and French; every key it uses exists", () => {
+test("the share extension speaks German, English, French and Chinese; every key it uses exists", () => {
   for (const [key, values] of Object.entries(strings)) {
     assert.equal(values.length, LANGS.length, key);
     for (const value of values) assert.ok(value.trim(), key);
     const names = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
     assert.deepEqual(names(values[0]), names(values[1]), key);
-    assert.deepEqual(names(values[2]), names(values[1]), key);
+    for (const value of values) assert.deepEqual(names(value), names(values[1]), key);
   }
   const sources = readdirSync(join(root, "plugins/capture"))
     .filter((f) => f.endsWith(".swift"))
@@ -152,12 +154,17 @@ test("the share extension speaks German, English and French; every key it uses e
   const table = swiftTable();
   assert.match(table, /private static let fr: \[String: String\] = \[/);
   assert.match(table, /"heading": "Enregistrer dans Flowplan",/);
+  // Simplified Chinese: "zh-Hans" on iOS, "zh" for the app and the instance.
+  assert.match(table, /private static let zh: \[String: String\] = \[/);
+  assert.match(table, /if lang == "zh" \{ return zh \}/);
+  assert.match(table, /from: \["de","en","fr","zh-Hans"\]/);
+  assert.match(table, /found == "zh-Hans" \? "zh" : found/);
 });
 
 test("the app's own texts for scanner and Spotlight exist in every language", () => {
   const keys = Object.keys(appStrings.de).filter((key) => key.startsWith("scan") || key.startsWith("spotlight"));
   assert.ok(keys.length >= 10);
-  for (const key of keys) for (const lang of ["en", "fr"] as const) assert.ok((appStrings[lang] as Record<string, string>)[key], `${lang}: ${key}`);
+  for (const key of keys) for (const lang of ["en", "fr", "zh"] as const) assert.ok((appStrings[lang] as Record<string, string>)[key], `${lang}: ${key}`);
 });
 
 test("the share extension is wired into the config with the App Group", () => {

@@ -3,7 +3,7 @@
 // the recently opened pages, are set by src/android/shortcuts.ts) – and the
 // share sheet's name "Save to Flowplan" also for sharing several files
 // (SEND_MULTIPLE; plugins/with-managed-config.js names the SEND filters).
-// Texts and icons are modules/flowplan-android's resources (de, en, fr).
+// Texts and icons are modules/flowplan-android's resources (de, en, fr, zh-Hans).
 const { AndroidConfig, withAndroidManifest, withDangerousMod, withGradleProperties } = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");

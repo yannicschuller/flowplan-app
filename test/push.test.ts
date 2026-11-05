@@ -579,19 +579,21 @@ test("Android: one FCM service, the app's; expo-notifications shows what it decr
   const gradle = read("modules/flowplan-push/android/build.gradle");
   assert.match(gradle, /implementation project\(':expo-notifications'\)/);
   assert.match(gradle, /com\.google\.crypto\.tink:tink-android:\d+\.\d+\.\d+/);
-  for (const lang of ["", "-de", "-fr"]) assert.match(read(`modules/flowplan-push/android/src/main/res/values${lang}/strings.xml`), /flowplan_push_placeholder/);
+  for (const lang of ["", "-de", "-fr", "-b+zh+Hans"]) assert.match(read(`modules/flowplan-push/android/src/main/res/values${lang}/strings.xml`), /flowplan_push_placeholder/);
 });
 
 test("the relay's iOS placeholder is in the app's Localizable.strings, in every language", () => {
   const locales = config.locales as Record<string, { ios: Record<string, Record<string, string>> }>;
-  const body = { de: "Neue Mitteilung", en: "New notification", fr: "Nouvelle notification" } as const;
-  for (const lang of ["de", "en", "fr"] as const) {
-    const table = locales[lang].ios["Localizable.strings"];
+  const body = { de: "Neue Mitteilung", en: "New notification", fr: "Nouvelle notification", zh: "新通知" } as const;
+  // The config's locale and the Android resource folder of each language.
+  const where = { de: ["de", "-de"], en: ["en", ""], fr: ["fr", "-fr"], zh: ["zh-Hans", "-b+zh+Hans"] } as const;
+  for (const lang of ["de", "en", "fr", "zh"] as const) {
+    const table = locales[where[lang][0]].ios["Localizable.strings"];
     assert.equal(table.FP_PUSH_TITLE, "Flowplan", lang);
     assert.equal(table.FP_PUSH_BODY, body[lang], lang);
     // The extension's and Android's placeholder say the same.
     assert.ok(read("plugins/notification-service/NotificationService.swift").includes(`"${body[lang]}"`), lang);
-    assert.ok(read(`modules/flowplan-push/android/src/main/res/values${lang === "en" ? "" : `-${lang}`}/strings.xml`).includes(body[lang]), lang);
+    assert.ok(read(`modules/flowplan-push/android/src/main/res/values${where[lang][1]}/strings.xml`).includes(body[lang]), lang);
   }
 });
 

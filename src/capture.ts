@@ -138,9 +138,12 @@ export function scanTitle(locale: Locale, date = new Date()) {
   return t("scanTitle", { date: `${localDay(date)} ${time}` }, locale);
 }
 
-// Vision's languages, the person's first.
+// Vision's languages, the person's first. Chinese goes with English only:
+// Vision pairs Chinese with English, and a request it refuses recognises
+// nothing (modules/flowplan-capture/ios/DocumentScanner.swift).
 export function scanLanguages(locale: Locale) {
   const all = { de: "de-DE", en: "en-US", fr: "fr-FR" } as const;
+  if (locale === "zh") return ["zh-Hans", all.en];
   return [all[locale], ...Object.values(all).filter((language) => language !== all[locale])];
 }
 

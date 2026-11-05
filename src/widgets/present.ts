@@ -409,7 +409,7 @@ export function suiteView<K extends SuiteKind>(
 // Made-up content for the widget pickers and previews, in the person's
 // language: the same answer shapes the instance sends.
 export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now = Date.now()): WidgetResult {
-  const L = (de: string, en: string, fr: string) => ({ de, en, fr })[locale];
+  const L = (de: string, en: string, fr: string, zh: string) => ({ de, en, fr, zh })[locale];
   const day = (offset: number) => {
     const d = new Date(`${today}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() + offset);
@@ -417,74 +417,74 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
   };
   const id = "00000000-0000-4000-8000-000000000000";
   const data: Record<SuiteKind, Data> = {
-    capture: { title: kindTitle("capture", locale), target: { id, name: L("Eingang", "Inbox", "Boîte d’entrée"), kind: "database" }, voice: true },
+    capture: { title: kindTitle("capture", locale), target: { id, name: L("Eingang", "Inbox", "Boîte d’entrée", "收件箱"), kind: "database" }, voice: true },
     tasks: {
-      title: L("Meine Aufgaben", "My tasks", "Mes tâches"),
+      title: L("Meine Aufgaben", "My tasks", "Mes tâches", "我的任务"),
       total: 3,
       items: [
-        { source: "doc", pageId: id, text: L("Angebot an Müller senden", "Send offer to Miller", "Envoyer l’offre à Martin"), due: day(-1), page: L("Vertrieb", "Sales", "Ventes"), url: "/#tasks", canEdit: true },
-        { source: "doc", pageId: id, text: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro"), due: today, page: L("Team", "Team", "Équipe"), url: "/#tasks", canEdit: true },
-        { source: "doc", pageId: id, text: L("Reisekosten abrechnen", "Submit travel expenses", "Note de frais du voyage"), due: day(1), page: L("Finanzen", "Finance", "Finances"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Angebot an Müller senden", "Send offer to Miller", "Envoyer l’offre à Martin", "给王磊发送报价"), due: day(-1), page: L("Vertrieb", "Sales", "Ventes", "销售"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会"), due: today, page: L("Team", "Team", "Équipe", "团队"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Reisekosten abrechnen", "Submit travel expenses", "Note de frais du voyage", "报销差旅费"), due: day(1), page: L("Finanzen", "Finance", "Finances", "财务"), url: "/#tasks", canEdit: true },
       ],
     },
     calendar: {
-      title: L("Heute", "Today", "Aujourd’hui"),
+      title: L("Heute", "Today", "Aujourd’hui", "今天"),
       items: [
-        { type: "event", title: L("Standup", "Stand-up", "Point d’équipe"), day: today, start: `${today}T07:30:00Z`, timed: true, calendar: L("Team", "Team", "Équipe"), url: "/" },
-        { type: "event", title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin"), day: today, start: `${today}T12:00:00Z`, timed: true, calendar: L("Vertrieb", "Sales", "Ventes"), url: "/" },
-        { type: "task", title: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro"), day: today, timed: false, calendar: L("Team", "Team", "Équipe"), url: "/" },
+        { type: "event", title: L("Standup", "Stand-up", "Point d’équipe", "站会"), day: today, start: `${today}T07:30:00Z`, timed: true, calendar: L("Team", "Team", "Équipe", "团队"), url: "/" },
+        { type: "event", title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议"), day: today, start: `${today}T12:00:00Z`, timed: true, calendar: L("Vertrieb", "Sales", "Ventes", "销售"), url: "/" },
+        { type: "task", title: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会"), day: today, timed: false, calendar: L("Team", "Team", "Équipe", "团队"), url: "/" },
       ],
     },
     pinned: {
-      title: L("Favoriten", "Favorites", "Favoris"),
+      title: L("Favoriten", "Favorites", "Favoris", "收藏"),
       items: [
-        { id, kind: "document", title: L("Wochenplan", "Weekly plan", "Plan de la semaine"), url: "/" },
+        { id, kind: "document", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划"), url: "/" },
         { id, kind: "database", title: "Roadmap", url: "/" },
-        { id, kind: "record", title: L("Website-Relaunch", "Website relaunch", "Refonte du site"), detail: "Roadmap", url: "/" },
+        { id, kind: "record", title: L("Website-Relaunch", "Website relaunch", "Refonte du site", "网站改版"), detail: "Roadmap", url: "/" },
       ],
     },
     counter: {
-      title: L("Bewerbungen", "Applications", "Candidatures"),
-      label: L("Einträge", "Records", "Entrées"),
+      title: L("Bewerbungen", "Applications", "Candidatures", "求职申请"),
+      label: L("Einträge", "Records", "Entrées", "记录"),
       formatted: "42",
       history: [28, 29, 29, 31, 30, 32, 33, 33, 35, 36, 38, 39, 41, 42].map((value, i) => ({ day: day(i - 13), value, ...(i < 4 ? { estimated: true } : {}) })),
       url: "/",
     },
     journal: {
-      title: L("Journal", "Journal", "Journal"),
-      journal: { id, name: L("Mein Journal", "My journal", "Mon journal"), written: true, streak: 6, today: "/", canWrite: true, trackers: [] },
+      title: L("Journal", "Journal", "Journal", "日记"),
+      journal: { id, name: L("Mein Journal", "My journal", "Mon journal", "我的日记"), written: true, streak: 6, today: "/", canWrite: true, trackers: [] },
       habits: {
         id,
-        name: L("Gewohnheiten", "Habits", "Habitudes"),
+        name: L("Gewohnheiten", "Habits", "Habitudes", "习惯"),
         done: 2,
         total: 3,
         canWrite: true,
         url: "/",
         items: [
-          { fieldId: "a", name: L("Laufen", "Run", "Courir"), done: true },
-          { fieldId: "b", name: L("Lesen", "Read", "Lire"), done: true },
-          { fieldId: "c", name: L("Kein Zucker", "No sugar", "Sans sucre"), done: false },
+          { fieldId: "a", name: L("Laufen", "Run", "Courir", "跑步"), done: true },
+          { fieldId: "b", name: L("Lesen", "Read", "Lire", "阅读"), done: true },
+          { fieldId: "c", name: L("Kein Zucker", "No sugar", "Sans sucre", "不吃糖"), done: false },
         ],
       },
     },
     time: {
-      title: L("Zeit diese Woche", "Time this week", "Temps cette semaine"),
+      title: L("Zeit diese Woche", "Time this week", "Temps cette semaine", "本周时间"),
       today: 3.5,
       week: 17.25,
       days: [6.5, 7.25, 3.5, 0, 0, 0, 0].map((hours, i) => ({ day: day(i - 2), hours })),
-      timer: { start: now - 47 * 60_000, title: L("Angebot schreiben", "Write offer", "Rédiger l’offre"), database: L("Projekte", "Projects", "Projets"), url: "/" },
+      timer: { start: now - 47 * 60_000, title: L("Angebot schreiben", "Write offer", "Rédiger l’offre", "撰写报价"), database: L("Projekte", "Projects", "Projets", "项目"), url: "/" },
       recent: [],
     },
     mentions: {
-      title: L("Erwähnungen", "Mentions", "Mentions"),
+      title: L("Erwähnungen", "Mentions", "Mentions", "提及"),
       unread: { mentions: 2, assignments: 1 },
       items: [
-        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada t’a mentionné dans « Roadmap »"), read: false, createdAt: now - 20 * 60_000, url: "/" },
-        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben t’a confié « Préparer la rétro »"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
+        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada t’a mentionné dans « Roadmap »", "Ada 在“Roadmap”中提及了你"), read: false, createdAt: now - 20 * 60_000, url: "/" },
+        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben t’a confié « Préparer la rétro »", "Ben 把“准备回顾会”分配给了你"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
       ],
     },
     forms: {
-      title: L("Kontaktformular", "Contact form", "Formulaire de contact"),
+      title: L("Kontaktformular", "Contact form", "Formulaire de contact", "联系表单"),
       total: 12,
       new: 2,
       items: [

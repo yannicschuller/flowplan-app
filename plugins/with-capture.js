@@ -55,7 +55,7 @@ function infoPlist(appGroup) {
     CFBundleExecutable: "$(EXECUTABLE_NAME)",
     CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)",
     CFBundleInfoDictionaryVersion: "6.0",
-    CFBundleLocalizations: ["de", "en", "fr"],
+    CFBundleLocalizations: ["de", "en", "fr", "zh-Hans"],
     CFBundleName: "$(PRODUCT_NAME)",
     CFBundlePackageType: "XPC!",
     CFBundleShortVersionString: "$(MARKETING_VERSION)",

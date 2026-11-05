@@ -152,6 +152,7 @@ export function sampleSummary(locale: Locale, now = new Date()): Summary {
     de: ["Angebot an Müller senden", "Retro vorbereiten", "Reisekosten abrechnen", "Website-Texte prüfen", "Vertrieb", "Team", "Finanzen", "Marketing"],
     en: ["Send offer to Miller", "Prepare the retro", "Submit travel expenses", "Review website copy", "Sales", "Team", "Finance", "Marketing"],
     fr: ["Envoyer l’offre à Martin", "Préparer la rétro", "Note de frais du voyage", "Relire les textes du site", "Ventes", "Équipe", "Finances", "Marketing"],
+    zh: ["给王磊发送报价", "准备回顾会", "报销差旅费", "审阅网站文案", "销售", "团队", "财务", "市场"],
   }[locale];
   return {
     name: "",

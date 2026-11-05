@@ -8,13 +8,13 @@ import { pathOfAppLink } from "../src/navigation";
 import type { ProfileState } from "../src/profiles";
 
 const intents = require("../plugins/intents/strings") as {
-  strings: Record<string, { de: string; fr: string }>;
-  phrases: Record<string, { de: string; fr: string }>;
+  strings: Record<string, { de: string; fr: string; zh: string }>;
+  phrases: Record<string, { de: string; fr: string; zh: string }>;
   localizable: (lang: string) => Record<string, string>;
 };
 const suite = require("../plugins/widget-suite/strings") as {
-  strings: Record<string, { de: string; fr: string }>;
-  localizable: (table: Record<string, { de: string; fr: string }>, lang: string) => Record<string, string>;
+  strings: Record<string, { de: string; fr: string; zh: string }>;
+  localizable: (table: Record<string, { de: string; fr: string; zh: string }>, lang: string) => Record<string, string>;
 };
 const { swiftKeys, shortcutPhrases } = require("../plugins/widget-suite/swift-keys") as {
   swiftKeys: (source: string) => Set<string>;
@@ -34,16 +34,17 @@ test("every text of the intents' Swift is translated (here or in the widget suit
   const missing: string[] = [];
   for (const file of ours)
     for (const key of swiftKeys(readFileSync(file, "utf8")))
-      for (const lang of ["de", "en", "fr"]) {
+      for (const lang of ["de", "en", "fr", "zh"]) {
         const table = { ...suite.localizable(suite.strings, lang), ...intents.localizable(lang) };
         if (!table[key]) missing.push(`${lang}: ${key} (${file.split("/").pop()})`);
         else assert.deepEqual(placeholders(table[key]), placeholders(key), `${lang}: ${key}`);
       }
   assert.deepEqual(missing, []);
   for (const [key, value] of Object.entries(intents.strings)) {
-    assert.ok(value.de?.trim() && value.fr?.trim(), key);
+    assert.ok(value.de?.trim() && value.fr?.trim() && value.zh?.trim(), key);
     assert.deepEqual(placeholders(value.de), placeholders(key), `de: ${key}`);
     assert.deepEqual(placeholders(value.fr), placeholders(key), `fr: ${key}`);
+    assert.deepEqual(placeholders(value.zh), placeholders(key), `zh: ${key}`);
     // Not a second translation of a text the suite already has.
     assert.ok(!(key in suite.strings), `twice: ${key}`);
   }
@@ -53,14 +54,14 @@ test("every text of the intents' Swift is translated (here or in the widget suit
   for (const key of Object.keys(intents.strings)) assert.ok(source.includes(`"${key.replace(/%@/g, "")}`) || source.includes(key.split("%@")[0]), `unused: ${key}`);
 });
 
-test("the App Shortcuts: at most 10, each intent of plugins/intents with phrases in three languages", () => {
+test("the App Shortcuts: at most 10, each intent of plugins/intents with phrases in every language", () => {
   const provider = readFileSync(join(root, "plugins/widget-suite/app/FlowplanAppIntents.swift"), "utf8");
   assert.ok((provider.match(/AppShortcut\(/g) ?? []).length <= 10);
   for (const intent of ["FPAddTaskIntent", "FPDueTodayIntent", "FPOpenPageIntent", "FPSearchIntent"]) assert.match(provider, new RegExp(`intent: ${intent}\\(\\)`));
   const used = shortcutPhrases(provider);
   for (const [phrase, value] of Object.entries(intents.phrases)) {
     assert.ok(used.has(phrase), `phrase not in the provider: ${phrase}`);
-    for (const lang of ["de", "fr"] as const) assert.ok(value[lang].includes("${applicationName}"), `${lang}: ${phrase}`);
+    for (const lang of ["de", "fr", "zh"] as const) assert.ok(value[lang].includes("${applicationName}"), `${lang}: ${phrase}`);
   }
 });
 
@@ -94,6 +95,10 @@ test("the app config: intents on top of the widget suite, their texts in Localiz
   assert.equal(fr.ios["Localizable.strings"]["Add a task"], "Ajouter une tâche");
   // The suite's texts are still there.
   assert.equal(fr.ios["Localizable.strings"]["Mark as done"], "Marquer comme terminée");
+  // Simplified Chinese as zh-Hans (zh-Hans.lproj), with the same texts.
+  const zh = (config.locales as Record<string, { ios: Record<string, Record<string, string>> }>)["zh-Hans"];
+  assert.equal(zh.ios["Localizable.strings"]["Add a task"], "添加任务");
+  assert.equal(zh.ios["Localizable.strings"]["Mark as done"], "标记为完成");
 });
 
 const state: ProfileState = {
