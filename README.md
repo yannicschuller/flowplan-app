@@ -8,7 +8,7 @@
 
 [Flowplan](https://github.com/yannicschuller/flowplan) · [Flowplan Desktop](https://github.com/yannicschuller/flowplan-desktop) · [Documentation](https://docs.flowplan.org/offline-and-apps)
 
-**Beta for iPhone and iPad:** [join on TestFlight](https://testflight.apple.com/join/Yjy9aZAE) · **Android:** [download the APK](https://flowplan.org/download/android.apk) (updates itself, see [Android without a store](#android-without-a-store-apk-download))
+**iPhone and iPad:** [download on the App Store](https://apps.apple.com/app/id6825801344) · **Android:** [download the APK](https://flowplan.org/download/android.apk) (updates itself, see [Android without a store](#android-without-a-store-apk-download))
 
 <img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, widgets, projects board, a document, a whiteboard and profiles">
 

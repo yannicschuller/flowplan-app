@@ -8,7 +8,7 @@ Include what is affected (iOS, iPadOS or Android, app version shown at the botto
 
 ## Supported versions
 
-Security fixes go into the latest build on TestFlight, Google Play and the APK on the releases page. Please keep the app up to date.
+Security fixes go into the latest version in the App Store, on Google Play and the APK on the releases page. Please keep the app up to date.
 
 ## Scope
 
