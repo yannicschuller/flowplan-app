@@ -80,7 +80,10 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-notifications"
+          "expo-notifications",
+          "expo-crypto",
+          "expo-haptics",
+          "expo-application"
         ]
       }
     }
