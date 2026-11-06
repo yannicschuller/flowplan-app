@@ -1,11 +1,11 @@
 // The offline copies on this device (iOS; src/offline/store.ts), one per
 // profile, in the files of modules/flowplan-native.
-import * as Crypto from "expo-crypto";
+import { sha256Hex } from "../sha256";
 import { offlineFileSystem } from "../../modules/flowplan-native/src";
 import { OfflineCopy, wipeProfile } from "./store";
 
 const copies = new Map<string, OfflineCopy>();
-const sha256 = (key: string) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, key);
+const sha256 = (key: string) => sha256Hex(key);
 
 // Whether this app keeps copies itself (iOS builds with the files).
 export const offlineCopiesAvailable = () => !!offlineFileSystem();

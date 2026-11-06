@@ -21,6 +21,7 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationBar } from "expo-navigation-bar";
 import * as Application from "expo-application";
 import * as Crypto from "expo-crypto";
+import { sha256Base64 } from "../sha256";
 import { store } from "../store";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -276,7 +277,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       if (!signInStarts.current.begin()) return;
       const outcome = await beginSignIn(server, via, {
         verifier: () => base64Url(Crypto.getRandomBytes(32)),
-        sha256Base64: (value) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value, { encoding: Crypto.CryptoEncoding.BASE64 }),
+        sha256Base64,
         pending: pending.current,
         open: {
           platform: Platform.OS,

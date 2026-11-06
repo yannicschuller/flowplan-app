@@ -22,7 +22,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
-import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
+import { sha256Hex } from "../sha256";
 import { apsEnvironment, deleteDeviceKey, devicePublicKey, keepDeviceKeys, pushKeysAvailable } from "../../modules/flowplan-push/src";
 import {
   DEFAULT_RELAY,
@@ -60,7 +60,7 @@ const zone = () => {
 };
 export const liveLabels = () => liveActivityLabels(locale(), zone());
 
-export const sha256 = (value: string) => digestStringAsync(CryptoDigestAlgorithm.SHA256, value);
+export const sha256 = (value: string) => sha256Hex(value);
 
 export const bundleId = () => Application.applicationId ?? "app.flowplan.mobile";
 
