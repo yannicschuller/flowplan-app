@@ -518,6 +518,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   // What the app keeps of a profile that is gone.
   const dropProfile = (id: string) => {
     store.setEverSignedIn(id, false);
+    store.forgetAppDevice(id);
     void forgetSuiteProfile(id);
     // The offline copy of the instance's content goes with the profile.
     void wipeOfflineCopy(id);

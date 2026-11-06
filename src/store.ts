@@ -4,7 +4,7 @@
 // In the keychain / Keystore, readable after the first unlock so that
 // background refreshes work while the phone is locked.
 import * as SecureStore from "expo-secure-store";
-import { randomUUID } from "expo-crypto";
+import { getRandomBytes, randomUUID } from "expo-crypto";
 import {
   activeProfile,
   loadProfiles,
@@ -21,6 +21,7 @@ import {
 import type { Summary } from "./summary";
 import { parseAdminState, type AdminState } from "./admin";
 import { parseLiveRecords, parseRecord, type LiveRecords, type PushRecord } from "./push-relay";
+import { appDeviceEntry, appDeviceFor, type AppDeviceKey } from "./app-device";
 
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 const KEYS = {
@@ -130,6 +131,16 @@ export const store = {
     const list = parseSignedIn(read(SIGNED_IN_KEY));
     const next = withSignedIn(list, id, signedIn);
     if (next.join() !== list.join()) write(SIGNED_IN_KEY, next.length ? JSON.stringify(next) : null);
+  },
+
+  // A profile's device key for its instance's page (app-device.ts), made
+  // on its first launch.
+  appDevice: (id: string): AppDeviceKey | null => appDeviceFor(id, { read, write }, getRandomBytes),
+  // A profile that is gone takes its key along.
+  forgetAppDevice(id: string) {
+    try {
+      write(appDeviceEntry(id), null);
+    } catch {}
   },
 
   // Leaving an instance (another profile, signing out, removing it): nothing
