@@ -21,6 +21,7 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationBar } from "expo-navigation-bar";
 import * as Application from "expo-application";
 import * as Crypto from "expo-crypto";
+import { store } from "../store";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
@@ -137,6 +138,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const [source, setSource] = useState<{ uri: string } | { html: string; baseUrl: string }>({ uri: server });
   // The profile's offline copy (iOS; null elsewhere and in older builds).
   const copy = useMemo(() => (Platform.OS === "ios" ? offlineCopy(profile) : null), [profile]);
+  // This device's key for the profile's instance (app-device.ts): the
+  // password sign-in sends it, so it lasts as long as the app's.
+  const deviceKey = useMemo(() => store.appDevice(profile), [profile]);
   // The stored page is showing (not the live one).
   const [showingCopy, setShowingCopy] = useState(false);
   const showingCopyRef = useRef(false);
@@ -712,6 +716,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             inkRecognition,
             ai: deviceAi,
             offline: !!copy,
+            deviceKey,
           })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly

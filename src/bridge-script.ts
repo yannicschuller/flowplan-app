@@ -18,8 +18,10 @@
 //   event "flowplan:ai"; and it opens the app's profiles (openProfiles: switch
 //   to or add another instance, or – for a profile never signed in – change
 //   its address; the sign-in pages' "Other server?", #69), with the page's
-//   path to come back to; and it starts the sign-in with passkeys or SSO
-//   (signIn, #109), answering with the event "flowplan:sign-in";
+//   path to come back to; it starts the sign-in with passkeys or SSO
+//   (signIn, #109), answering with the event "flowplan:sign-in"; and it
+//   carries this device's key for the instance (deviceKey, app-device.ts),
+//   which the password sign-in sends so it lasts as long as the app's;
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
 //   page's offline module fills, kept by the app, and the loader that runs
 //   the stored page without a connection (src/offline/loader.ts);
@@ -99,6 +101,9 @@ export function bridgeScript(options: {
   ai?: boolean;
   // iOS: the app keeps the offline copy (src/offline/loader.ts).
   offline?: boolean;
+  // This device's key for the instance (app-device.ts): the sign-in form
+  // sends it with the password, so the sign-in lasts as long as the app's.
+  deviceKey?: { id: string; secret: string } | null;
 }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
@@ -195,7 +200,9 @@ export function bridgeScript(options: {
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     signIn: (via) => post({ type: "signIn", via: via === "sso" ? "sso" : null }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
-    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${options.offline ? `\n    offline,` : ""}${
+    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
+      options.deviceKey ? `\n    deviceKey: Object.freeze(${JSON.stringify({ id: String(options.deviceKey.id), secret: String(options.deviceKey.secret) })}),` : ""
+    }${options.offline ? `\n    offline,` : ""}${
       options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""
     }
   });

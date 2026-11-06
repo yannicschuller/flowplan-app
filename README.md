@@ -94,6 +94,15 @@ Passkeys and identity providers that need one do not work inside an app's web vi
 
 The code is valid for one minute, works once and only together with the verifier that never leaves the app.
 
+### How long the app stays signed in
+
+The instance gives the app its long sign-in (Administration → Anmeldung & SSO → Sitzungen, by default 90 days without use) only when the app proves the sign-in its own – the user agent alone, which any browser can send, does not count (Flowplan's `lib/app-devices.ts`):
+
+- **Passkey, SSO, sign-in in the browser**: the hand-off above is the proof – in every app version.
+- **Password in the app**: on the first launch of a profile the app makes a random **device key** (an id and a 32-byte secret, [`src/app-device.ts`](src/app-device.ts)), keeps it in the keychain / Keystore under `flowplan.profile.<id>.appDevice` and hands it only to that instance's page (`window.FlowplanApp.deviceKey`). The sign-in form sends it with the password; the instance registers it at the first sign-in of the account on this phone and wants the same secret afterwards. It stays across profile switches and sign-outs and goes with the profile.
+
+Version 1.0.5 and older have no device key: a password sign-in there lasts like one in a browser; passkey and SSO keep the app's lifetime.
+
 ### The app and the instance
 
 After signing in, the app registers itself from inside the page (`POST /api/mobile/register`, Flowplan's `lib/mobile-devices.ts`): the entry is bound to that sign-in, so signing out, an expired session or a deleted account remove it. The instance answers with a **device token** that only reads a short summary (`GET /api/mobile/summary`: unread notifications, open tasks, the running timer) – that is what widgets, badge and timer show, also when the app is closed. Leaving the instance removes the entry (`POST /api/mobile/unregister`).
