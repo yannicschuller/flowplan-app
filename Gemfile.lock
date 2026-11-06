@@ -120,7 +120,7 @@ GEM
     faraday-retry (2.4.0)
       faraday (~> 2.0)
     fastimage (2.4.1)
-    fastlane (2.241.1)
+    fastlane (2.241.2)
       CFPropertyList (>= 2.3, < 5.0.0)
       abbrev (~> 0.1)
       addressable (>= 2.9.0, < 3.0.0)
@@ -409,7 +409,7 @@ CHECKSUMS
   faraday-net_http (3.5.0) sha256=2e7094c34e38754ee048cc3df47376f8657005d9375f8473bce1c3b526a22e36
   faraday-retry (2.4.0) sha256=7b79c48fb7e56526faf247b12d94a680071ff40c9fda7cf1ec1549439ad11ebe
   fastimage (2.4.1) sha256=c64bebd46b6fd8943ab70c1e6e85ff728f970f2e48f92ecd249b6bc3a540ad20
-  fastlane (2.241.1) sha256=e8e97f3274d678c74d9e473b98d202621262c40dfce2b43b7a05afde7caa2ea5
+  fastlane (2.241.2) sha256=9c23f6d1b4aa5d8570ff8584186d5fdb1fdf7a01dd7ad168501b43fe360fe122
   fastlane-sirp (1.1.0) sha256=10bc94f9682efd8e1badfb31452a76dd8981f1f3a33717c765fde6d75b54d847
   ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
   ffi (1.17.4-aarch64-linux-gnu) sha256=b208f06f91ffd8f5e1193da3cae3d2ccfc27fc36fba577baf698d26d91c080df
