@@ -18,7 +18,8 @@
 //   event "flowplan:ai"; and it opens the app's profiles (openProfiles: switch
 //   to or add another instance, or – for a profile never signed in – change
 //   its address; the sign-in pages' "Other server?", #69), with the page's
-//   path to come back to;
+//   path to come back to; and it starts the sign-in with passkeys or SSO
+//   (signIn, #109), answering with the event "flowplan:sign-in";
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
 //   page's offline module fills, kept by the app, and the loader that runs
 //   the stored page without a connection (src/offline/loader.ts);
@@ -54,6 +55,10 @@ export type PageMessage =
   // the app (capture.ts pageScanRequest).
   | { type: "scanDocument"; pageId: string; rowId?: string }
   | { type: "openInBrowser"; url: string }
+  // "Mit Passkey anmelden" / "Mit SSO anmelden" (#109): the sign-in through
+  // the system's sheet, without the detour of a navigation the app has to
+  // catch; the answer is the event "flowplan:sign-in" (sign-in.ts).
+  | { type: "signIn"; via?: string | null }
   | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean }
   // The page's keyboard shortcuts for the key commands (ipad.ts checks the
   // list), and a page of the instance for a new window (iPad, iPhone Duo).
@@ -188,6 +193,7 @@ export function bridgeScript(options: {
         : ""
     }${options.inkRecognition ? `\n    recognizeInk,` : ""}${options.ai ? `\n    ai,` : ""}
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
+    signIn: (via) => post({ type: "signIn", via: via === "sso" ? "sso" : null }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${options.offline ? `\n    offline,` : ""}${
       options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""
