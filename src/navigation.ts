@@ -69,6 +69,28 @@ export const pageRendered = (state: NavigationState) => {
   state.redirecting = false;
 };
 
+// Whether a request of onShouldStartLoadWithRequest is for the main frame.
+// Only iOS says (isTopFrame); Android's event carries url, title, loading,
+// canGoBack, canGoForward and lockIdentifier and nothing about the frame
+// (react-native-webview RNCWebViewClient.createWebViewEvent; its types call
+// navigationType "always other on android"). Missing means main frame:
+// Android asks about subframes the same way, and those are allowed anyway
+// unless they leave the instance (decide).
+export const isMainFrame = (request: { url: string; isTopFrame?: boolean | null }) => request.isTopFrame !== false;
+
+// The hand-off for passkeys and SSO (/api/auth/desktop without a challenge,
+// as the sign-in page links it) loading in the web view: the app did not
+// catch it in onShouldStartLoadWithRequest (an Android web view that did not
+// ask, or asked and timed out after 250 ms and loads it anyway). The app
+// stops it and starts the sign-in itself (#109). With a challenge it is the
+// browser's part of a sign-in, never the app's page.
+export function missedSignIn(url: string, server: string | null): { via: string | null } | null {
+  if (!server || originOf(url) !== server) return null;
+  const target = new URL(url);
+  if (target.pathname !== "/api/auth/desktop" || target.searchParams.has("challenge")) return null;
+  return { via: target.searchParams.get("via") };
+}
+
 export function decide(
   url: string,
   options: { server: string | null; mainFrame: boolean; newWindow?: boolean; state: NavigationState; now?: number },

@@ -3,7 +3,9 @@
 //
 // 1. The instance's sign-in page links "Mit Passkey anmelden" / "Mit SSO
 //    anmelden" to /api/auth/desktop when it sees FlowplanMobile/ in the user
-//    agent. The app catches that navigation (navigation.ts).
+//    agent. Newer instances call FlowplanApp.signIn (bridge-script.ts)
+//    instead; for older ones the app catches that navigation (navigation.ts),
+//    and stops it should it load anyway (missedSignIn).
 // 2. It keeps a random verifier and opens /api/auth/desktop?challenge=<its
 //    SHA-256> in ASWebAuthenticationSession (iOS) or a Custom Tab (Android).
 // 3. After signing in and confirming, the page hands flowplan://sign-in with a
@@ -91,6 +93,57 @@ export async function openSignIn(url: string, open: SignInOpeners): Promise<Open
       return { opened: false, error: `${reason(first)}; ${reason(second)}` };
     }
   }
+}
+
+// The whole start of a sign-in (steps 2 and 3 up to the sheet): the challenge
+// and the sheet. Nothing escapes as a rejected promise any more – in 1.0.5 an
+// error before the sheet (the challenge) went nowhere, and the tap did
+// nothing (#109); now every failure comes back with the step it failed in.
+export type SignInStart = { opened: true; link: string | null } | { opened: false; stage: "challenge" | "open"; error: string };
+export async function beginSignIn(
+  server: string,
+  via: string | null,
+  deps: { verifier: () => string; sha256Base64: (value: string) => Promise<string>; pending: PendingSignIns; open: SignInOpeners },
+): Promise<SignInStart> {
+  let challenge: string;
+  try {
+    const verifier = deps.verifier();
+    challenge = (await deps.sha256Base64(verifier)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new Error(`unexpected challenge (${challenge.length} characters)`);
+    deps.pending.add(challenge, verifier);
+  } catch (e) {
+    return { opened: false, stage: "challenge", error: e instanceof Error ? e.message : String(e) };
+  }
+  try {
+    const outcome = await openSignIn(signInUrl(server, challenge, via), deps.open);
+    return outcome.opened ? outcome : { opened: false, stage: "open", error: outcome.error };
+  } catch (e) {
+    return { opened: false, stage: "open", error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// One sign-in per tap: the page's bridge call, the caught navigation and the
+// load the app stops (missedSignIn) can all report the same tap.
+export class SignInStarts {
+  private last = -Infinity;
+  begin(now = Date.now()) {
+    if (now - this.last < 1500) return false;
+    this.last = now;
+    return true;
+  }
+}
+
+// "Mit SSO anmelden" / "Mit Passkey anmelden" through the bridge
+// (FlowplanApp.signIn, lib/native-app.ts in Flowplan): only "sso" means
+// anything; everything else is the instance's own sign-in.
+export const signInVia = (message: { via?: unknown }) => (message.via === "sso" ? "sso" : null);
+
+// What the page hears about the start (the event "flowplan:sign-in"): it
+// shows a failure under the buttons and reports it to the instance's log.
+export type SignInAnswer = { status: "opened" } | { status: "failed"; stage: string; error: string };
+export function signInAnswerScript(answer: SignInAnswer) {
+  const detail = answer.status === "opened" ? answer : { status: "failed", stage: answer.stage, error: String(answer.error).slice(0, 300) };
+  return `window.dispatchEvent(new CustomEvent("flowplan:sign-in", { detail: ${JSON.stringify(detail)} })); true;`;
 }
 
 export type SignInResult = { code: string; verifier: string } | { error: "foreign" } | null;

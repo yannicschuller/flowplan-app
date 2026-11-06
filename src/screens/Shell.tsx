@@ -46,9 +46,9 @@ import {
 import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
-import { decide, httpErrorNeedsCheck, loadStarted, mayStay, navigationState, pageRendered } from "../navigation";
+import { decide, httpErrorNeedsCheck, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
 import { checkServer, fetchRequest, originOf } from "../server";
-import { acceptSignIn, base64Url, openSignIn, PendingSignIns, redeemScript, signInUrl } from "../sign-in";
+import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, signInAnswerScript, SignInStarts, signInVia } from "../sign-in";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
@@ -164,6 +164,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // The foreign page the web view was sent back from (Android, see below).
   const bounced = useRef("");
   const pending = useRef(new PendingSignIns());
+  const signInStarts = useRef(new SignInStarts());
+  // The page that linked a hand-off the app stopped only at its load.
+  const beforeHandOff = useRef("");
   const redeemWhenLoaded = useRef<string | null>(null);
   // Colours of the bars (see the comment at the top).
   const [bars, setBars] = useState({ top: palette.background, bottom: palette.background, fadeTop: false, fadeBottom: false, cover: false });
@@ -262,29 +265,34 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   );
 
   // Passkeys and SSO: the system's sign-in sheet (ASWebAuthenticationSession,
-  // Custom Tab), which hands flowplan://sign-in back.
+  // Custom Tab), which hands flowplan://sign-in back. Every failure is shown
+  // and told to the page, which reports it to the instance's log (#109).
   const startSignIn = useCallback(
-    async (via: string | null) => {
-      const verifier = base64Url(Crypto.getRandomBytes(32));
-      const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, {
-        encoding: Crypto.CryptoEncoding.BASE64,
-      });
-      const challenge = digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      pending.current.add(challenge, verifier);
-      const outcome = await openSignIn(signInUrl(server, challenge, via), {
-        platform: Platform.OS,
-        authSession: (url, redirect) => WebBrowser.openAuthSessionAsync(url, redirect, { preferEphemeralSession: false }),
-        // Without waiting for the tab to close: the result comes as an app link.
-        customTab: (url) => WebBrowser.openBrowserAsync(url, { showTitle: true, createTask: false }).then(() => undefined),
-        browser: (url) => Linking.openURL(url),
-      });
-      if (outcome.opened && outcome.link) signInLink(outcome.link);
-      else if (!outcome.opened) {
-        console.warn("sign-in could not open", outcome.error);
-        Alert.alert(t("signInImpossible"), t("signInNoBrowser"));
+    async (via: string | null, how: "bridge" | "navigation" | "load") => {
+      if (!signInStarts.current.begin()) return;
+      const outcome = await beginSignIn(server, via, {
+        verifier: () => base64Url(Crypto.getRandomBytes(32)),
+        sha256Base64: (value) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value, { encoding: Crypto.CryptoEncoding.BASE64 }),
+        pending: pending.current,
+        open: {
+          platform: Platform.OS,
+          authSession: (url, redirect) => WebBrowser.openAuthSessionAsync(url, redirect, { preferEphemeralSession: false }),
+          // Without waiting for the tab to close: the result comes as an app link.
+          customTab: (url) => WebBrowser.openBrowserAsync(url, { showTitle: true, createTask: false }).then(() => undefined),
+          browser: (url) => Linking.openURL(url),
+        },
+      }).catch((e: unknown) => ({ opened: false as const, stage: "open" as const, error: e instanceof Error ? e.message : String(e) }));
+      if (outcome.opened) {
+        if (onServer()) run(signInAnswerScript({ status: "opened" }));
+        if (outcome.link) signInLink(outcome.link);
+        return;
       }
+      console.warn(`sign-in (${how}) failed at ${outcome.stage}:`, outcome.error);
+      if (onServer()) run(signInAnswerScript({ status: "failed", stage: `${how}/${outcome.stage}`, error: outcome.error }));
+      Alert.alert(t("signInImpossible"), outcome.stage === "open" ? t("signInNoBrowser") : `${t("signInFailed")}: ${outcome.error}`);
     },
-    [server, signInLink],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [server, signInLink, run],
   );
 
   useImperativeHandle(
@@ -591,6 +599,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "shortcuts") features.shortcuts(message.list);
     else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "ai") handleAi(message);
+    else if (message.type === "signIn") void startSignIn(signInVia(message), "bridge");
     else if (message.type === "openWindow") {
       if (!features.openWindow(message.url)) route(message.url, true, true);
     } else onMessage(message);
@@ -618,7 +627,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       case "allow":
         return true;
       case "signIn":
-        void startSignIn(decision.via);
+        void startSignIn(decision.via, "navigation");
         return false;
       case "appLink":
         if (decision.url.startsWith("flowplan://sign-in")) signInLink(decision.url);
@@ -707,7 +716,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly
           onMessage={handleMessage}
-          onShouldStartLoadWithRequest={(request) => route(request.url, request.isTopFrame !== false)}
+          onShouldStartLoadWithRequest={(request) => route(request.url, isMainFrame(request))}
           // Links with target=_blank; on the iPad (and iPhone Duo) those to the instance in a
           // window of their own.
           onOpenWindow={(event) => {
@@ -721,11 +730,28 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             // Another document (not just another #route): it reports anew
             // whether back does something; until then the history counts.
             if (url.split("#")[0] !== pageUrl.current.split("#")[0]) pageCanGoBack.current = null;
+            // The hand-off loads although route() should have caught it
+            // (#109): stopped, and the sign-in starts here.
+            const missed = missedSignIn(url, server);
+            if (missed) {
+              console.warn("sign-in hand-off was not caught before loading", url);
+              if (!missedSignIn(pageUrl.current, server)) beforeHandOff.current = pageUrl.current;
+              web.current?.stopLoading();
+              void startSignIn(missed.via, "load");
+              return;
+            }
             loadStarted(navigation.current, url, server);
             bounceForeign(url);
           }}
           onLoadEnd={(event) => {
             const url = event.nativeEvent.url;
+            // A hand-off stopped too late (onLoadStart): back to the page
+            // that linked it, not the instance's "Invalid link".
+            if (missedSignIn(url, server)) {
+              const back = originOf(beforeHandOff.current) === server ? beforeHandOff.current : server;
+              run(`location.replace(${JSON.stringify(back)}); true;`);
+              return;
+            }
             pageUrl.current = url;
             pageRendered(navigation.current);
             if (!fromInstance(url)) return;
