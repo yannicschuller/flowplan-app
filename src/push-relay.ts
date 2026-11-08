@@ -370,9 +370,11 @@ const CATEGORY_IDS: Record<string, string> = {
   task: "flowplan.task",
   comment: "flowplan.comment",
   read: "flowplan.read",
+  approval: "flowplan.workflow-approval",
   "flowplan.task": "flowplan.task",
   "flowplan.comment": "flowplan.comment",
   "flowplan.read": "flowplan.read",
+  "flowplan.workflow-approval": "flowplan.workflow-approval",
 };
 export function categoryId(value: unknown): string | null {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(CATEGORY_IDS, value) ? CATEGORY_IDS[value] : null;

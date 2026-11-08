@@ -643,7 +643,7 @@ test("contract: the instance's alert opens with the app's code and works for tap
   // (aps.category, outside the encryption) is never a registered one, so a
   // placeholder the extension could not replace never shows buttons whose
   // notification id is missing.
-  const registered = categoryButtons({ done: "", tomorrow: "", reply: "", send: "", placeholder: "", read: "" }).map((c) => c.identifier);
+  const registered = categoryButtons({ done: "", tomorrow: "", reply: "", send: "", placeholder: "", read: "", approve: "", reject: "" }).map((c) => c.identifier);
   assert.deepEqual(registered.sort(), Object.values(CATEGORIES).sort());
   assert.ok(registered.includes(message.category!));
   for (const outer of ["task", "comment", "default"]) assert.ok(!registered.includes(outer), outer);

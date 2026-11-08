@@ -7,7 +7,7 @@ import UIKit
 import UserNotifications
 
 // The buttons on Flowplan's push notifications – "Done", "Tomorrow",
-// "Reply", "Mark as read" (categories registered from JavaScript,
+// "Reply", "Mark as read", "Reject" (categories registered from JavaScript,
 // src/native/notification-actions.ts) – are answered here in Swift: iOS
 // starts or wakes the app in the background for a button and gives it only
 // a few seconds, too few to load JavaScript first. The request
@@ -93,6 +93,11 @@ final class FPNotificationActions: NotificationDelegate {
     "fp.tomorrow": "tomorrow",
     "fp.reply": "reply",
     "fp.read": "read",
+    // "Approve" (fp.approve) is not here: it opens the app, which asks for
+    // Face ID / Touch ID before it sends anything (src/native/notification-
+    // actions.ts answerApproval). "Reject" needs no confirmation (the
+    // instance names the approval from the notification).
+    "fp.reject": "reject",
   ]
 
   func didReceive(_ response: UNNotificationResponse, completionHandler: @escaping () -> Void) -> Bool {

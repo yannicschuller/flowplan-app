@@ -5,7 +5,7 @@
     "NSMicrophoneUsageDescription": "当你为页面录制语音笔记或视频时，Flowplan 会使用麦克风。",
     "NSPhotoLibraryUsageDescription": "当你选择要添加到页面的图片时，Flowplan 会打开你的照片。",
     "NSPhotoLibraryAddUsageDescription": "Flowplan 会在你要求时将图片存储到你的照片中。",
-    "NSFaceIDUsageDescription": "开启应用锁后，Flowplan 会使用 Face ID 解锁应用。",
+    "NSFaceIDUsageDescription": "开启应用锁后，Flowplan 会使用 Face ID 解锁应用，并用它确认工作流审批。",
     "NSSpeechRecognitionUsageDescription": "Flowplan 会在此设备上将你的语音笔记转换为文字。",
     "NSLocalNetworkUsageDescription": "当你的 Flowplan 实例运行在本地网络中时，Flowplan 会连接到它。"
   },
