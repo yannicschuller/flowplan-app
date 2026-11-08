@@ -5,21 +5,24 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BUTTONS, buttonRequest, CATEGORIES, categoryButtons, isButton, notificationData } from "../src/notification-buttons";
+import { approvalRequest, BUTTONS, buttonRequest, CATEGORIES, categoryButtons, isButton, notificationData, opensApp } from "../src/notification-buttons";
+import { approvalEntries, approvalOutcome, approveBody, isApprovalSecret, newApprovalSecret, toBase64Url, verifierOf } from "../src/approval-key";
+import { categoryId } from "../src/push-relay";
+import { createHash } from "node:crypto";
 import { planReminders, REMINDER_PREFIX } from "../src/reminder-plan";
 import { voiceRequest, voiceScripts, voiceStamp, wordsToSegments } from "../src/voice-bridge";
 import { bridgeScript, parsePageMessage } from "../src/bridge-script";
 import { notifyStrings } from "../src/i18n-notify";
 import type { Summary } from "../src/summary";
 
-const texts = { done: "Done", tomorrow: "Tomorrow", reply: "Reply", send: "Send", placeholder: "Your reply", read: "Mark as read" };
+const texts = { done: "Done", tomorrow: "Tomorrow", reply: "Reply", send: "Send", placeholder: "Your reply", read: "Mark as read", approve: "Approve", reject: "Reject" };
 const response = (actionIdentifier: string, data: unknown, userText?: string) => ({
   actionIdentifier,
   userText,
   notification: { request: { identifier: "n1", content: { data } } },
 });
 
-test("the categories the instance names have their buttons; nothing opens the app", () => {
+test("the categories the instance names have their buttons; only “Approve” opens the app", () => {
   const categories = categoryButtons(texts);
   assert.deepEqual(
     categories.map((c) => [c.identifier, c.actions.map((a) => a.identifier)]),
@@ -27,17 +30,20 @@ test("the categories the instance names have their buttons; nothing opens the ap
       [CATEGORIES.task, ["fp.done", "fp.tomorrow"]],
       [CATEGORIES.comment, ["fp.reply", "fp.read"]],
       [CATEGORIES.read, ["fp.read"]],
+      [CATEGORIES.approval, ["fp.approve", "fp.reject"]],
     ],
   );
   for (const category of categories)
     for (const action of category.actions) {
-      assert.equal(action.options.opensAppToForeground, false);
+      // "Approve" is confirmed with the biometrics in the app first.
+      assert.equal(action.options.opensAppToForeground, action.identifier === "fp.approve");
       // Changes in the person's name want the phone unlocked.
       assert.equal(action.options.isAuthenticationRequired, action.identifier !== "fp.read");
     }
   assert.deepEqual(categories[1].actions[0].textInput, { submitButtonTitle: "Send", placeholder: "Your reply" });
   // The ids are what the instance sends (lib/notification-targets.ts in Flowplan).
-  assert.deepEqual(Object.values(CATEGORIES), ["flowplan.task", "flowplan.comment", "flowplan.read"]);
+  assert.deepEqual(Object.values(CATEGORIES), ["flowplan.task", "flowplan.comment", "flowplan.read", "flowplan.workflow-approval"]);
+  assert.equal(categories[3].actions[1].options.isDestructive, true);
 });
 
 test("a tapped button becomes the instance's request; other taps do not", () => {
@@ -53,7 +59,7 @@ test("a tapped button becomes the instance's request; other taps do not", () => 
   assert.equal(buttonRequest(null, "2026-10-24"), null);
   assert.ok(isButton("fp.read"));
   assert.ok(!isButton("constructor"));
-  assert.deepEqual(Object.keys(BUTTONS), ["fp.done", "fp.tomorrow", "fp.reply", "fp.read"]);
+  assert.deepEqual(Object.keys(BUTTONS), ["fp.done", "fp.tomorrow", "fp.reply", "fp.read", "fp.approve", "fp.reject"]);
 });
 
 test("the instance's data is found as Android's background task brings it", () => {
@@ -167,7 +173,8 @@ test("the page opens the browser and asks for voice notes through FlowplanApp", 
 test("the texts exist in every language, and the Swift side knows the same buttons", () => {
   for (const lang of ["en", "fr", "zh"] as const) assert.deepEqual(Object.keys(notifyStrings[lang]).sort(), Object.keys(notifyStrings.de).sort());
   const swift = readFileSync(join(import.meta.dirname, "..", "modules/flowplan-notify/ios/NotificationActions.swift"), "utf8");
-  for (const [identifier, action] of Object.entries(BUTTONS)) assert.ok(swift.includes(`"${identifier}": "${action}"`), identifier);
+  // Swift answers every button but "Approve", which opens the app.
+  for (const [identifier, action] of Object.entries(BUTTONS)) assert.equal(swift.includes(`"${identifier}": "${action}"`), !opensApp(identifier), identifier);
   // The speech permission text is in the Info.plist and translated.
   const config = readFileSync(join(import.meta.dirname, "..", "app.config.ts"), "utf8");
   assert.match(config, /NSSpeechRecognitionUsageDescription/);
@@ -175,4 +182,50 @@ test("the texts exist in every language, and the Swift side knows the same butto
     const locale = JSON.parse(readFileSync(join(import.meta.dirname, "..", `locales/${lang}.json`), "utf8")) as { ios: Record<string, string> };
     assert.ok(locale.ios.NSSpeechRecognitionUsageDescription, lang);
   }
+});
+
+const approvalId = "0b6f6c3e-8c55-4c55-9a51-6d5b2e1c7a10";
+test("workflow approvals: “Reject” is a request like the others, “Approve” is answered in the app", () => {
+  const data = { url: "/#page=w1", notificationId: "n7", approvalId, origin: "https://flow.example" };
+  assert.deepEqual(buttonRequest(response("fp.reject", data), "2026-11-08"), { action: "reject", notificationId: "n7", approvalId });
+  // A malformed approval id is left out (the instance takes the notification's own).
+  assert.deepEqual(buttonRequest(response("fp.reject", { ...data, approvalId: "x" }), "2026-11-08"), { action: "reject", notificationId: "n7" });
+  // "Approve" never goes the way of the background buttons.
+  assert.equal(buttonRequest(response("fp.approve", data), "2026-11-08"), null);
+  assert.deepEqual(approvalRequest(response("fp.approve", data)), { notificationId: "n7", approvalId, url: "/#page=w1", origin: "https://flow.example" });
+  // Through Android's background task the data may be text, or under "body".
+  assert.deepEqual(approvalRequest(response("fp.approve", { body: JSON.stringify({ notificationId: "n7", approvalId }) })), { notificationId: "n7", approvalId, url: null, origin: null });
+  for (const bad of [{ notificationId: "n7" }, { approvalId }, { notificationId: "n7", approvalId: "not-a-uuid" }])
+    assert.equal(approvalRequest(response("fp.approve", bad)), null, JSON.stringify(bad));
+  assert.equal(approvalRequest(response("fp.reject", data)), null);
+  assert.equal(approvalRequest(null), null);
+  assert.ok(opensApp("fp.approve") && !opensApp("fp.reject") && !opensApp("fp.done"));
+  // The relay's encrypted category reaches the buttons under both names.
+  assert.equal(categoryId("flowplan.workflow-approval"), CATEGORIES.approval);
+  assert.equal(categoryId("approval"), CATEGORIES.approval);
+});
+
+test("the confirmation key: 32 random bytes, its verifier is what the instance compares (SHA-256, base64url)", async () => {
+  let n = 0;
+  const secret = newApprovalSecret((bytes) => Uint8Array.from({ length: bytes }, () => n++ % 256));
+  assert.ok(isApprovalSecret(secret));
+  assert.equal(secret.length, 43);
+  assert.throws(() => newApprovalSecret((bytes) => new Uint8Array(bytes - 1)));
+  const nodeBase64 = async (value: string) => createHash("sha256").update(value).digest("base64");
+  // Node's digest("base64url") on the instance – the same text.
+  assert.equal(await verifierOf(secret, nodeBase64), createHash("sha256").update(secret).digest("base64url"));
+  assert.equal(toBase64Url("a+b/c=="), "a-b_c");
+  assert.deepEqual(approveBody({ notificationId: "n7", approvalId }, secret), { action: "approve", notificationId: "n7", approvalId, confirmation: secret });
+  assert.deepEqual(approvalEntries("p1"), { secret: "flowplan.profile.p1.approvalSecret", verifier: "flowplan.profile.p1.approvalVerifier" });
+  assert.throws(() => approvalEntries("../x"));
+});
+
+test("after asking the instance: approved, or the approval view opens (registering again when the key was unknown)", () => {
+  assert.deepEqual(approvalOutcome(200, { decision: "approved" }), { kind: "approved" });
+  assert.deepEqual(approvalOutcome(403, { error: "Approving is not set up on this device." }), { kind: "open", message: "Approving is not set up on this device.", register: true });
+  assert.deepEqual(approvalOutcome(401, null), { kind: "open", message: "", register: true });
+  assert.deepEqual(approvalOutcome(409, { error: "This approval has been decided already." }), { kind: "open", message: "This approval has been decided already.", register: false });
+  assert.deepEqual(approvalOutcome(0, null), { kind: "open", message: "", register: false });
+  // An answer that is not an approval (an old instance that knows no "approve").
+  assert.equal(approvalOutcome(200, { ok: true } as never).kind, "open");
 });

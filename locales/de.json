@@ -5,7 +5,7 @@
     "NSMicrophoneUsageDescription": "Flowplan nutzt das Mikrofon, wenn du eine Sprachnotiz oder ein Video für eine Seite aufnimmst.",
     "NSPhotoLibraryUsageDescription": "Flowplan öffnet deine Fotos, wenn du Bilder für eine Seite auswählst.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan sichert Bilder in deinen Fotos, wenn du es möchtest.",
-    "NSFaceIDUsageDescription": "Flowplan nutzt Face ID, um die App zu entsperren, wenn die App-Sperre an ist.",
+    "NSFaceIDUsageDescription": "Flowplan nutzt Face ID, um die App zu entsperren, wenn die App-Sperre an ist, und um Freigaben von Workflows zu bestätigen.",
     "NSSpeechRecognitionUsageDescription": "Flowplan wandelt deine Sprachnotizen auf diesem Gerät in Text um.",
     "NSLocalNetworkUsageDescription": "Flowplan verbindet sich mit deiner Flowplan-Instanz, wenn sie in deinem lokalen Netz läuft."
   },

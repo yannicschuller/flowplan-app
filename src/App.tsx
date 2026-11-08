@@ -50,6 +50,8 @@ import { widgetAction } from "./widgets/api";
 import { addFocusFilterListener } from "../modules/flowplan-intents/src";
 import { sendFocusRule, syncIntentProfiles, takeFocusStep } from "./native/intents";
 import { onNotificationButton, setUpNotificationButtons, syncButtonSession } from "./native/notification-actions";
+import { tn } from "./i18n-notify";
+import { forgetApprovalKey, onApprovalKeyChanged, prepareApprovalKey } from "./native/approvals";
 import { setLocalRemindersWanted } from "./native/local-reminders";
 import { originOf } from "./server";
 import { voiceRequest, type VoiceRequest } from "./voice-bridge";
@@ -190,7 +192,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     const links = Linking.addEventListener("url", ({ url }) => appLink(url));
     const opened = onNotificationOpened(open);
     const received = onNotificationReceived(() => void refresh());
-    const buttons = onNotificationButton();
+    const buttons = onNotificationButton(open);
     const quickAction = ({ id, path, link }: QuickAction) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path));
     const first = started.current;
     started.current = null;
@@ -318,12 +320,15 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     const profile = activeProfile(store.profiles());
     if (!server || profile?.server !== server) return;
     const { pending, ...push } = await pushFields(profile, { create: !!store.deviceToken() });
+    // "Approve" on workflow approvals: the verifier of this profile's
+    // confirmation key (native/approvals.ts), made here on iOS.
+    const approvalKey = await prepareApprovalKey(profile.id, tn("approvePrompt"));
     relayPending.current = pending;
     sentRelay.current = !!push.relayToken;
     // Live Activity tokens reach the instance on their own (live-push.ts):
     // not a reason to register again.
     const { liveActivityRelayTokens: _live, liveActivityLabels: _labels, ...lasting } = push;
-    const key = `${server}|${JSON.stringify(lasting)}`;
+    const key = `${server}|${JSON.stringify(lasting)}|${approvalKey ?? ""}`;
     if (registered.current === key) return;
     sent.current = key;
     shell.current?.register({
@@ -332,6 +337,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
       name: deviceName([Device.deviceName, Device.modelName], Platform.OS === "ios" ? (Platform.isPad ? "iPad" : "iPhone") : "Android"),
       appVersion: `${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`,
       ...push,
+      ...(approvalKey ? { approvalKey } : {}),
     });
   }, [server]);
 
@@ -343,9 +349,11 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     };
     const tokens = onDeviceTokenChanged(again);
     onLiveTokensChanged(again);
+    onApprovalKeyChanged(again);
     return () => {
       tokens.remove();
       onLiveTokensChanged(null);
+      onApprovalKeyChanged(null);
     };
   }, [register]);
 
@@ -519,6 +527,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   const dropProfile = (id: string) => {
     store.setEverSignedIn(id, false);
     store.forgetAppDevice(id);
+    forgetApprovalKey(id);
     void forgetSuiteProfile(id);
     // The offline copy of the instance's content goes with the profile.
     void wipeOfflineCopy(id);

@@ -5,7 +5,7 @@
     "NSMicrophoneUsageDescription": "Flowplan uses the microphone when you record a voice note or a video for a page.",
     "NSPhotoLibraryUsageDescription": "Flowplan opens your photos when you choose pictures to add to a page.",
     "NSPhotoLibraryAddUsageDescription": "Flowplan saves images to your photos when you ask it to.",
-    "NSFaceIDUsageDescription": "Flowplan uses Face ID to unlock the app when the app lock is on.",
+    "NSFaceIDUsageDescription": "Flowplan uses Face ID to unlock the app when the app lock is on, and to confirm approvals of workflows.",
     "NSSpeechRecognitionUsageDescription": "Flowplan turns your voice notes into text on this device.",
     "NSLocalNetworkUsageDescription": "Flowplan connects to your Flowplan instance when it runs in your local network."
   },

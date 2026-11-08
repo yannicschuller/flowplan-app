@@ -26,9 +26,11 @@ internal object PushContent {
     "task" to "flowplan.task",
     "comment" to "flowplan.comment",
     "read" to "flowplan.read",
+    "approval" to "flowplan.workflow-approval",
     "flowplan.task" to "flowplan.task",
     "flowplan.comment" to "flowplan.comment",
     "flowplan.read" to "flowplan.read",
+    "flowplan.workflow-approval" to "flowplan.workflow-approval",
   )
 
   class Message(val title: String, val body: String, val path: String?, val id: String, val category: String?, val data: JSONObject?)

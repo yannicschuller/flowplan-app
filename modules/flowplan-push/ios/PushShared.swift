@@ -237,9 +237,11 @@ struct FPPushMessage {
     "task": "flowplan.task",
     "comment": "flowplan.comment",
     "read": "flowplan.read",
+    "approval": "flowplan.workflow-approval",
     "flowplan.task": "flowplan.task",
     "flowplan.comment": "flowplan.comment",
     "flowplan.read": "flowplan.read",
+    "flowplan.workflow-approval": "flowplan.workflow-approval",
   ]
 
   static func parse(_ plaintext: Data, origin: String, now: Date = Date()) -> FPPushMessage? {
