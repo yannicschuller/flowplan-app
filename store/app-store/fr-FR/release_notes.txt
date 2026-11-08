@@ -1,7 +1,4 @@
 Nouveautés de cette version :
-• Change de profil directement sur la page de connexion ; un profil avec lequel tu ne t’es jamais connecté peut être modifié ou supprimé
-• Les instances de ton réseau local fonctionnent aussi en HTTP, avec un avertissement clair
-• Les copies obsolètes de la page ne restent plus à l’écran – l’app charge la version actuelle
-• Les actions rapides sur l’icône de l’app fonctionnent aussi quand l’app était fermée
-• Les activités en direct sur l’écran verrouillé utilisent l’arrière-plan du système
+• Validations de workflow directement depuis la notification : « Approuver » (avec Face ID ou Touch ID) et « Refuser », sans ouvrir l’app
+• Connecté avec un mot de passe, tu restes connecté plus longtemps – l’app s’identifie avec sa propre clé d’appareil
 • Petites améliorations et corrections

@@ -1,7 +1,4 @@
 New in this version:
-• Switch profiles right on the sign-in page; a profile you never signed in with can be changed or removed
-• Instances in your local network now also work over HTTP, with a clear warning
-• Outdated copies of the page no longer stay on screen – the app loads the current version
-• Quick actions on the app icon also work when the app was closed
-• Live Activities on the lock screen use the system's background
+• Workflow approvals right from the notification: "Approve" (with Face ID or Touch ID) and "Reject", without opening the app
+• Signed in with a password, you now stay signed in longer – the app identifies itself with its own device key
 • Smaller improvements and fixes

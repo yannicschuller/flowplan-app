@@ -1,7 +1,4 @@
 Neu in dieser Version:
-• Profile direkt auf der Anmeldeseite wechseln; ein Profil, mit dem du dich noch nie angemeldet hast, lässt sich ändern oder entfernen
-• Instanzen im lokalen Netz gehen jetzt auch über HTTP, mit einem deutlichen Hinweis
-• Veraltete Kopien der Seite bleiben nicht mehr auf dem Bildschirm stehen – die App lädt die aktuelle Version
-• Schnellaktionen am App-Symbol funktionieren auch, wenn die App geschlossen war
-• Live-Aktivitäten auf dem Sperrbildschirm mit dem Hintergrund des Systems
+• Workflow-Freigaben direkt aus der Mitteilung: „Genehmigen“ (mit Face ID oder Touch ID) und „Ablehnen“, ohne die App zu öffnen
+• Mit Passwort angemeldet bleibst du in der App länger angemeldet – die App weist sich mit einem eigenen Geräteschlüssel aus
 • Kleinere Verbesserungen und Fehlerbehebungen
