@@ -1,4 +1,4 @@
 Neu in dieser Version:
-• Workflow-Freigaben direkt aus der Mitteilung: „Genehmigen“ (mit Face ID oder Touch ID) und „Ablehnen“, ohne die App zu öffnen
-• Mit Passwort angemeldet bleibst du in der App länger angemeldet – die App weist sich mit einem eigenen Geräteschlüssel aus
+• Ist dein Server gerade nicht erreichbar (z. B. in einem anderen WLAN), zeigt die App sofort „Verbinde mit …“ statt einer leeren Seite – und öffnet nach wenigen Sekunden deine Offline-Kopie
+• Ohne Offline-Kopie erklärt eine klare Meldung, was los ist, mit „Erneut versuchen“ und „Profil wechseln“; die App versucht es im Hintergrund weiter
 • Kleinere Verbesserungen und Fehlerbehebungen

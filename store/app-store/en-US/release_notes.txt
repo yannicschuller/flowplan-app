@@ -1,4 +1,4 @@
 New in this version:
-• Workflow approvals right from the notification: "Approve" (with Face ID or Touch ID) and "Reject", without opening the app
-• Signed in with a password, you now stay signed in longer – the app identifies itself with its own device key
+• If your server can't be reached right now (e.g. on another Wi-Fi), the app shows "Connecting to …" right away instead of an empty page – and opens your offline copy after a few seconds
+• Without an offline copy, a clear message explains what's going on, with "Try again" and "Switch profile"; the app keeps trying in the background
 • Smaller improvements and fixes
