@@ -198,3 +198,28 @@ export const fetchRequest: HttpRequest = async ({ url }) => {
 
 // The address without "https://", for texts.
 export const shortServer = (origin: string) => origin.replace(/^https:\/\//, "");
+
+// Whether anything answers at the instance's health check within `ms` (any
+// HTTP status counts: an error page has its own handling). Used while the
+// window connects (src/connecting.ts) and by the offline screen, which keeps
+// trying; without cookies, never from a cache.
+export async function instanceAnswers(origin: string, ms: number, request: typeof fetch = fetch): Promise<boolean> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Also when a request does not end on abort: the answer is "no" in time.
+  const late = new Promise<false>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(false);
+    }, ms);
+  });
+  const asked = request(`${origin}/api/health`, { cache: "no-store", credentials: "omit", signal: controller.signal }).then(
+    () => true,
+    () => false,
+  );
+  try {
+    return await Promise.race([asked, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -53,7 +53,8 @@ export function PageWindow({ url }: { url: string | null }) {
         onMessage={onMessage}
         // flowplan:// links of the page go through the system to the main window.
         onAppLink={(link) => void Linking.openURL(link).catch(() => {})}
-        onProfiles={() => {}}
+        // The profiles are the main window's (the offline screen's "Switch profile").
+        onProfiles={() => void Linking.openURL("flowplan://change-server").catch(() => {})}
         onPageLoaded={() => {
           const path = pendingPath.current;
           pendingPath.current = null;

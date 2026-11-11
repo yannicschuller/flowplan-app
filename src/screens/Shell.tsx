@@ -12,6 +12,9 @@
 // another build than the copy's (src/offline/stale.ts). Only without a copy
 // does the app's own offline screen show – with "Switch profile", also when
 // the address answers with an error page and no Flowplan behind it (#69).
+// Until a page is there, "Connecting to …" covers the window; an instance
+// that does not answer within seconds leads to the copy or the offline
+// screen instead of an empty window (src/connecting.ts, #203).
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Keyboard, Linking, Platform, StyleSheet, View } from "react-native";
 import * as Network from "expo-network";
@@ -49,12 +52,14 @@ import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, httpErrorNeedsCheck, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
-import { checkServer, fetchRequest, originOf } from "../server";
+import { checkServer, fetchRequest, instanceAnswers, originOf } from "../server";
 import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, signInAnswerScript, SignInStarts, signInVia } from "../sign-in";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
 import { Offline } from "./Offline";
+import { Connecting } from "./Connecting";
+import { connectStep, nextTick, PROBE_TIMEOUT_MS, startConnect, type ConnectEvent } from "../connecting";
 import { copyDocument } from "../offline/copy";
 import { refreshScript, reachedScript, returnScript } from "../offline/loader";
 import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
@@ -151,6 +156,12 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // A new key loads the page again even when the address stays the same.
   const [attempt, setAttempt] = useState(0);
   const [offline, setOffline] = useState(false);
+  // "Connecting to …" over the window until a page is there (#203); a new
+  // run starts with every fresh load (a new key, a crashed web view).
+  const [connecting, setConnecting] = useState(true);
+  const [connectRun, setConnectRun] = useState(0);
+  const connectEvent = useRef<((event: ConnectEvent) => void) | null>(null);
+  const settle = () => connectEvent.current?.({ type: "settled" });
   const [keyboard, setKeyboard] = useState(0);
   const keyboardRef = useRef(0);
   keyboardRef.current = keyboard;
@@ -365,6 +376,46 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       stale = true;
     };
   }, [server, showCopy]);
+
+  // A fresh load of the instance's page (src/connecting.ts): the health
+  // check runs next to it; without an answer in time, the stored copy or the
+  // offline screen – the web view may wait a minute or more for a network
+  // that cannot reach the instance.
+  const showCopyRef = useRef(showCopy);
+  showCopyRef.current = showCopy;
+  useEffect(() => {
+    let state = startConnect(Date.now());
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    setConnecting(true);
+    const apply = (event: ConnectEvent) => {
+      if (stopped) return;
+      state = connectStep(state, event, Platform.OS);
+      if (timer) clearTimeout(timer);
+      if (state.phase === "connecting") {
+        const at = nextTick(state);
+        if (at !== null) timer = setTimeout(() => apply({ type: "tick", at: Date.now() }), Math.max(0, at - Date.now()));
+        return;
+      }
+      stopped = true;
+      connectEvent.current = null;
+      setConnecting(false);
+      if (state.phase === "fallback") void showCopyRef.current();
+    };
+    connectEvent.current = apply;
+    apply({ type: "tick", at: Date.now() });
+    void instanceAnswers(server, PROBE_TIMEOUT_MS).then((answered) => apply({ type: "probe", answered, at: Date.now() }));
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      if (connectEvent.current === apply) connectEvent.current = null;
+    };
+  }, [server, attempt, connectRun]);
+  // The stored copy or the offline screen took over: nothing to wait for.
+  useEffect(() => {
+    if (offline || showingCopy) settle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offline, showingCopy]);
 
   // The stored copy is showing: once the network is back and the instance
   // answers, the page hears it (it sends what was changed offline) and the
@@ -581,6 +632,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     if (!fromInstance(event.nativeEvent.url)) return;
     const message = parsePageMessage(event.nativeEvent.data);
     if (!message) return;
+    // The page runs: it is there.
+    settle();
     if (message.type === "offline") {
       const call = parseOfflineMessage(message);
       if (call && copy) void offlineAnswer(copy, call).then((script) => run(script));
@@ -749,6 +802,11 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             loadStarted(navigation.current, url, server);
             bounceForeign(url);
           }}
+          // A page is there (also a foreign one, an error page): no longer
+          // "Connecting". Failed loads end in onError, which decides.
+          onLoad={(event) => {
+            if (showingCopyRef.current || !/^about:blank/.test(event.nativeEvent.url || "")) settle();
+          }}
           onLoadEnd={(event) => {
             const url = event.nativeEvent.url;
             // A hand-off stopped too late (onLoadStart): back to the page
@@ -776,6 +834,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             // Android: a scheme the web view does not load (-10).
             if (code === -999 || code === 102 || code === -10) return;
             if (!url || originOf(url) === server) {
+              settle();
               // The stored copy itself failed: the offline screen.
               if (showingCopyRef.current) setOffline(true);
               else void showCopy();
@@ -795,8 +854,15 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
               },
             );
           }}
-          onContentProcessDidTerminate={() => web.current?.reload()}
-          onRenderProcessGone={() => web.current?.reload()}
+          // The page loads again from scratch: "Connecting" until it is there.
+          onContentProcessDidTerminate={() => {
+            setConnectRun((value) => value + 1);
+            web.current?.reload();
+          }}
+          onRenderProcessGone={() => {
+            setConnectRun((value) => value + 1);
+            web.current?.reload();
+          }}
           // Exports and files: the page fetches them with its cookies and
           // hands them to the share sheet (iOS web views cannot download).
           onFileDownload={(event) => {
@@ -840,6 +906,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         {bars.fadeBottom ? (
           <LinearGradient pointerEvents="none" colors={[transparent(bars.bottom), bars.bottom]} style={[shellStyles.fade, { bottom: 0 }]} />
         ) : null}
+        {connecting && !showingCopy ? <Connecting server={server} /> : null}
       </View>
       <View style={{ height: bars.cover ? keyboard : Math.max(insets.bottom, keyboard), backgroundColor: keyboard ? fallback : bars.bottom }} />
     </View>

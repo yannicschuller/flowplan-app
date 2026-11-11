@@ -32,7 +32,7 @@ Other iOS 17+ APIs do not change the picture: `WKWebsiteDataStore(forIdentifier:
 
 ### Opening (offline)
 
-When the web view cannot reach the instance (`onError`), or the network is down at start (`expo-network`, which uses `NWPathMonitor` on iOS), Shell.tsx builds the stored page (src/offline/document.ts):
+When the web view cannot reach the instance (`onError`), the network is down at start (`expo-network`, which uses `NWPathMonitor` on iOS), or the instance's health check does not answer within 6 seconds while "Connecting to …" shows (a network that cannot reach the instance often makes the connection hang instead of fail, #203; src/connecting.ts), Shell.tsx builds the stored page (src/offline/document.ts):
 
 - the stored `/` – never the sign-in page – with the instance's `Content-Security-Policy` as a `<meta>` first in `<head>` (`frame-ancestors`, `sandbox` and reporting are not allowed there; `blob:` is added to `script-src`, which `'strict-dynamic'` allows anyway);
 - every tag React rendered stays (it hydrates against them), without the address it would load: `src` → `data-flowplan-src`, `href` → `data-flowplan-href`;
