@@ -3,6 +3,8 @@
 import React from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useColorScheme, View, type ViewStyle } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets, type Edge } from "react-native-safe-area-context";
+import { showsSpinner } from "./motion";
+import { useMotion } from "./native/motion";
 
 export const BACKGROUND = { light: "#fcfbf8", dark: "#16151b" };
 const palettes = {
@@ -41,6 +43,10 @@ export function Button({
   style?: ViewStyle;
 }) {
   const p = usePalette();
+  // A busy button turns its spinner only with "normal" motion (motion.ts);
+  // otherwise it stays disabled and says busy to assistive technologies.
+  const motion = useMotion();
+  const spinner = busy && showsSpinner(motion);
   const primary = kind === "primary";
   return (
     <Pressable
@@ -55,7 +61,7 @@ export function Button({
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={primary ? p.onBrand : p.text} style={{ marginRight: 8 }} /> : null}
+      {spinner ? <ActivityIndicator color={primary ? p.onBrand : p.text} style={{ marginRight: 8 }} /> : null}
       <Text style={[styles.buttonText, { color: primary ? p.onBrand : kind === "danger" ? p.error : p.text }]}>{title}</Text>
     </Pressable>
   );

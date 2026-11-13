@@ -30,6 +30,11 @@
 // - Android: the safe areas the web view reports, and whether the page keeps
 //   clear of the system bars itself (src/safe-areas.ts; the attribute
 //   data-app-safe-areas="page" on <html>) or the app does;
+// - where offline use stands on this device (offlineStatus, lib/app-offline-offer.ts
+//   in Flowplan): the app offers it once and shows it in its settings
+//   (src/offline-offer.ts) – instances without the hook never call it;
+// - the person's "Animations" (data-motion on <html>, #260): the app's own
+//   screens follow it (src/motion.ts), reported when the workspace is there;
 // - no zooming into form fields on iOS (it zooms into text below 16px).
 import { offlineScript } from "./offline/loader";
 
@@ -75,7 +80,11 @@ export type PageMessage =
   | { type: "offline"; id: number; op: string; cache?: string | null; key?: string; entry?: unknown }
   | { type: "offlineReturn" }
   // The page's files did not load: a copy of an older build (src/offline/stale.ts).
-  | { type: "staleCopy"; build?: unknown; clear?: unknown; copy?: unknown };
+  | { type: "staleCopy"; build?: unknown; clear?: unknown; copy?: unknown }
+  // Where offline use stands here (src/offline-offer.ts parseOfflineStatus
+  // checks it), and the person's "Animations" (src/motion.ts parseMotion).
+  | { type: "offlineStatus"; status: unknown }
+  | { type: "motion"; value: unknown };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -200,7 +209,8 @@ export function bridgeScript(options: {
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     signIn: (via) => post({ type: "signIn", via: via === "sso" ? "sso" : null }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
-    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),${
+    shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),
+    offlineStatus: (status) => post({ type: "offlineStatus", status: status && typeof status === "object" ? status : null }),${
       options.deviceKey ? `\n    deviceKey: Object.freeze(${JSON.stringify({ id: String(options.deviceKey.id), secret: String(options.deviceKey.secret) })}),` : ""
     }${options.offline ? `\n    offline,` : ""}${
       options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""
@@ -238,10 +248,28 @@ export function bridgeScript(options: {
     return best;
   };
 ${options.platform === "android" ? androidSafeAreas : ""}
+  // The person's "Animations" (#260): data-motion on <html> (none for
+  // "normal"), the workspace's root carries it from the first paint. Only
+  // where the workspace is (.app-shell) – the sign-in page knows no person.
+  // Looked at with every report: a change of the attribute is one, and the
+  // first touch or scroll after the workspace rendered.
+  let lastMotion = "";
+  const reportMotion = () => {
+    try {
+      const shell = document.querySelector(".app-shell");
+      if (!shell) return;
+      const value = (document.documentElement && document.documentElement.getAttribute("data-motion")) || shell.getAttribute("data-motion") || "normal";
+      const motion = value === "reduced" || value === "off" ? value : "normal";
+      if (motion === lastMotion) return;
+      lastMotion = motion;
+      post({ type: "motion", value: motion });
+    } catch (e) {}
+  };
   // Reported once per animation frame at most, and only when something
   // changed: elementFromPoint ×14 is the most expensive thing the app does.
   let frame = 0, last = "";
   const report = () => {${options.platform === "android" ? "\n    showSafeAreas();" : ""}
+    reportMotion();
     const page = document.scrollingElement || document.documentElement;
     const base = opaque(getComputedStyle(document.body || page).backgroundColor) || opaque(getComputedStyle(page).backgroundColor);
     const message = JSON.stringify({

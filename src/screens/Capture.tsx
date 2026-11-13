@@ -17,11 +17,14 @@ import type { CaptureRequest } from "../navigation";
 import { connection, refreshSuite, timeZone } from "../native/suite";
 import { onStopRecording, setRecording } from "../native/activities";
 import { Button, SheetBody, styles, usePalette } from "../ui";
+import { modalAnimation } from "../motion";
+import { useMotion } from "../native/motion";
 
 type Target = { id: string; name: string };
 
 export function Capture({ request, onClose, onOpen }: { request: CaptureRequest | null; onClose: () => void; onOpen: (path: string) => void }) {
   const p = usePalette();
+  const motion = useMotion();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [target, setTarget] = useState<Target | null>(null);
   const [title, setTitle] = useState("");
@@ -144,7 +147,7 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
   const heading = { note: t("captureNewNote"), task: t("captureNewTask"), voice: t("captureVoice"), photo: t("capturePhoto") }[mode];
   const input = [styles.input, { color: p.text, borderColor: p.line, backgroundColor: p.card }];
   return (
-    <Modal visible={!!request} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible={!!request} animationType={modalAnimation(motion)} presentationStyle="pageSheet" onRequestClose={close}>
       <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>

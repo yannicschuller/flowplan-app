@@ -30,6 +30,12 @@ Other iOS 17+ APIs do not change the picture: `WKWebsiteDataStore(forIdentifier:
 - What the service worker does for requests, lib/offline-app.ts does in the page when the app offers its store: GET requests the copy holds go to the network first; pages, records and files that arrive are kept; when the network fails, the copy answers; pictures (`<img>`) that fail are shown from the copy.
 - Every call is a message to the app (`{ type: "offline", id, op, … }`), answered with an injected event. The app checks it again (src/offline/policy.ts) and keeps it in files (src/offline/store.ts, modules/flowplan-native/ios/FlowplanOfflineFiles.swift).
 
+### Offered by the app (#203)
+
+Offline use stays opt-in per device, but the app asks once per profile (src/offline-offer.ts): when the page reports through `window.FlowplanApp.offlineStatus` (lib/app-offline-offer.ts in Flowplan) that it can switch it on and it is off, the app asks natively "Seiten auf diesem Gerät speichern?" after the first sign-in (after the notification question) or the first time a signed-in profile opens on such an instance. **Speichern** dispatches `flowplan:offline-enable`; the page calls its own `enableOffline` for the signed-in person and the open workspace and shows the progress. **Nicht jetzt** is remembered per profile; a profile where offline use is on is never asked. Instances without the hook never report, so nothing is asked there; what the web app refuses (no support – Android over HTTP –, guests, the demo, too little room, no connection) is reported as unavailable and not offered. The same works on Android, where the page's service worker keeps the copy.
+
+The app's settings show the active profile's copy: on iOS from the marker in the app's own store (`flowplan-settings`), on Android from the page's last report (asked again when the settings open; "managed in Flowplan" before any report), with a button to Flowplan's Settings → Offline & devices (`/#settings/devices`).
+
 ### Opening (offline)
 
 When the web view cannot reach the instance (`onError`), the network is down at start (`expo-network`, which uses `NWPathMonitor` on iOS), or the instance's health check does not answer within 6 seconds while "Connecting to …" shows (a network that cannot reach the instance often makes the connection hang instead of fail, #203; src/connecting.ts), Shell.tsx builds the stored page (src/offline/document.ts):

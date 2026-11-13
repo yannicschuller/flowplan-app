@@ -15,6 +15,8 @@ import { connection, refreshSuite, timeZone } from "../native/suite";
 import { fileSize, hasContent, MAX_SHARE_FILES, saveShare, shareDraft, shareTargetPath, type ShareDraft } from "../android/share";
 import { Button, SheetBody, styles, usePalette } from "../ui";
 import { draftKey, type DraftKey } from "../idempotency";
+import { modalAnimation } from "../motion";
+import { useMotion } from "../native/motion";
 
 export type ShareRequest = { kind: "share"; content: SharedContent } | { kind: "quick" };
 type Target = { id: string; name: string; detail: string; kind: string };
@@ -34,6 +36,7 @@ export function ShareCapture({
   onOpen: (path: string) => void;
 }) {
   const p = usePalette();
+  const motion = useMotion();
   const [draft, setDraft] = useState<ShareDraft>(EMPTY);
   const [inbox, setInbox] = useState<Target | null>(null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -147,7 +150,7 @@ export function ShareCapture({
   const input = [styles.input, { color: p.text, borderColor: p.line, backgroundColor: p.card }];
   const done = saved !== null;
   return (
-    <Modal visible={!!request} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible={!!request} animationType={modalAnimation(motion)} presentationStyle="pageSheet" onRequestClose={close}>
       <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>

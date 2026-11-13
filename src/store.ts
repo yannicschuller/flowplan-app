@@ -7,6 +7,8 @@ import * as SecureStore from "expo-secure-store";
 import { getRandomBytes, randomUUID } from "expo-crypto";
 import {
   activeProfile,
+  LASTING_KEYS,
+  lastingKey,
   loadProfiles,
   PROFILE_KEYS,
   PROFILES_KEY,
@@ -22,6 +24,8 @@ import type { Summary } from "./summary";
 import { parseAdminState, type AdminState } from "./admin";
 import { parseLiveRecords, parseRecord, type LiveRecords, type PushRecord } from "./push-relay";
 import { appDeviceEntry, appDeviceFor, type AppDeviceKey } from "./app-device";
+import { parseMotion, type Motion } from "./motion";
+import { parseCopyInfo, type CopyInfo } from "./offline-offer";
 
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 const KEYS = {
@@ -140,6 +144,24 @@ export const store = {
   forgetAppDevice(id: string) {
     try {
       write(appDeviceEntry(id), null);
+    } catch {}
+  },
+
+  // The person's "Animations" in Flowplan as the profile's page last
+  // reported it (motion.ts); null until it did.
+  motion: (id: string): Motion | null => parseMotion(read(lastingKey(id, "motion"))),
+  setMotion: (id: string, motion: Motion) => write(lastingKey(id, "motion"), motion),
+  // Whether offline use was offered on this profile (offline-offer.ts):
+  // asked once, whatever the answer.
+  offlineOffered: (id: string) => read(lastingKey(id, "offlineOffer")) === "1",
+  setOfflineOffered: (id: string) => write(lastingKey(id, "offlineOffer"), "1"),
+  // Android: what the page last reported of its copy (the service worker's).
+  offlineInfo: (id: string): CopyInfo | null => parseCopyInfo(read(lastingKey(id, "offlineInfo"))),
+  setOfflineInfo: (id: string, info: CopyInfo) => write(lastingKey(id, "offlineInfo"), JSON.stringify(info)),
+  // A profile that is gone: what was kept across switches goes too.
+  forgetLasting(id: string) {
+    try {
+      for (const key of LASTING_KEYS) write(lastingKey(id, key), null);
     } catch {}
   },
 
