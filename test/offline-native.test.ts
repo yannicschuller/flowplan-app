@@ -57,7 +57,9 @@ test("the window offers the copy, answers its calls and falls back to it", () =>
   assert.match(shell, /message\.type === "offline"[\s\S]*offlineAnswer\(copy, call\)/);
   // Without a connection: the copy first, the offline screen without one.
   assert.match(shell, /else void showCopy\(\);/);
-  assert.match(shell, /if \(!html\) \{\s*setOffline\(true\);/);
+  assert.match(shell, /if \(!html\) \{\s*setOffline\("noCopy"\);/);
+  // A copy that fails or goes stale without the instance: the screen says so (#203).
+  assert.match(shell, /if \(showingCopyRef.current\) setOffline\("copyFailed"\);/);
   assert.match(shell, /setSource\(\{ html, baseUrl: `\$\{server\}\/\$\{hash\}` \}\)/);
   // Back online: reached, then the live page once nobody types – at once
   // when the instance runs another build (src/offline/stale.ts, #61).

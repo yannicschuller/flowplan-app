@@ -25,7 +25,22 @@ const flowplanAnswers = (server: string) =>
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000)),
   ]);
 
-export function Offline({ server, onRetry, onProfiles }: { server: string; onRetry: () => void; onProfiles: () => void }) {
+// Why there is no page to show: no offline copy on this device (offline use
+// is switched on in Flowplan, per device – #203), or a copy that could not
+// be opened.
+export type OfflineReason = "noCopy" | "copyFailed";
+
+export function Offline({
+  server,
+  reason,
+  onRetry,
+  onProfiles,
+}: {
+  server: string;
+  reason: OfflineReason;
+  onRetry: () => void;
+  onProfiles: () => void;
+}) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const retryRef = useRef(onRetry);
@@ -82,6 +97,7 @@ export function Offline({ server, onRetry, onProfiles }: { server: string; onRet
           {t("offlineServer", { server: shortServer(server) })}
         </Text>
         <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineHint")}</Text>
+        <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t(reason === "copyFailed" ? "offlineCopyFailed" : "offlineNoCopy")}</Text>
         <Button title={t("retry")} onPress={onRetry} style={{ marginTop: 22 }} />
         <Button title={t("switchProfile")} kind="secondary" onPress={onProfiles} style={{ marginTop: 10 }} />
       </ScrollView>

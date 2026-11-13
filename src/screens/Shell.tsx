@@ -57,7 +57,7 @@ import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, sig
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
-import { Offline } from "./Offline";
+import { Offline, type OfflineReason } from "./Offline";
 import { Connecting } from "./Connecting";
 import { connectStep, nextTick, PROBE_TIMEOUT_MS, startConnect, type ConnectEvent } from "../connecting";
 import { copyDocument } from "../offline/copy";
@@ -155,7 +155,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const copyBuild = useRef<string | null>(null);
   // A new key loads the page again even when the address stays the same.
   const [attempt, setAttempt] = useState(0);
-  const [offline, setOffline] = useState(false);
+  const [offline, setOffline] = useState<OfflineReason | false>(false);
   // "Connecting to …" over the window until a page is there (#203); a new
   // run starts with every fresh load (a new key, a crashed web view).
   const [connecting, setConnecting] = useState(true);
@@ -206,7 +206,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     try {
       const html = copy ? await copyDocument(copy).catch(() => null) : null;
       if (!html) {
-        setOffline(true);
+        setOffline("noCopy");
         return;
       }
       const hash = pageUrl.current.includes("#") ? pageUrl.current.slice(pageUrl.current.indexOf("#")) : "";
@@ -472,7 +472,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
 
   // "Back" (back.ts): the page decides on instances that know how, the web
   // view's history on older ones; otherwise back is the system's.
-  const backState = () => ({ offline, onServer: onServer(), pageCanGoBack: pageCanGoBack.current, historyCanGoBack: canGoBack.current });
+  const backState = () => ({ offline: !!offline, onServer: onServer(), pageCanGoBack: pageCanGoBack.current, historyCanGoBack: canGoBack.current });
   const updateBackable = () => setBackable(backAction(backState()) !== "system");
   const goBack = () => {
     const action = backAction(backState());
@@ -675,7 +675,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     if (action.clearWebCache) web.current?.clearCache?.(Platform.OS === "android");
     if (action.forgetCopyPage && copy) await forgetCopyPage(copy).catch(() => {});
     if (action.next === "live") goLive();
-    else if (action.next === "offline") setOffline(true);
+    else if (action.next === "offline") setOffline("copyFailed");
   };
 
   // Where a navigation goes (navigation.ts); true lets the web view load it.
@@ -738,7 +738,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     setSource({ uri: server });
     setAttempt((value) => value + 1);
   }, [server]);
-  if (offline) return <Offline server={server} onRetry={retry} onProfiles={onProfiles} />;
+  if (offline) return <Offline server={server} reason={offline} onRetry={retry} onProfiles={onProfiles} />;
 
   return (
     <View
@@ -836,7 +836,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             if (!url || originOf(url) === server) {
               settle();
               // The stored copy itself failed: the offline screen.
-              if (showingCopyRef.current) setOffline(true);
+              if (showingCopyRef.current) setOffline("copyFailed");
               else void showCopy();
             }
           }}
