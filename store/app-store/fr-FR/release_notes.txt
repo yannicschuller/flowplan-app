@@ -1,4 +1,6 @@
 Nouveautés de cette version :
-• Si ton serveur est injoignable (par ex. sur un autre réseau Wi-Fi), l’app affiche tout de suite « Connexion à … » au lieu d’une page vide – et ouvre ta copie hors ligne au bout de quelques secondes
-• Sans copie hors ligne, un message clair explique la situation, avec « Réessayer » et « Changer de profil » ; l’app continue d’essayer en arrière-plan. Elle indique aussi où activer l’utilisation hors ligne : dans Flowplan, sous Paramètres → Hors ligne et appareils
+• L’app propose une fois d’enregistrer tes pages sur l’appareil, pour les lire et les modifier même sans connexion. Les réglages de l’app indiquent s’il existe une copie hors ligne et de quand elle date
+• Si ton serveur est injoignable, l’app affiche tout de suite « Connexion à … » au lieu d’une page vide et ouvre ta copie hors ligne au bout de quelques secondes. Sans copie, elle t’indique où activer l’utilisation hors ligne
+• Certificats personnels : les instances avec un certificat auto-signé ou une autorité de certification privée fonctionnent si ton appareil fait confiance au certificat – l’app explique comment le configurer
+• Les animations de l’app suivent l’option Réduire les animations et ton réglage « Animations » dans Flowplan
 • Petites améliorations et corrections

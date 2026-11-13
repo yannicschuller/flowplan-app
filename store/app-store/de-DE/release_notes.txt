@@ -1,4 +1,6 @@
 Neu in dieser Version:
-• Ist dein Server gerade nicht erreichbar (z. B. in einem anderen WLAN), zeigt die App sofort „Verbinde mit …“ statt einer leeren Seite – und öffnet nach wenigen Sekunden deine Offline-Kopie
-• Ohne Offline-Kopie erklärt eine klare Meldung, was los ist, mit „Erneut versuchen“ und „Profil wechseln“; die App versucht es im Hintergrund weiter. Sie sagt jetzt auch, wo du die Offline-Nutzung einschaltest: in Flowplan unter Einstellungen → Offline & Geräte
+• Die App bietet einmal an, deine Seiten auf dem Gerät zu speichern – so kannst du sie auch ohne Verbindung lesen und bearbeiten. In den App-Einstellungen siehst du, ob es eine Offline-Kopie gibt und wie alt sie ist
+• Ist dein Server nicht erreichbar, zeigt die App sofort „Verbinde mit …“ statt einer leeren Seite und öffnet nach wenigen Sekunden deine Offline-Kopie. Ohne Kopie sagt sie dir, wo du die Offline-Nutzung einschaltest
+• Eigene Zertifikate: Instanzen mit selbst signiertem Zertifikat oder eigener Zertifizierungsstelle funktionieren, wenn dein Gerät dem Zertifikat vertraut – die App erklärt, wie du es einrichtest
+• Animationen der App folgen „Bewegung reduzieren“ und deiner Einstellung „Animationen“ in Flowplan
 • Kleinere Verbesserungen und Fehlerbehebungen

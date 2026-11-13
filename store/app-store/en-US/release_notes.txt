@@ -1,4 +1,6 @@
 New in this version:
-• If your server can't be reached right now (e.g. on another Wi-Fi), the app shows "Connecting to …" right away instead of an empty page – and opens your offline copy after a few seconds
-• Without an offline copy, a clear message explains what's going on, with "Try again" and "Switch profile"; the app keeps trying in the background. It now also tells you where to turn on offline use: in Flowplan under Settings → Offline & devices
+• The app offers once to save your pages on the device, so you can read and edit them without a connection. App settings show whether there's an offline copy and how old it is
+• If your server can't be reached, the app shows "Connecting to …" right away instead of an empty page and opens your offline copy after a few seconds. Without a copy, it tells you where to turn on offline use
+• Own certificates: instances with a self-signed certificate or a private certificate authority work when your device trusts the certificate – the app explains how to set it up
+• The app's animations follow Reduce Motion and your "Animations" setting in Flowplan
 • Smaller improvements and fixes

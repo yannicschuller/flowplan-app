@@ -283,6 +283,10 @@ platform :ios do
       skip_screenshots: !screenshots,
       overwrite_screenshots: true,
       submit_for_review: submit,
+      # A newer version replaces one still waiting for review (it would
+      # block creating the new version otherwise); the newer one carries
+      # its changes too.
+      reject_if_possible: submit,
       # Released to everyone as soon as Apple approves it.
       automatic_release: true,
       submission_information: {
