@@ -17,6 +17,7 @@ import { store } from "../store";
 import { Button, SheetBody, styles, usePalette } from "../ui";
 import { askForPush, pushPermission, type PushState } from "../native/notifications";
 import { ProfileList } from "./Profiles";
+import { CertificatePin } from "./CertificatePin";
 import { activityChoices, setActivityChoices } from "../native/activities";
 import { lastWidgetActionError } from "../native/suite";
 import type { ActionError } from "../widgets/actions";
@@ -138,6 +139,8 @@ export function Settings({
           <ProfileList profiles={profiles.profiles} active={profiles.active} onSwitch={onSwitch} onRename={onRename} />
           <Text style={[styles.small, { color: p.muted, marginTop: 8, marginHorizontal: 4 }]}>{t("profilesText")}</Text>
           <Button title={t("addProfile")} kind="secondary" onPress={onAddProfile} style={{ marginTop: 12 }} />
+          {/* The active profile's pinned certificate, if any (certs/pins.ts). */}
+          <CertificatePin server={current?.server} />
 
           <Text style={heading}>{t("notifications")}</Text>
           <View style={section}>

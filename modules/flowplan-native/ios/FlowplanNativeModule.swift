@@ -16,7 +16,9 @@ import WidgetKit
 ///   widget extension reads instance, device token, profile and language
 ///   from the App Group's keychain and asks the instance itself;
 /// - links that App Shortcuts and Siri hand to the app ("Voice memo",
-///   "Start focus"), and donations of those shortcuts.
+///   "Start focus"), and donations of those shortcuts;
+/// - the certificate an HTTPS instance presents, for the dialog when iOS
+///   does not trust it (FlowplanCertificates.swift).
 /// Sharing and the timer notification are Android's (iOS has the Live
 /// Activity from expo-widgets instead).
 public class FlowplanNativeModule: Module {
@@ -118,6 +120,12 @@ public class FlowplanNativeModule: Module {
     }
 
     // Siri suggestions: "note", "voice", "timer", "focus", "today".
+    // The certificate an HTTPS instance presents – { chain, trusted } or nil
+    // (FlowplanCertificates.swift; src/certs/review.ts shows it).
+    AsyncFunction("inspectCertificate") { (origin: String, promise: Promise) in
+      FlowplanCertificateInspector.inspect(origin) { promise.resolve($0) }
+    }
+
     Function("donateShortcut") { (name: String) in
       guard let type = NSClassFromString("FlowplanIntentDonor") as? NSObject.Type else { return }
       _ = type.init().perform(NSSelectorFromString("donate:"), with: name)

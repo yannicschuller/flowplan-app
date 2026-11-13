@@ -60,6 +60,7 @@ import { useWindowFeatures } from "../window-features";
 import { Offline, type OfflineReason } from "./Offline";
 import { Connecting } from "./Connecting";
 import { connectStep, nextTick, PROBE_TIMEOUT_MS, startConnect, type ConnectEvent } from "../connecting";
+import { certificateLoadError } from "../certs/shell";
 import { copyDocument } from "../offline/copy";
 import { refreshScript, reachedScript, returnScript } from "../offline/loader";
 import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
@@ -844,10 +845,14 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             // Android: a scheme the web view does not load (-10).
             if (code === -999 || code === 102 || code === -10) return;
             if (!url || originOf(url) === server) {
-              settle();
-              // The stored copy itself failed: the offline screen.
-              if (showingCopyRef.current) setOffline("copyFailed");
-              else void showCopy();
+              const failed = () => {
+                settle();
+                // The stored copy itself failed: the offline screen.
+                if (showingCopyRef.current) setOffline("copyFailed");
+                else void showCopy();
+              };
+              // A certificate this device does not trust (src/certs/shell.ts).
+              if (!certificateLoadError(event.nativeEvent, server, { reload: () => web.current?.reload(), retry, failed })) failed();
             }
           }}
           // An error page instead of the instance (a proxy's 502 while it is

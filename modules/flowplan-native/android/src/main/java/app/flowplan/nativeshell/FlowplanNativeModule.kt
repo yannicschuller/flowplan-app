@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -23,7 +25,8 @@ import expo.modules.kotlin.records.Record
  *   Android's counterpart of the Live Activity, promoted to a Live Update on Android 16;
  * - the same for what else runs now: focus, the meeting now, imports and exports, a voice
  *   memo being recorded, an incident of the instance (src/native/activities.ts);
- * - "New note" as a Quick Settings tile (CaptureTileService).
+ * - "New note" as a Quick Settings tile (CaptureTileService);
+ * - certificates the person trusted for a self-hosted instance (CertificatePins, PinnedWebViewClient).
  *
  * "Share" from other apps, the app shortcuts and "Quick capture" are modules/flowplan-android's.
  */
@@ -33,6 +36,38 @@ class FlowplanNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("FlowplanNative")
+
+    OnCreate {
+      appContext.reactContext?.applicationContext?.let { CertificatePins.install(it) }
+      CertificatePins.onRemoved = {
+        appContext.currentActivity?.let { activity ->
+          activity.runOnUiThread { PinnedWebViewClient.clearDecisions(activity.window.decorView) }
+        }
+      }
+    }
+
+    // The certificates the person trusted, per host (src/certs/pins.ts): [{ host, sha256 }].
+    Function("setCertificatePins") { pins: List<Map<String, Any?>> ->
+      CertificatePins.install(context.applicationContext)
+      CertificatePins.set(context.applicationContext, pins)
+    }
+
+    // The certificate an HTTPS instance presents ({ chain, trusted } or null), off the main thread.
+    AsyncFunction("inspectCertificate") { origin: String, promise: Promise ->
+      Thread {
+        try {
+          promise.resolve(CertificatePins.inspect(origin))
+        } catch (_: Exception) {
+          promise.resolve(null)
+        }
+      }.start()
+    }
+
+    // The window's web views accept the pinned certificates from now on; answers how many it armed.
+    AsyncFunction("armWebViews") {
+      val root = appContext.currentActivity?.window?.decorView ?: return@AsyncFunction 0
+      PinnedWebViewClient.arm(root)
+    }.runOnQueue(Queues.MAIN)
 
     Function("getManagedServer") {
       val manager = context.getSystemService(Context.RESTRICTIONS_SERVICE) as? RestrictionsManager

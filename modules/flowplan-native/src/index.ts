@@ -76,6 +76,9 @@ type NativeModule = {
   offlineRemove?(path: string): Promise<void>;
   offlineList?(path: string): Promise<string[]>;
   offlineAvailable?(): Promise<number>;
+  inspectCertificate?(origin: string): Promise<InspectedCertificate | null>;
+  setCertificatePins?(pins: { host: string; sha256: string }[]): void;
+  armWebViews?(): Promise<number>;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
   addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
   addListener(event: "onAppLink", listener: (event: { url: string }) => void): EventSubscription;
@@ -218,4 +221,43 @@ export function offlineFileSystem(): OfflineFileSystem | null {
     list: (path) => m.offlineList!(path),
     available: () => m.offlineAvailable!(),
   };
+}
+
+// The certificate an HTTPS instance presents (src/certs/review.ts): the chain
+// as base64 DER, leaf first, and whether the system trusts it for that host
+// (iOS: the trust evaluation of the TLS challenge; Android: the platform's
+// trust manager with the app's network security config). Nothing is sent to
+// the instance – the handshake is cancelled right after the certificate
+// arrived. null: no TLS answer at all (not reachable) or an older build.
+export type InspectedCertificate = { chain: string[]; trusted: boolean };
+export async function inspectCertificate(origin: string): Promise<InspectedCertificate | null> {
+  try {
+    const result = await native?.inspectCertificate?.(origin);
+    return result && Array.isArray(result.chain) && result.chain.length ? { chain: result.chain.map(String), trusted: result.trusted === true } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Android: the certificates the person trusted, per host (src/certs/pins.ts).
+// The app's own requests (OkHttp) and the web views accept exactly these
+// there; the native side keeps them for background work without the app.
+export function setCertificatePins(pins: { host: string; sha256: string }[]) {
+  if (Platform.OS !== "android") return;
+  try {
+    native?.setCertificatePins?.(pins);
+  } catch {}
+}
+
+// Android: lets the web views of the window accept the pinned certificates
+// (PinnedWebViewClient.kt; react-native-webview cancels every certificate
+// error). Answers how many web views it newly armed – 0 when they all were
+// (then a certificate error is a real one).
+export async function armWebViews(): Promise<number> {
+  if (Platform.OS !== "android") return 0;
+  try {
+    return (await native?.armWebViews?.()) ?? 0;
+  } catch {
+    return 0;
+  }
 }

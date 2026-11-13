@@ -432,6 +432,9 @@ const config: ExpoConfig = {
     "./plugins/with-managed-config",
     // Android: static app shortcuts, the share sheet's name for several files.
     "./plugins/with-android-extras",
+    // Android: trusts the CAs the person installed besides the system's
+    // (self-hosted instances, #271); plain HTTP stays as it is.
+    "./plugins/with-network-security",
     // iPad: several windows and Handoff of the open page (modules/flowplan-ipad).
     "./plugins/with-ipad",
     "./plugins/with-android-signing",
