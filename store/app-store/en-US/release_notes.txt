@@ -1,4 +1,4 @@
 New in this version:
 • If your server can't be reached right now (e.g. on another Wi-Fi), the app shows "Connecting to …" right away instead of an empty page – and opens your offline copy after a few seconds
-• Without an offline copy, a clear message explains what's going on, with "Try again" and "Switch profile"; the app keeps trying in the background
+• Without an offline copy, a clear message explains what's going on, with "Try again" and "Switch profile"; the app keeps trying in the background. It now also tells you where to turn on offline use: in Flowplan under Settings → Offline & devices
 • Smaller improvements and fixes

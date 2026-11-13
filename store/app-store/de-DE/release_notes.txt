@@ -1,4 +1,4 @@
 Neu in dieser Version:
 • Ist dein Server gerade nicht erreichbar (z. B. in einem anderen WLAN), zeigt die App sofort „Verbinde mit …“ statt einer leeren Seite – und öffnet nach wenigen Sekunden deine Offline-Kopie
-• Ohne Offline-Kopie erklärt eine klare Meldung, was los ist, mit „Erneut versuchen“ und „Profil wechseln“; die App versucht es im Hintergrund weiter
+• Ohne Offline-Kopie erklärt eine klare Meldung, was los ist, mit „Erneut versuchen“ und „Profil wechseln“; die App versucht es im Hintergrund weiter. Sie sagt jetzt auch, wo du die Offline-Nutzung einschaltest: in Flowplan unter Einstellungen → Offline & Geräte
 • Kleinere Verbesserungen und Fehlerbehebungen

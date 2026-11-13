@@ -1,4 +1,4 @@
 Nouveautés de cette version :
 • Si ton serveur est injoignable (par ex. sur un autre réseau Wi-Fi), l’app affiche tout de suite « Connexion à … » au lieu d’une page vide – et ouvre ta copie hors ligne au bout de quelques secondes
-• Sans copie hors ligne, un message clair explique la situation, avec « Réessayer » et « Changer de profil » ; l’app continue d’essayer en arrière-plan
+• Sans copie hors ligne, un message clair explique la situation, avec « Réessayer » et « Changer de profil » ; l’app continue d’essayer en arrière-plan. Elle indique aussi où activer l’utilisation hors ligne : dans Flowplan, sous Paramètres → Hors ligne et appareils
 • Petites améliorations et corrections
