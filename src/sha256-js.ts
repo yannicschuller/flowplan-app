@@ -34,8 +34,9 @@ function utf8(value: string): Uint8Array {
   return Uint8Array.from(out);
 }
 
-export function sha256Bytes(value: string): Uint8Array {
-  const data = utf8(value);
+// A string (as UTF-8) or bytes (a certificate's DER, src/certs/x509.ts).
+export function sha256Bytes(value: string | Uint8Array): Uint8Array {
+  const data = typeof value === "string" ? utf8(value) : value;
   const length = data.length;
   const blocks = ((length + 9 + 63) >> 6) << 6;
   const m = new Uint8Array(blocks);

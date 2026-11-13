@@ -22,6 +22,7 @@ import type { Summary } from "./summary";
 import { parseAdminState, type AdminState } from "./admin";
 import { parseLiveRecords, parseRecord, type LiveRecords, type PushRecord } from "./push-relay";
 import { appDeviceEntry, appDeviceFor, type AppDeviceKey } from "./app-device";
+import { CERTIFICATE_PINS_KEY, parsePins, serializePins, type CertificatePin } from "./certs/pins";
 
 const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 const KEYS = {
@@ -142,6 +143,12 @@ export const store = {
       write(appDeviceEntry(id), null);
     } catch {}
   },
+
+  // The certificates the person trusted per instance (certs/pins.ts); not
+  // a PROFILE_KEYS entry: they stay when the profile is switched or signed
+  // out, and go with the profile (certs/review.ts → syncCertificatePins).
+  certificatePins: (): CertificatePin[] => parsePins(read(CERTIFICATE_PINS_KEY)),
+  setCertificatePins: (pins: CertificatePin[]) => write(CERTIFICATE_PINS_KEY, pins.length ? serializePins(pins) : null),
 
   // Leaving an instance (another profile, signing out, removing it): nothing
   // of it stays on the phone.

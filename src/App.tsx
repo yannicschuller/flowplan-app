@@ -58,6 +58,7 @@ import { voiceRequest, type VoiceRequest } from "./voice-bridge";
 import { pathOn } from "./ipad";
 import { useHandoff } from "./window-features";
 import { useAppWindow, useSharedState, WindowContext, type WindowProps } from "./windows";
+import { syncCertificatePins } from "./certs/review";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -572,6 +573,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     void sendFocusRule(connection(), store.profiles().active);
   };
   useEffect(() => syncIntentProfiles(profiles), [profiles]);
+  // Pinned certificates follow the profiles (certs/review.ts).
+  useEffect(() => syncCertificatePins(profiles.profiles.map((profile) => profile.server)), [profiles]);
   useEffect(() => {
     followFocus.current();
     const focus = addFocusFilterListener(() => followFocus.current());
