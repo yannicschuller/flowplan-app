@@ -4,7 +4,7 @@
 // Several instances are kept as profiles (profiles.ts); push, widgets, badge
 // and timer belong to the active one.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, type AppStateStatus, Linking, Platform } from "react-native";
+import { Alert, AppState, type AppStateStatus, Linking, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
@@ -17,7 +17,9 @@ import { addShareListener, takeShare, type SharedContent } from "../modules/flow
 import { addOpenedLinkListener, consumeOpenedLink } from "../modules/flowplan-capture/src";
 import type { PageMessage } from "./bridge-script";
 import { deviceName } from "./device";
-import { pickLocale, setLocale } from "./i18n";
+import { pickLocale, setLocale, t } from "./i18n";
+import { infoOfStatus, OFFLINE_SETTINGS_PATH, parseOfflineStatus, shouldOffer, type OfflineStatus } from "./offline-offer";
+import { reportMotion, setMotionProfile } from "./native/motion";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
 import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
 import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile, switchProfile, type ProfileState } from "./profiles";
@@ -101,6 +103,11 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   const [scan, setScan] = useState<ScanRequest | null>(null);
   // A voice note the page asked for (VoiceNote.tsx).
   const [voice, setVoice] = useState<VoiceRequest | null>(null);
+  // Where offline use stands on the active profile's device, as its page
+  // last reported it (offline-offer.ts), and whether the notification
+  // question is open (the offer waits for it).
+  const [offlineStatus, setOfflineStatus] = useState<{ profile: string; status: OfflineStatus } | null>(null);
+  const [pushAsking, setPushAsking] = useState(false);
   const shell = useRef<ShellHandle>(null);
   // Paths and shares that arrive before the instance's page is there.
   // A window that became the main window keeps its page.
@@ -285,6 +292,29 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     };
   }, [appState, signedIn]);
 
+  // The active profile's "Animations" (motion.ts) for the app's own screens.
+  useEffect(() => setMotionProfile(profiles.active), [profiles.active]);
+
+  // Offline use, offered once per profile (#203, offline-offer.ts): when its
+  // page reports that it can and it is off, the window is in front and
+  // nothing else asks. A moment after the report, so the page is there.
+  const front = !!server && !setup && !settings && !locked && appState === "active" && !capture && !shareRequest && !scan && !voice;
+  const activeId = profiles.active;
+  const status = offlineStatus && offlineStatus.profile === activeId ? offlineStatus.status : null;
+  useEffect(() => {
+    if (!activeId || !shouldOffer({ status, offered: store.offlineOffered(activeId), signedIn, front, otherQuestion: pushAsking })) return;
+    const timer = setTimeout(() => {
+      if (store.profiles().active !== activeId || store.offlineOffered(activeId)) return;
+      // Asked once, whatever the answer: "Nicht jetzt" is not asked again.
+      store.setOfflineOffered(activeId);
+      Alert.alert(t("offerTitle"), t("offerText"), [
+        { text: t("offerLater"), style: "cancel" },
+        { text: t("offerSave"), onPress: () => shell.current?.offline("enable") },
+      ]);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [activeId, status, signedIn, front, pushAsking]);
+
   // With the app lock on, nothing of the page shows while the app is not in
   // front (app switcher, Face ID prompt, a system sheet): an opaque cover, and
   // no screenshots or recordings while locked. On Android that is FLAG_SECURE,
@@ -390,12 +420,20 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
               registered.current = null;
               void register();
             }
-            // Asked once, right after the first sign-in.
-            if (body.pushAvailable !== false && !store.pushAsked() && (await pushPermission()) === "undetermined") {
-              store.setPushAsked();
-              if ((await askForPush()) === "granted") {
-                registered.current = null;
-                void register();
+            // Asked once, right after the first sign-in (the offer of
+            // offline use waits for it).
+            if (body.pushAvailable !== false && !store.pushAsked()) {
+              setPushAsking(true);
+              try {
+                if ((await pushPermission()) === "undetermined") {
+                  store.setPushAsked();
+                  if ((await askForPush()) === "granted") {
+                    registered.current = null;
+                    void register();
+                  }
+                }
+              } finally {
+                setPushAsking(false);
               }
             }
           } else if (message.status === 401) {
@@ -442,6 +480,22 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
         case "voiceNote": {
           const request = voiceRequest(message);
           if (request) setVoice(request);
+          return;
+        }
+        // The person's "Animations" in Flowplan (#260, motion.ts).
+        case "motion":
+          reportMotion(store.profiles().active, message.value);
+          return;
+        // Where offline use stands (#203, offline-offer.ts): for the offer
+        // and the app's settings. On already: never offered here.
+        case "offlineStatus": {
+          const status = parseOfflineStatus(message.status);
+          const id = store.profiles().active;
+          if (!status || !id) return;
+          setOfflineStatus({ profile: id, status });
+          // Kept for the settings (Android), not for every step of a run.
+          if (!status.busy) store.setOfflineInfo(id, infoOfStatus(status));
+          if (status.enabled && !store.offlineOffered(id)) store.setOfflineOffered(id);
           return;
         }
       }
@@ -529,8 +583,10 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     store.forgetAppDevice(id);
     forgetApprovalKey(id);
     void forgetSuiteProfile(id);
-    // The offline copy of the instance's content goes with the profile.
+    // The offline copy of the instance's content goes with the profile, and
+    // what was remembered of it (motion, the offer).
     void wipeOfflineCopy(id);
+    store.forgetLasting(id);
     void refreshSuite({ force: true });
   };
 
@@ -629,6 +685,12 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
             void register();
           }}
           onLockChanged={() => setLockOn(store.appLock())}
+          offlineInfo={!settings ? null : status ? infoOfStatus(status) : activeId ? store.offlineInfo(activeId) : null}
+          onAskOffline={() => shell.current?.offline("status")}
+          onOpenOffline={() => {
+            setSettings(false);
+            open(OFFLINE_SETTINGS_PATH);
+          }}
         />
       ) : null}
       {server ? <Capture request={locked ? null : capture} onClose={() => setCapture(null)} onOpen={open} /> : null}

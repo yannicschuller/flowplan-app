@@ -68,6 +68,7 @@ type NativeModule = {
   hideTimer(): void;
   startPencil(): void;
   setEdgeSwipe?(enabled: boolean): void;
+  setEdgeSwipeMotion?(motion: string): void;
   offlineRead?(path: string): Promise<string | null>;
   offlineWrite?(path: string, base64: string): Promise<void>;
   offlineReadText?(path: string): Promise<string | null>;
@@ -113,6 +114,14 @@ export function setEdgeSwipe(enabled: boolean) {
   if (Platform.OS !== "ios") return;
   try {
     native?.setEdgeSwipe?.(enabled);
+  } catch {}
+}
+// How the swipe's chevron moves (src/motion.ts): "normal" scales and slides,
+// "reduced" only fades, "off" neither. Older builds without it keep "normal".
+export function setEdgeSwipeMotion(motion: "normal" | "reduced" | "off") {
+  if (Platform.OS !== "ios") return;
+  try {
+    native?.setEdgeSwipeMotion?.(motion);
   } catch {}
 }
 export function addEdgeSwipeListener(listener: () => void) {

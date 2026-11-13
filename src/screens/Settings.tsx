@@ -1,6 +1,8 @@
 // The app's own settings: the profiles (switch, rename, add), notifications,
-// the app lock, what the widgets and the timer do, and leaving the active
-// profile's instance. Opened from the quick
+// the app lock, the active profile's offline copy on this device (#203: iOS
+// from the copy the app keeps, Android from what the page reported; the
+// way to Flowplan's Settings → Offline & devices), what the widgets and the
+// timer do, and leaving the active profile's instance. Opened from the quick
 // actions, the offline page or Flowplan's settings (window.FlowplanApp).
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
@@ -19,6 +21,10 @@ import { activityChoices, setActivityChoices } from "../native/activities";
 import { lastWidgetActionError } from "../native/suite";
 import type { ActionError } from "../widgets/actions";
 import { canAddTile, requestAddTile } from "../../modules/flowplan-android/src";
+import { copyLine, infoOfMarker, type CopyInfo } from "../offline-offer";
+import { offlineCopy } from "../offline/native";
+import { modalAnimation } from "../motion";
+import { useMotion } from "../native/motion";
 
 export function Settings({
   visible,
@@ -32,6 +38,9 @@ export function Settings({
   onForget,
   onPushChanged,
   onLockChanged,
+  offlineInfo,
+  onAskOffline,
+  onOpenOffline,
 }: {
   visible: boolean;
   profiles: ProfileState;
@@ -44,8 +53,14 @@ export function Settings({
   onForget: () => void;
   onPushChanged: () => void;
   onLockChanged: () => void;
+  // Android: what the page last reported of its copy (null: not known).
+  offlineInfo: CopyInfo | null;
+  // The page reports again (Android), and Flowplan's Settings → Offline & devices.
+  onAskOffline: () => void;
+  onOpenOffline: () => void;
 }) {
   const p = usePalette();
+  const motion = useMotion();
   const insets = useSafeAreaInsets();
   const current = activeProfile(profiles);
   const [push, setPush] = useState<PushState>("undetermined");
@@ -54,9 +69,18 @@ export function Settings({
   const [choices, setChoices] = useState(activityChoices);
   // What a widget's button last failed to do (status 0: not reached).
   const [widgetError, setWidgetError] = useState<ActionError | null>(null);
+  // iOS: the copy the app keeps for the active profile (src/offline/store.ts);
+  // undefined while it is read, null where the app keeps none.
+  const [iosCopy, setIosCopy] = useState<CopyInfo | null | undefined>(undefined);
 
+  const currentId = current?.id ?? "";
   const load = useCallback(async () => {
     setWidgetError(lastWidgetActionError());
+    if (Platform.OS === "ios") {
+      const copy = currentId ? offlineCopy(currentId) : null;
+      const state = copy ? await copy.state().catch(() => null) : null;
+      setIosCopy(state ? infoOfMarker(state.marker, state.bytes) : null);
+    } else onAskOffline();
     setPush(await pushPermission());
     setLock(store.appLock());
     try {
@@ -64,7 +88,8 @@ export function Settings({
     } catch {
       setLockAvailable(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
   useEffect(() => {
     if (visible) void load();
   }, [visible, load]);
@@ -96,7 +121,7 @@ export function Settings({
         : t("notificationsOff");
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType={modalAnimation(motion)} presentationStyle="pageSheet" onRequestClose={onClose}>
       {/* The sides clear of the camera and the side status bar (landscape,
           the closed iPhone Duo); the list runs under the home indicator. */}
       <SheetBody style={{ backgroundColor: p.background }} edges={["left", "right"]}>
@@ -120,6 +145,14 @@ export function Settings({
             {signedIn && pushAvailable && push !== "granted" ? (
               <Button title={push === "undetermined" ? t("allowNotifications") : t("systemSettings")} onPress={allowPush} style={{ marginTop: 12 }} />
             ) : null}
+          </View>
+
+          <Text style={heading}>{t("offlineCopyTitle")}</Text>
+          <View style={section}>
+            <Text style={[styles.text, { color: p.text }]}>
+              {Platform.OS === "ios" ? (iosCopy === undefined ? " " : copyLine(iosCopy, Date.now(), locale())) : copyLine(offlineInfo, Date.now(), locale())}
+            </Text>
+            {signedIn ? <Button title={t("offlineCopyOpen")} kind="secondary" onPress={onOpenOffline} style={{ marginTop: 12 }} /> : null}
           </View>
 
           <Text style={heading}>{t("appLock")}</Text>

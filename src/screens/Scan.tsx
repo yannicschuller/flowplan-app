@@ -15,11 +15,14 @@ import { locale, t } from "../i18n";
 import { haptic } from "../native/actions";
 import { connection } from "../native/suite";
 import { Button, SheetBody, styles, usePalette } from "../ui";
+import { modalAnimation } from "../motion";
+import { useMotion } from "../native/motion";
 
 type Choice = CaptureTarget & { inbox?: boolean };
 
 export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null; onClose: () => void; onOpen: (path: string) => void }) {
   const p = usePalette();
+  const motion = useMotion();
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [target, setTarget] = useState<Choice | null>(null);
   const [query, setQuery] = useState("");
@@ -111,7 +114,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
   const shown = useMemo(() => (choices ?? []).filter((choice) => matchesTarget(choice, query)).slice(0, 60), [choices, query]);
   const input = [styles.input, { color: p.text, borderColor: p.line, backgroundColor: p.card }];
   return (
-    <Modal visible={!!request && !direct} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={!!request && !direct} animationType={modalAnimation(motion)} presentationStyle="pageSheet" onRequestClose={onClose}>
       <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", alignItems: "center" }}>

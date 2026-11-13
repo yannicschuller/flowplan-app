@@ -38,6 +38,16 @@ export function profileKey(id: string, key: ProfileKey) {
   if (!ID.test(id)) throw new ProfileError("invalid");
   return `flowplan.profile.${id}.${key}`;
 }
+// What the app remembers of a profile across switches (PROFILE_KEYS go with
+// every switch), gone only with the profile: the person's "Animations" as
+// the page reported it (motion.ts), whether offline use was offered here
+// (offline-offer.ts) and, on Android, what the page last said about its copy.
+export const LASTING_KEYS = ["motion", "offlineOffer", "offlineInfo"] as const;
+export type LastingKey = (typeof LASTING_KEYS)[number];
+export function lastingKey(id: string, key: LastingKey) {
+  if (!ID.test(id)) throw new ProfileError("invalid");
+  return `flowplan.profile.${id}.${key}`;
+}
 export const PROFILES_KEY = "flowplan.profiles";
 // The keys of the single-address versions.
 export const LEGACY_KEYS = { server: "flowplan.server", deviceToken: "flowplan.deviceToken", summary: "flowplan.summary" } as const;

@@ -65,6 +65,9 @@ import { refreshScript, reachedScript, returnScript } from "../offline/loader";
 import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
 import { offlineCopy } from "../offline/native";
 import { setOfflineRefreshHook } from "../offline/refresh-hook";
+import { offlineEnableScript, offlineStatusScript } from "../offline-offer";
+import { animatesStatusBar } from "../motion";
+import { useMotion } from "../native/motion";
 import { answerBuild, copyOnReach, forgetCopyPage, pageBuild, parseStaleMessage, staleAction, type StaleMessage } from "../offline/stale";
 
 export type ShellHandle = {
@@ -84,6 +87,9 @@ export type ShellHandle = {
   // Runs the app's answers in the instance's page, in order (a voice note:
   // src/voice-bridge.ts).
   deliver: (scripts: string[]) => void;
+  // Offline use (src/offline-offer.ts): the live page switches it on, or
+  // reports where it stands; nothing on the stored copy or another page.
+  offline: (op: "enable" | "status") => void;
 };
 
 type Props = {
@@ -139,6 +145,7 @@ const FRESH_DOCUMENT = { "Cache-Control": "no-cache" };
 export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
+  const motion = useMotion();
   // WebView<object>: its typings make the props `never` without a type argument.
   const web = useRef<WebView<object>>(null);
   const [source, setSource] = useState<{ uri: string } | { html: string; baseUrl: string }>({ uri: server });
@@ -336,6 +343,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
       },
       deliver: (scripts) => {
         if (onServer()) for (const script of scripts) run(script);
+      },
+      offline: (op) => {
+        if (onServer() && !showingCopyRef.current) run(op === "enable" ? offlineEnableScript : offlineStatusScript);
       },
       signOut: () =>
         new Promise<void>((resolve) => {
@@ -748,7 +758,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         setSize((current) => (current.width === width && current.height === height ? current : { width, height }));
       }}
     >
-      <StatusBar style={statusStyle} animated />
+      <StatusBar style={statusStyle} animated={animatesStatusBar(motion)} />
       {Platform.OS === "android" ? <NavigationBar style={navigationStyle} /> : null}
       <View style={{ height: bars.cover ? 0 : insets.top, backgroundColor: bars.top }} />
       <View style={{ flex: 1, paddingLeft: bars.cover ? 0 : insets.left, paddingRight: bars.cover ? 0 : insets.right, backgroundColor: fallback, overflow: "hidden" }}>
@@ -906,7 +916,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         {bars.fadeBottom ? (
           <LinearGradient pointerEvents="none" colors={[transparent(bars.bottom), bars.bottom]} style={[shellStyles.fade, { bottom: 0 }]} />
         ) : null}
-        {connecting && !showingCopy ? <Connecting server={server} /> : null}
+        <Connecting server={server} visible={connecting && !showingCopy} />
       </View>
       <View style={{ height: bars.cover ? keyboard : Math.max(insets.bottom, keyboard), backgroundColor: keyboard ? fallback : bars.bottom }} />
     </View>

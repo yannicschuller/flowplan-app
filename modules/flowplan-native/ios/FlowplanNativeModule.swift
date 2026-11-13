@@ -168,6 +168,13 @@ public class FlowplanNativeModule: Module {
       }
     }
 
+    // The chevron follows the app's motion (src/motion.ts).
+    Function("setEdgeSwipeMotion") { (motion: String) in
+      Task { @MainActor in
+        EdgeSwipeObserver.motion = ["reduced", "off"].contains(motion) ? motion : "normal"
+      }
+    }
+
     OnDestroy {
       if let linkObserver = self.linkObserver {
         NotificationCenter.default.removeObserver(linkObserver)
@@ -310,6 +317,8 @@ final class EdgeSwipeObserver: NSObject, UIGestureRecognizerDelegate {
   private var armed = false
   private let threshold: CGFloat = 72
   private let size: CGFloat = 40
+  // "normal", "reduced" (fades only) or "off" (nothing animates).
+  static var motion = "normal"
 
   var enabled = false {
     didSet { recognizer?.isEnabled = enabled }
@@ -380,10 +389,12 @@ final class EdgeSwipeObserver: NSObject, UIGestureRecognizerDelegate {
       if past != armed {
         armed = past
         if past { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-        UIView.animate(withDuration: 0.12) {
-          self.indicator?.transform = past ? CGAffineTransform(scaleX: 1.12, y: 1.12) : .identity
+        let motion = EdgeSwipeObserver.motion
+        let change = {
+          if motion == "normal" { self.indicator?.transform = past ? CGAffineTransform(scaleX: 1.12, y: 1.12) : .identity }
           self.indicator?.alpha = past ? 1 : 0.85
         }
+        if motion == "off" { change() } else { UIView.animate(withDuration: 0.12, animations: change) }
       }
     case .ended:
       let flick = recognizer.velocity(in: window).x > 700 && distance > 24
@@ -425,9 +436,14 @@ final class EdgeSwipeObserver: NSObject, UIGestureRecognizerDelegate {
   private func hide() {
     guard let view = indicator else { return }
     indicator = nil
-    UIView.animate(withDuration: 0.18, animations: {
+    let motion = EdgeSwipeObserver.motion
+    if motion == "off" {
+      view.removeFromSuperview()
+      return
+    }
+    UIView.animate(withDuration: motion == "normal" ? 0.18 : 0.12, animations: {
       view.alpha = 0
-      view.center.x = -self.size / 2
+      if motion == "normal" { view.center.x = -self.size / 2 }
     }, completion: { _ in view.removeFromSuperview() })
   }
 }

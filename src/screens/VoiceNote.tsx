@@ -15,6 +15,8 @@ import { t } from "../i18n";
 import { tn } from "../i18n-notify";
 import { voiceScripts, voiceStamp, wordsToSegments, type VoiceRequest, type VoiceResult, type VoiceTranscript } from "../voice-bridge";
 import { Button, SheetBody, styles, usePalette } from "../ui";
+import { modalAnimation } from "../motion";
+import { useMotion } from "../native/motion";
 
 const MAX_MINUTES = 30;
 // Speech in mono AAC at 32 kbit/s: half an hour stays below 8 MB.
@@ -33,6 +35,7 @@ type Phase = "idle" | "recording" | "recorded" | "working";
 
 export function VoiceNote({ request, onResult }: { request: VoiceRequest | null; onResult: (id: string, scripts: string[]) => void }) {
   const p = usePalette();
+  const motion = useMotion();
   const recorder = useAudioRecorder(VOICE);
   const [phase, setPhase] = useState<Phase>("idle");
   const [since, setSince] = useState(0);
@@ -117,7 +120,7 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
 
   const recording = phase === "recording";
   return (
-    <Modal visible={!!request} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => void close()}>
+    <Modal visible={!!request} animationType={modalAnimation(motion)} presentationStyle="pageSheet" onRequestClose={() => void close()}>
       <SheetBody style={{ backgroundColor: p.background }}>
         <ScrollView contentContainerStyle={{ padding: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
