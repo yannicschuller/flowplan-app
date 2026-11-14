@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import config from "../app.config";
-import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type BackState } from "../src/back";
+import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, pageEdgeOf, parseBackProgress, parseEdgeSwipeMode, previewsBack, type BackState } from "../src/back";
 import { backProgressScript, backScript, bridgeScript, parsePageMessage } from "../src/bridge-script";
 
 const state = (extra: Partial<BackState> = {}): BackState => ({ offline: false, onServer: true, pageCanGoBack: null, historyCanGoBack: false, ...extra });
@@ -69,7 +69,7 @@ const bridgeHead = (platform: "ios" | "android") => {
   window.top = window;
   const head = script.slice(0, script.indexOf("// Vibrations")) + "})();";
   new Function("window", "location", "navigator", head)(window, { origin: "https://flowplan.example.com" }, {});
-  return { app: window.FlowplanApp as { edgeSwipe?: (mode: unknown) => void }, posted };
+  return { app: window.FlowplanApp as { edgeSwipe?: (mode: unknown, options?: unknown) => void }, posted };
 };
 
 test("the page says what the swipe from the left edge does (FlowplanApp.edgeSwipe), on iOS and Android", () => {
@@ -81,21 +81,21 @@ test("the page says what the swipe from the left edge does (FlowplanApp.edgeSwip
     // Anything else is "back": the app's swipe or the system's gesture as before.
     app.edgeSwipe?.("sideways");
     assert.deepEqual(posted, [
-      { type: "edgeSwipe", mode: "drawer" },
-      { type: "edgeSwipe", mode: "back" },
-      { type: "edgeSwipe", mode: "back" },
+      { type: "edgeSwipe", mode: "drawer", android: false },
+      { type: "edgeSwipe", mode: "back", android: false },
+      { type: "edgeSwipe", mode: "back", android: false },
     ], platform);
   }
 });
 
 test("Android: 'drawer' from the page keeps a strip of the left edge from the system's back gesture", () => {
   // The page's message, as the shell reads it, to what goes to the module.
-  const exclusionAfter = (mode: unknown, extra: { active?: boolean; offline?: boolean } = {}) => {
+  const exclusionAfter = (mode: unknown, extra: { active?: boolean; offline?: boolean } = {}, options: unknown = { android: true }) => {
     const { app, posted } = bridgeHead("android");
-    app.edgeSwipe?.(mode);
-    const message = posted[0] as { type: string; mode: unknown };
+    app.edgeSwipe?.(mode, options);
+    const message = posted[0] as { type: string; mode: unknown; android?: unknown };
     assert.equal(message.type, "edgeSwipe");
-    return edgeExclusion({ active: true, offline: false, ...extra, pageEdge: parseEdgeSwipeMode(message.mode) });
+    return edgeExclusion({ active: true, offline: false, ...extra, pageEdge: pageEdgeOf("android", message) });
   };
   assert.equal(exclusionAfter("drawer"), true);
   assert.equal(exclusionAfter("back"), false);
@@ -103,13 +103,19 @@ test("Android: 'drawer' from the page keeps a strip of the left edge from the sy
   // Not in a window behind, not on the offline page.
   assert.equal(exclusionAfter("drawer", { active: false }), false);
   assert.equal(exclusionAfter("drawer", { offline: true }), false);
+  // An instance up to 0.9.6 reports "drawer" without offering the choice on
+  // Android: the edge stays the system's back there.
+  assert.equal(exclusionAfter("drawer", {}, null), false);
+  assert.equal(exclusionAfter("drawer", {}, { android: "yes" }), false);
+  // iOS takes the report as before.
+  assert.equal(pageEdgeOf("ios", { mode: "drawer" }), "drawer");
   // Nothing reported (an instance from before the choice, a new document): the system's back.
   assert.equal(edgeExclusion({ active: true, offline: false, pageEdge: null }), false);
 
   // The shell hands it to the module, which sets the rects on the window and follows its layout.
   const shell = readFileSync(join(__dirname, "../src/screens/Shell.tsx"), "utf8");
   assert.match(shell, /setLeftEdgeExclusion\(edgeExclusion\(\{ active, offline: !!offline, pageEdge \}\)\);\s*\n\s*\}, \[active, offline, pageEdge\]\);/);
-  assert.match(shell, /message\.type === "edgeSwipe"\) setPageEdge\(parseEdgeSwipeMode\(message\.mode\)\)/);
+  assert.match(shell, /message\.type === "edgeSwipe"\) setPageEdge\(pageEdgeOf\(Platform\.OS, message\)\)/);
   assert.match(shell, /setLeftEdgeExclusion\(false\)/);
   const index = readFileSync(join(__dirname, "../modules/flowplan-android/src/index.ts"), "utf8");
   assert.match(index, /native\?\.setLeftEdgeExclusion\?\.\(enabled\)/);

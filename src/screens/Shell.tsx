@@ -33,7 +33,7 @@ import { addBackProgressListener, setLeftEdgeExclusion, setPredictiveBack } from
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
 import { deviceAiAvailability, deviceAiCancel, deviceAiGenerate, deviceAiLinked, deviceAiStream, DeviceAiError } from "../../modules/flowplan-ai/src";
-import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type EdgeSwipeMode } from "../back";
+import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, pageEdgeOf, parseBackProgress, previewsBack, type EdgeSwipeMode } from "../back";
 import {
   backProgressScript,
   backScript,
@@ -677,7 +677,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "backState") {
       pageCanGoBack.current = message.canGoBack;
       updateBackable();
-    } else if (message.type === "edgeSwipe") setPageEdge(parseEdgeSwipeMode(message.mode)); else if (message.type === "back") handleBackAnswer(message.handled);
+    } else if (message.type === "edgeSwipe") setPageEdge(pageEdgeOf(Platform.OS, message)); else if (message.type === "back") handleBackAnswer(message.handled);
     else if (message.type === "shortcuts") features.shortcuts(message.list);
     else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "ai") handleAi(message);

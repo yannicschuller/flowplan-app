@@ -71,6 +71,16 @@ export function parseEdgeSwipeMode(value: unknown): EdgeSwipeMode | null {
   return value === "drawer" || value === "back" ? value : null;
 }
 
+// What the page reported. On Android only a page that offers the choice
+// there too says so ({ android: true }, Flowplan newer than 0.9.6): an older
+// instance reports "drawer" by default, but its settings show the choice
+// only on iOS – excluding the edge there would leave no way back to the
+// system's back gesture. Such a report counts as nothing reported.
+export function pageEdgeOf(platform: string, message: { mode: unknown; android?: unknown }): EdgeSwipeMode | null {
+  if (platform === "android" && message.android !== true) return null;
+  return parseEdgeSwipeMode(message.mode);
+}
+
 // Whether the app's own swipe from the left edge (modules/flowplan-native)
 // is on: in the window in front, with a step back, online – and not when the
 // page wants the edge for its sidebar. Back stays in the page's arrows.

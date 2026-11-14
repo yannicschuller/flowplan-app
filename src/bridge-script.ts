@@ -61,7 +61,7 @@ export type PageMessage =
   // instance from before window.FlowplanNavigation).
   | { type: "backState"; canGoBack: boolean }
   // What the swipe from the left edge does (back.ts parseEdgeSwipeMode).
-  | { type: "edgeSwipe"; mode: unknown }
+  | { type: "edgeSwipe"; mode: unknown; android?: unknown }
   | { type: "back"; handled: boolean | null }
   // "Scan document" in the page: its page (and record), checked again by
   // the app (capture.ts pageScanRequest).
@@ -206,7 +206,7 @@ export function bridgeScript(options: {
     openSettings: () => post({ type: "openSettings" }),
     openProfiles: () => post({ type: "openProfiles", path: String(location.pathname || "") + String(location.search || "") + String(location.hash || "") }),
     backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
-    edgeSwipe: (mode) => post({ type: "edgeSwipe", mode: mode === "drawer" ? "drawer" : "back" }),${
+    edgeSwipe: (mode, options) => post({ type: "edgeSwipe", mode: mode === "drawer" ? "drawer" : "back", android: !!(options && options.android === true) }),${
       options.scanner
         ? `
     scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`
