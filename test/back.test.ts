@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import config from "../app.config";
-import { afterAnswer, backAction, parseBackProgress, previewsBack, type BackState } from "../src/back";
+import { afterAnswer, backAction, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type BackState } from "../src/back";
 import { backProgressScript, backScript, bridgeScript, parsePageMessage } from "../src/bridge-script";
 
 const state = (extra: Partial<BackState> = {}): BackState => ({ offline: false, onServer: true, pageCanGoBack: null, historyCanGoBack: false, ...extra });
@@ -59,6 +59,47 @@ test("the page reports whether back does something through FlowplanApp.backState
   (window.FlowplanApp as { backState: (value: unknown) => void }).backState(true);
   (window.FlowplanApp as { backState: (value: unknown) => void }).backState("yes");
   assert.deepEqual(posted, [{ type: "backState", canGoBack: true }, { type: "backState", canGoBack: false }]);
+});
+
+// #285: the page may want the swipe from the left edge for its sidebar.
+const bridgeHead = (platform: "ios" | "android") => {
+  const script = bridgeScript({ server: "https://flowplan.example.com", platform, version: "1.0.0" });
+  const posted: unknown[] = [];
+  const window: Record<string, unknown> = { ReactNativeWebView: { postMessage: (data: string) => posted.push(parsePageMessage(data)) } };
+  window.top = window;
+  const head = script.slice(0, script.indexOf("// Vibrations")) + "})();";
+  new Function("window", "location", "navigator", head)(window, { origin: "https://flowplan.example.com" }, {});
+  return { app: window.FlowplanApp as { edgeSwipe?: (mode: unknown) => void }, posted };
+};
+
+test("on iOS the page says what the swipe from the left edge does (FlowplanApp.edgeSwipe)", () => {
+  const { app, posted } = bridgeHead("ios");
+  app.edgeSwipe?.("drawer");
+  app.edgeSwipe?.("back");
+  // Anything else is "back": the app's swipe as before.
+  app.edgeSwipe?.("sideways");
+  assert.deepEqual(posted, [
+    { type: "edgeSwipe", mode: "drawer" },
+    { type: "edgeSwipe", mode: "back" },
+    { type: "edgeSwipe", mode: "back" },
+  ]);
+  // Android's back is the system's: the page is not offered the choice.
+  assert.equal(bridgeHead("android").app.edgeSwipe, undefined);
+});
+
+test("the app's back swipe is off while the page wants the edge for its sidebar", () => {
+  const on = { active: true, backable: true, offline: false };
+  assert.equal(edgeSwipeBack({ ...on, pageEdge: "drawer" }), false);
+  assert.equal(edgeSwipeBack({ ...on, pageEdge: "back" }), true);
+  // An instance from before the choice (or not reported yet): as before.
+  assert.equal(edgeSwipeBack({ ...on, pageEdge: null }), true);
+  assert.equal(edgeSwipeBack({ ...on, backable: false, pageEdge: "back" }), false);
+  assert.equal(edgeSwipeBack({ ...on, offline: true, pageEdge: null }), false);
+  assert.equal(edgeSwipeBack({ ...on, active: false, pageEdge: "back" }), false);
+  assert.equal(parseEdgeSwipeMode("drawer"), "drawer");
+  assert.equal(parseEdgeSwipeMode("back"), "back");
+  assert.equal(parseEdgeSwipeMode("left"), null);
+  assert.equal(parseEdgeSwipeMode(undefined), null);
 });
 
 test("the predictive back gesture's events are checked before they reach the page", () => {
