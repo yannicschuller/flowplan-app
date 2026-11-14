@@ -1,7 +1,8 @@
 // Android pieces of the Flowplan app (Kotlin in android/): "Share" from other
 // apps, the app shortcuts on the launcher icon, the Material You palette for
 // the widgets, the "Quick capture" Quick Settings tile and the progress of the
-// predictive back gesture. Everything is a no-op elsewhere.
+// predictive back gesture, and the strip of the left edge kept from the
+// system's back gesture. Everything is a no-op elsewhere.
 import { Platform } from "react-native";
 import { requireOptionalNativeModule, type EventSubscription } from "expo";
 
@@ -25,6 +26,7 @@ type NativeModule = {
   canAddTile(): boolean;
   requestAddTile(label: string): boolean;
   setPredictiveBack?(enabled: boolean): boolean;
+  setLeftEdgeExclusion?(enabled: boolean): boolean;
   addListener(event: "onShare", listener: () => void): EventSubscription;
   addListener(event: "onBackProgress", listener: (event: unknown) => void): EventSubscription;
 };
@@ -72,3 +74,10 @@ export const setPredictiveBack = (enabled: boolean) => quiet(() => native?.setPr
 export function addBackProgressListener(listener: (event: unknown) => void) {
   return native ? native.addListener("onBackProgress", listener) : { remove() {} };
 }
+
+// The swipe from the left edge for the page's sidebar (#285, src/back.ts
+// edgeExclusion): while on, a strip of the left edge (at most 200 dp high,
+// vertically centred – Android allows no more per edge) is kept from the
+// system's back gesture (Android 10+, gesture navigation), so the swipe
+// reaches the page. Kept up to date with the window's size and orientation.
+export const setLeftEdgeExclusion = (enabled: boolean) => quiet(() => native?.setLeftEdgeExclusion?.(enabled) ?? false, false);

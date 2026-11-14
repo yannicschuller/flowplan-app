@@ -56,12 +56,15 @@ export function previewsBack(state: BackState): boolean {
   return backAction(state) === "page";
 }
 
-// What the swipe from the left edge does on iOS, as the page reports it
+// What the swipe from the left edge does, as the page reports it
 // (FlowplanApp.edgeSwipe; "Wischen vom linken Rand" in Flowplan's settings,
 // lib/edge-swipe.ts there, #285): "drawer" – the page opens its sidebar
-// from the very edge, the app's back swipe stays off; "back" – the app's
-// back swipe as before. null: nothing reported (an instance from before the
-// choice, or a new document that has not reported yet) – as before.
+// from the very edge: on iOS the app's back swipe stays off, on Android a
+// strip of the left edge is kept from the system's back gesture
+// (edgeExclusion); "back" – the app's back swipe (iOS) or the system's back
+// gesture (Android) as before. null: nothing reported (an instance from
+// before the choice, or a new document that has not reported yet) – as
+// before.
 export type EdgeSwipeMode = "drawer" | "back";
 
 export function parseEdgeSwipeMode(value: unknown): EdgeSwipeMode | null {
@@ -73,4 +76,13 @@ export function parseEdgeSwipeMode(value: unknown): EdgeSwipeMode | null {
 // page wants the edge for its sidebar. Back stays in the page's arrows.
 export function edgeSwipeBack(state: { active: boolean; backable: boolean; offline: boolean; pageEdge: EdgeSwipeMode | null }): boolean {
   return state.active && state.backable && !state.offline && state.pageEdge !== "drawer";
+}
+
+// Android: whether a strip of the left edge is kept from the system's back
+// gesture so the swipe reaches the page and opens its sidebar
+// (modules/flowplan-android setLeftEdgeExclusion) – in the window in front,
+// online, and only when the page asked for the edge. The right edge, the
+// rest of the left one and the back button stay the system's back.
+export function edgeExclusion(state: { active: boolean; offline: boolean; pageEdge: EdgeSwipeMode | null }): boolean {
+  return state.active && !state.offline && state.pageEdge === "drawer";
 }

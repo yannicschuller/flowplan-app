@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import config from "../app.config";
-import { afterAnswer, backAction, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type BackState } from "../src/back";
+import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type BackState } from "../src/back";
 import { backProgressScript, backScript, bridgeScript, parsePageMessage } from "../src/bridge-script";
 
 const state = (extra: Partial<BackState> = {}): BackState => ({ offline: false, onServer: true, pageCanGoBack: null, historyCanGoBack: false, ...extra });
@@ -72,19 +72,54 @@ const bridgeHead = (platform: "ios" | "android") => {
   return { app: window.FlowplanApp as { edgeSwipe?: (mode: unknown) => void }, posted };
 };
 
-test("on iOS the page says what the swipe from the left edge does (FlowplanApp.edgeSwipe)", () => {
-  const { app, posted } = bridgeHead("ios");
-  app.edgeSwipe?.("drawer");
-  app.edgeSwipe?.("back");
-  // Anything else is "back": the app's swipe as before.
-  app.edgeSwipe?.("sideways");
-  assert.deepEqual(posted, [
-    { type: "edgeSwipe", mode: "drawer" },
-    { type: "edgeSwipe", mode: "back" },
-    { type: "edgeSwipe", mode: "back" },
-  ]);
-  // Android's back is the system's: the page is not offered the choice.
-  assert.equal(bridgeHead("android").app.edgeSwipe, undefined);
+test("the page says what the swipe from the left edge does (FlowplanApp.edgeSwipe), on iOS and Android", () => {
+  for (const platform of ["ios", "android"] as const) {
+    const { app, posted } = bridgeHead(platform);
+    assert.equal(typeof app.edgeSwipe, "function", platform);
+    app.edgeSwipe?.("drawer");
+    app.edgeSwipe?.("back");
+    // Anything else is "back": the app's swipe or the system's gesture as before.
+    app.edgeSwipe?.("sideways");
+    assert.deepEqual(posted, [
+      { type: "edgeSwipe", mode: "drawer" },
+      { type: "edgeSwipe", mode: "back" },
+      { type: "edgeSwipe", mode: "back" },
+    ], platform);
+  }
+});
+
+test("Android: 'drawer' from the page keeps a strip of the left edge from the system's back gesture", () => {
+  // The page's message, as the shell reads it, to what goes to the module.
+  const exclusionAfter = (mode: unknown, extra: { active?: boolean; offline?: boolean } = {}) => {
+    const { app, posted } = bridgeHead("android");
+    app.edgeSwipe?.(mode);
+    const message = posted[0] as { type: string; mode: unknown };
+    assert.equal(message.type, "edgeSwipe");
+    return edgeExclusion({ active: true, offline: false, ...extra, pageEdge: parseEdgeSwipeMode(message.mode) });
+  };
+  assert.equal(exclusionAfter("drawer"), true);
+  assert.equal(exclusionAfter("back"), false);
+  assert.equal(exclusionAfter("sideways"), false);
+  // Not in a window behind, not on the offline page.
+  assert.equal(exclusionAfter("drawer", { active: false }), false);
+  assert.equal(exclusionAfter("drawer", { offline: true }), false);
+  // Nothing reported (an instance from before the choice, a new document): the system's back.
+  assert.equal(edgeExclusion({ active: true, offline: false, pageEdge: null }), false);
+
+  // The shell hands it to the module, which sets the rects on the window and follows its layout.
+  const shell = readFileSync(join(__dirname, "../src/screens/Shell.tsx"), "utf8");
+  assert.match(shell, /setLeftEdgeExclusion\(edgeExclusion\(\{ active, offline: !!offline, pageEdge \}\)\);\s*\n\s*\}, \[active, offline, pageEdge\]\);/);
+  assert.match(shell, /message\.type === "edgeSwipe"\) setPageEdge\(parseEdgeSwipeMode\(message\.mode\)\)/);
+  assert.match(shell, /setLeftEdgeExclusion\(false\)/);
+  const index = readFileSync(join(__dirname, "../modules/flowplan-android/src/index.ts"), "utf8");
+  assert.match(index, /native\?\.setLeftEdgeExclusion\?\.\(enabled\)/);
+  const kotlin = readFileSync(join(__dirname, "../modules/flowplan-android/android/src/main/java/app/flowplan/androidshell/FlowplanAndroidModule.kt"), "utf8");
+  assert.match(kotlin, /Function\("setLeftEdgeExclusion"\) \{ enabled: Boolean ->/);
+  assert.match(kotlin, /systemGestureExclusionRects = listOf\(rect\)/);
+  assert.match(kotlin, /addOnLayoutChangeListener\(edgeLayout\)/);
+  // Android honours at most 200 dp per edge; only the left edge.
+  assert.match(kotlin, /private const val EDGE_HEIGHT_DP = 200\b/);
+  assert.match(kotlin, /Rect\(0, top, /);
 });
 
 test("the app's back swipe is off while the page wants the edge for its sidebar", () => {

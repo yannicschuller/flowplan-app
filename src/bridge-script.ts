@@ -19,9 +19,10 @@
 //   to or add another instance, or – for a profile never signed in – change
 //   its address; the sign-in pages' "Other server?", #69), with the page's
 //   path to come back to; it starts the sign-in with passkeys or SSO
-//   (signIn, #109), answering with the event "flowplan:sign-in"; on iOS it
-//   takes what the swipe from the left edge does (edgeSwipe, #285: the
-//   page's sidebar or the app's back swipe, src/back.ts); and it
+//   (signIn, #109), answering with the event "flowplan:sign-in"; it takes
+//   what the swipe from the left edge does (edgeSwipe, #285: the page's
+//   sidebar, or back – the app's back swipe on iOS, the system's gesture on
+//   Android; src/back.ts); and it
 //   carries this device's key for the instance (deviceKey, app-device.ts),
 //   which the password sign-in sends so it lasts as long as the app's;
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
@@ -59,7 +60,7 @@ export type PageMessage =
   // Flowplan), and what the page did when asked (null: no answer, an
   // instance from before window.FlowplanNavigation).
   | { type: "backState"; canGoBack: boolean }
-  // iOS: what the swipe from the left edge does (back.ts parseEdgeSwipeMode).
+  // What the swipe from the left edge does (back.ts parseEdgeSwipeMode).
   | { type: "edgeSwipe"; mode: unknown }
   | { type: "back"; handled: boolean | null }
   // "Scan document" in the page: its page (and record), checked again by
@@ -204,9 +205,8 @@ export function bridgeScript(options: {
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
     openProfiles: () => post({ type: "openProfiles", path: String(location.pathname || "") + String(location.search || "") + String(location.hash || "") }),
-    backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),${
-      options.platform === "ios" ? `\n    edgeSwipe: (mode) => post({ type: "edgeSwipe", mode: mode === "drawer" ? "drawer" : "back" }),` : ""
-    }${
+    backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
+    edgeSwipe: (mode) => post({ type: "edgeSwipe", mode: mode === "drawer" ? "drawer" : "back" }),${
       options.scanner
         ? `
     scanDocument: (target) => post({ type: "scanDocument", pageId: String((target && target.pageId) || ""), rowId: target && target.rowId ? String(target.rowId) : undefined }),`

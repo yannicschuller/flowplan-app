@@ -29,11 +29,11 @@ import { store } from "../store";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
-import { addBackProgressListener, setPredictiveBack } from "../../modules/flowplan-android/src";
+import { addBackProgressListener, setLeftEdgeExclusion, setPredictiveBack } from "../../modules/flowplan-android/src";
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
 import { deviceAiAvailability, deviceAiCancel, deviceAiGenerate, deviceAiLinked, deviceAiStream, DeviceAiError } from "../../modules/flowplan-ai/src";
-import { afterAnswer, backAction, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type EdgeSwipeMode } from "../back";
+import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type EdgeSwipeMode } from "../back";
 import {
   backProgressScript,
   backScript,
@@ -184,8 +184,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // What the page reported about "back" (back.ts); null until it does.
   const pageCanGoBack = useRef<boolean | null>(null);
   const [backable, setBackable] = useState(false);
-  // iOS: what the page wants the swipe from the left edge to do (back.ts);
-  // null until it says.
+  // What the page wants the swipe from the left edge to do (back.ts); null
+  // until it says.
   const [pageEdge, setPageEdge] = useState<EdgeSwipeMode | null>(null);
   const navigation = useRef(navigationState());
   // The foreign page the web view was sent back from (Android, see below).
@@ -554,6 +554,15 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   useEffect(() => {
     if (features.main) setEdgeSwipe(edgeSwipeBack({ active, backable, offline: !!offline, pageEdge }));
   }, [features.main, active, backable, offline, pageEdge]);
+
+  // Android: the system's back gesture leaves a strip of the left edge to
+  // the page while it opens its sidebar from there (#285, edgeExclusion in
+  // back.ts); otherwise the edge is the system's back as before.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    setLeftEdgeExclusion(edgeExclusion({ active, offline: !!offline, pageEdge }));
+  }, [active, offline, pageEdge]);
+  useEffect(() => (Platform.OS === "android" ? () => void setLeftEdgeExclusion(false) : undefined), []);
 
   // Android draws edge to edge: the page makes room for the keyboard itself.
   useEffect(() => {
