@@ -1,3 +1,7 @@
 Neu in dieser Version:
 • Wischen vom linken Rand öffnet auf iPhone und iPad die Seitenleiste über der aktuellen Seite, statt zurückzugehen – zurück geht es weiter mit den Pfeilen oben links. Wer lieber zurückwischt, stellt das unter Einstellungen → Darstellung & Sprache → „Wischen vom linken Rand“ um (benötigt Flowplan 0.9.7 auf dem Server)
+• Die App bietet einmal an, deine Seiten auf dem Gerät zu speichern – so kannst du sie auch ohne Verbindung lesen und bearbeiten. In den App-Einstellungen siehst du, ob es eine Offline-Kopie gibt und wie alt sie ist
+• Ist dein Server nicht erreichbar, zeigt die App sofort „Verbinde mit …“ statt einer leeren Seite und öffnet nach wenigen Sekunden deine Offline-Kopie. Ohne Kopie sagt sie dir, wo du die Offline-Nutzung einschaltest
+• Eigene Zertifikate: Instanzen mit selbst signiertem Zertifikat oder eigener Zertifizierungsstelle funktionieren, wenn dein Gerät dem Zertifikat vertraut – die App erklärt, wie du es einrichtest
+• Animationen der App folgen „Bewegung reduzieren“ und deiner Einstellung „Animationen“ in Flowplan
 • Kleinere Verbesserungen und Fehlerbehebungen

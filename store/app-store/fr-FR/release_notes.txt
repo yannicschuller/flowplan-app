@@ -1,3 +1,7 @@
-Nouveautés :
-• Sur iPhone et iPad, balayer depuis le bord gauche ouvre la barre latérale au-dessus de la page actuelle au lieu de revenir en arrière – les flèches en haut à gauche permettent toujours de revenir. Pour revenir en arrière par balayage, modifiez ce réglage dans Réglages → Apparence et langue → « Balayer depuis le bord gauche » (nécessite Flowplan 0.9.7 sur le serveur)
-• Améliorations mineures et corrections de bugs
+Nouveautés de cette version :
+• Sur iPhone et iPad, balayer depuis le bord gauche ouvre la barre latérale au-dessus de la page actuelle au lieu de revenir en arrière – les flèches en haut à gauche permettent toujours de revenir. Pour revenir en arrière par balayage, modifie ce réglage dans Réglages → Apparence et langue → « Balayer depuis le bord gauche » (nécessite Flowplan 0.9.7 sur le serveur)
+• L’app propose une fois d’enregistrer tes pages sur l’appareil, pour les lire et les modifier même sans connexion. Les réglages de l’app indiquent s’il existe une copie hors ligne et de quand elle date
+• Si ton serveur est injoignable, l’app affiche tout de suite « Connexion à … » au lieu d’une page vide et ouvre ta copie hors ligne au bout de quelques secondes. Sans copie, elle t’indique où activer l’utilisation hors ligne
+• Certificats personnels : les instances avec un certificat auto-signé ou une autorité de certification privée fonctionnent si ton appareil fait confiance au certificat – l’app explique comment le configurer
+• Les animations de l’app suivent l’option Réduire les animations et ton réglage « Animations » dans Flowplan
+• Petites améliorations et corrections
