@@ -103,7 +103,7 @@ test("Android: 'drawer' from the page keeps a strip of the left edge from the sy
   // Not in a window behind, not on the offline page.
   assert.equal(exclusionAfter("drawer", { active: false }), false);
   assert.equal(exclusionAfter("drawer", { offline: true }), false);
-  // An instance up to 0.9.6 reports "drawer" without offering the choice on
+  // An earlier :beta reports "drawer" without offering the choice on
   // Android: the edge stays the system's back there.
   assert.equal(exclusionAfter("drawer", {}, null), false);
   assert.equal(exclusionAfter("drawer", {}, { android: "yes" }), false);

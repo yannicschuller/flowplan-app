@@ -72,7 +72,7 @@ export function parseEdgeSwipeMode(value: unknown): EdgeSwipeMode | null {
 }
 
 // What the page reported. On Android only a page that offers the choice
-// there too says so ({ android: true }, Flowplan newer than 0.9.6): an older
+// there too says so ({ android: true }, Flowplan 0.9.7 and later): an earlier :beta
 // instance reports "drawer" by default, but its settings show the choice
 // only on iOS – excluding the edge there would leave no way back to the
 // system's back gesture. Such a report counts as nothing reported.
