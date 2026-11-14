@@ -55,3 +55,22 @@ export function parseBackProgress(event: unknown): BackProgress | null {
 export function previewsBack(state: BackState): boolean {
   return backAction(state) === "page";
 }
+
+// What the swipe from the left edge does on iOS, as the page reports it
+// (FlowplanApp.edgeSwipe; "Wischen vom linken Rand" in Flowplan's settings,
+// lib/edge-swipe.ts there, #285): "drawer" – the page opens its sidebar
+// from the very edge, the app's back swipe stays off; "back" – the app's
+// back swipe as before. null: nothing reported (an instance from before the
+// choice, or a new document that has not reported yet) – as before.
+export type EdgeSwipeMode = "drawer" | "back";
+
+export function parseEdgeSwipeMode(value: unknown): EdgeSwipeMode | null {
+  return value === "drawer" || value === "back" ? value : null;
+}
+
+// Whether the app's own swipe from the left edge (modules/flowplan-native)
+// is on: in the window in front, with a step back, online – and not when the
+// page wants the edge for its sidebar. Back stays in the page's arrows.
+export function edgeSwipeBack(state: { active: boolean; backable: boolean; offline: boolean; pageEdge: EdgeSwipeMode | null }): boolean {
+  return state.active && state.backable && !state.offline && state.pageEdge !== "drawer";
+}

@@ -33,7 +33,7 @@ import { addBackProgressListener, setPredictiveBack } from "../../modules/flowpl
 import { scannerAvailable } from "../../modules/flowplan-capture/src";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
 import { deviceAiAvailability, deviceAiCancel, deviceAiGenerate, deviceAiLinked, deviceAiStream, DeviceAiError } from "../../modules/flowplan-ai/src";
-import { afterAnswer, backAction, parseBackProgress, previewsBack } from "../back";
+import { afterAnswer, backAction, edgeSwipeBack, parseBackProgress, parseEdgeSwipeMode, previewsBack, type EdgeSwipeMode } from "../back";
 import {
   backProgressScript,
   backScript,
@@ -184,6 +184,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // What the page reported about "back" (back.ts); null until it does.
   const pageCanGoBack = useRef<boolean | null>(null);
   const [backable, setBackable] = useState(false);
+  // iOS: what the page wants the swipe from the left edge to do (back.ts);
+  // null until it says.
+  const [pageEdge, setPageEdge] = useState<EdgeSwipeMode | null>(null);
   const navigation = useRef(navigationState());
   // The foreign page the web view was sent back from (Android, see below).
   const bounced = useRef("");
@@ -538,7 +541,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
 
   // iOS: the swipe from the left edge (modules/flowplan-native) instead of
   // the web view's own, which walks its history – in the main window (it is
-  // on the window that has it, windows.ts).
+  // on the window that has it, windows.ts). Off while the page opens its
+  // sidebar from the edge instead (#285, edgeSwipeBack in back.ts).
   useEffect(() => {
     if (!features.main) return;
     const subscription = addEdgeSwipeListener(() => void goBackRef.current());
@@ -548,8 +552,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     };
   }, [features.main]);
   useEffect(() => {
-    if (features.main) setEdgeSwipe(active && backable && !offline);
-  }, [features.main, active, backable, offline]);
+    if (features.main) setEdgeSwipe(edgeSwipeBack({ active, backable, offline: !!offline, pageEdge }));
+  }, [features.main, active, backable, offline, pageEdge]);
 
   // Android draws edge to edge: the page makes room for the keyboard itself.
   useEffect(() => {
@@ -664,7 +668,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "backState") {
       pageCanGoBack.current = message.canGoBack;
       updateBackable();
-    } else if (message.type === "back") handleBackAnswer(message.handled);
+    } else if (message.type === "edgeSwipe") setPageEdge(parseEdgeSwipeMode(message.mode)); else if (message.type === "back") handleBackAnswer(message.handled);
     else if (message.type === "shortcuts") features.shortcuts(message.list);
     else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "ai") handleAi(message);
@@ -799,7 +803,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             const url = event.nativeEvent.url;
             // Another document (not just another #route): it reports anew
             // whether back does something; until then the history counts.
-            if (url.split("#")[0] !== pageUrl.current.split("#")[0]) pageCanGoBack.current = null;
+            if (url.split("#")[0] !== pageUrl.current.split("#")[0]) {
+              pageCanGoBack.current = null;
+              setPageEdge(null);
+            }
             // The hand-off loads although route() should have caught it
             // (#109): stopped, and the sign-in starts here.
             const missed = missedSignIn(url, server);
