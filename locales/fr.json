@@ -1,13 +1,13 @@
 {
   "ios": {
     "CFBundleDisplayName": "Flowplan",
-    "NSCameraUsageDescription": "Flowplan utilise l’appareil photo quand tu prends une photo pour une page ou un tableau blanc, ou que tu numérises un document.",
-    "NSMicrophoneUsageDescription": "Flowplan utilise le micro quand tu enregistres une note vocale ou une vidéo pour une page.",
-    "NSPhotoLibraryUsageDescription": "Flowplan ouvre tes photos quand tu choisis des images à ajouter à une page.",
-    "NSPhotoLibraryAddUsageDescription": "Flowplan enregistre des images dans tes photos quand tu le demandes.",
+    "NSCameraUsageDescription": "Flowplan utilise l’appareil photo quand vous prenez une photo pour une page ou un tableau blanc, ou que vous numérisez un document.",
+    "NSMicrophoneUsageDescription": "Flowplan utilise le micro quand vous enregistrez une note vocale ou une vidéo pour une page.",
+    "NSPhotoLibraryUsageDescription": "Flowplan ouvre vos photos quand vous choisissez des images à ajouter à une page.",
+    "NSPhotoLibraryAddUsageDescription": "Flowplan enregistre des images dans vos photos quand vous le demandez.",
     "NSFaceIDUsageDescription": "Flowplan utilise Face ID pour déverrouiller l’app quand le verrouillage est activé et pour confirmer les approbations de workflows.",
-    "NSSpeechRecognitionUsageDescription": "Flowplan convertit tes notes vocales en texte sur cet appareil.",
-    "NSLocalNetworkUsageDescription": "Flowplan se connecte à ton instance Flowplan lorsqu’elle tourne sur ton réseau local."
+    "NSSpeechRecognitionUsageDescription": "Flowplan convertit vos notes vocales en texte sur cet appareil.",
+    "NSLocalNetworkUsageDescription": "Flowplan se connecte à votre instance Flowplan lorsqu’elle tourne sur votre réseau local."
   },
   "android": {
     "share_label": "Enregistrer dans Flowplan",
