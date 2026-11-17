@@ -53,3 +53,10 @@ test("the native catalogues key their plain texts by the English text", () => {
     for (const [key, text] of Object.entries(en)) if (!/^(phrase|gallery)\./.test(key)) assert.equal(text, key, `${folder}: ${key}`);
   }
 });
+
+test("French says vous", () => {
+  // tu, te, t’, toi, ton, ta, tes as words (\b would see "tes" in "êtes").
+  const informal = /(?<!\p{L})(?:tu|te|toi|ton|ta|tes)(?!\p{L})|(?<!\p{L})t’/iu;
+  for (const folder of FOLDERS)
+    for (const [key, text] of Object.entries(read(folder, "fr"))) assert.doesNotMatch(text, informal, `${folder}: ${key}`);
+});

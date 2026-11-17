@@ -178,9 +178,9 @@ test("texts: the question and the settings in every language, with Flowplan's na
   assert.equal(strings.de.offerTitle, "Seiten auf diesem Gerät speichern?");
   assert.equal(strings.de.offerSave, "Speichern");
   assert.equal(strings.de.offerLater, "Nicht jetzt");
-  // Informal: "du" in German, "tu" in French.
+  // "du" in German, "vous" in French.
   assert.match(strings.de.offerText, /\bdu\b/);
   assert.doesNotMatch(strings.de.offerText, /\bSie\b/);
-  assert.match(strings.fr.offerText, /\bTu\b|\btu\b/);
-  assert.doesNotMatch(strings.fr.offerText, /\bvous\b/i);
+  assert.match(strings.fr.offerText, /\bVous\b|\bvous\b/);
+  assert.doesNotMatch(strings.fr.offerText, /\btu\b/i);
 });

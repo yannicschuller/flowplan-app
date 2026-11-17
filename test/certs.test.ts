@@ -223,10 +223,10 @@ test("the certificate texts exist in every language with the same placeholders",
   const texts = (lang: keyof typeof strings) => keys.map((key) => strings[lang][key]).join(" ");
   for (const lang of ["en", "fr", "zh"] as const)
     for (const key of keys) assert.deepEqual(placeholders(strings[lang][key]), placeholders(strings.de[key]), `${lang}.${key}`);
-  // German: informal "du"; French: "tu".
+  // German: informal "du"; French: "vous".
   assert.match(strings.de.certTrustHint, /Vertraue ihm/);
   assert.match(strings.de.certIosHint, /installiere/);
   assert.doesNotMatch(texts("de"), /\b(Sie|Ihnen|Ihr)\b/);
-  assert.doesNotMatch(texts("fr"), /\bvous\b/i);
+  assert.match(texts("fr"), /\bvous\b/i);
   assert.equal(strings.de.certTrust, "Diesem Zertifikat vertrauen");
 });

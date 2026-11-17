@@ -14,10 +14,10 @@
   "saving": "Enregistrement …",
   "saved": "Enregistré dans {target}",
   "failed": "Non enregistré : {error}",
-  "signIn": "Ouvre Flowplan et connecte-toi pour pouvoir partager ici.",
+  "signIn": "Ouvrez Flowplan et connectez-vous pour pouvoir partager ici.",
   "offline": "Flowplan est injoignable pour le moment.",
   "nothing": "Il n’y a rien à enregistrer ici.",
-  "noTargets": "Aucune destination : crée une page ou une base de données dans Flowplan.",
+  "noTargets": "Aucune destination : créez une page ou une base de données dans Flowplan.",
   "skipped": "Certains fichiers ont été ignorés : seulement des images et des PDF.",
   "tooMany": "Au maximum {count} fichiers à la fois.",
   "tooLarge": "{name} dépasse {mb} Mo."
