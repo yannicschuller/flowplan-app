@@ -479,8 +479,8 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
       title: L("Erwähnungen", "Mentions", "Mentions", "提及"),
       unread: { mentions: 2, assignments: 1 },
       items: [
-        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada t’a mentionné dans « Roadmap »", "Ada 在“Roadmap”中提及了你"), read: false, createdAt: now - 20 * 60_000, url: "/" },
-        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben t’a confié « Préparer la rétro »", "Ben 把“准备回顾会”分配给了你"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
+        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada vous a mentionné dans « Roadmap »", "Ada 在“Roadmap”中提及了你"), read: false, createdAt: now - 20 * 60_000, url: "/" },
+        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben vous a confié « Préparer la rétro »", "Ben 把“准备回顾会”分配给了你"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
       ],
     },
     forms: {

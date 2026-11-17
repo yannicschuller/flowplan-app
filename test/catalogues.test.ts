@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { SUITE_KINDS } from "../src/widgets/suite";
+import { sampleResult } from "../src/widgets/present";
 
 // The flat text catalogues, one JSON file per language: German is written
 // by hand, the other languages come in as pull requests from
@@ -59,6 +61,19 @@ test("French says vous", () => {
   const informal = /(?<!\p{L})(?:tu|te|toi|ton|ta|tes)(?!\p{L})|(?<!\p{L})t’/iu;
   for (const folder of FOLDERS)
     for (const [key, text] of Object.entries(read(folder, "fr"))) assert.doesNotMatch(text, informal, `${folder}: ${key}`);
+  // The native texts (iOS permissions, Android), the store listings with their
+  // changelogs and the made-up widget content of the pickers.
+  const strings = (value: unknown): string[] =>
+    typeof value === "string" ? [value] : value && typeof value === "object" ? Object.values(value).flatMap(strings) : [];
+  for (const text of strings(JSON.parse(readFileSync(join(root, "locales/fr.json"), "utf8")))) assert.doesNotMatch(text, informal, `locales/fr.json: ${text}`);
+  const listings = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? listings(join(dir, entry.name)) : entry.name.endsWith(".txt") ? [join(dir, entry.name)] : [],
+    );
+  for (const file of [...listings(join(root, "store/app-store/fr-FR")), ...listings(join(root, "store/google-play/fr-FR"))])
+    assert.doesNotMatch(readFileSync(file, "utf8"), informal, file);
+  for (const kind of SUITE_KINDS)
+    for (const text of strings(sampleResult(kind, "fr", "2026-10-22", Date.parse("2026-10-22T10:00:00Z")))) assert.doesNotMatch(text, informal, `sample ${kind}: ${text}`);
 });
 
 test("src/i18n.ts loads its catalogues without default imports (iOS widget layout bundle)", () => {
