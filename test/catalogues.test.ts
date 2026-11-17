@@ -60,3 +60,12 @@ test("French says vous", () => {
   for (const folder of FOLDERS)
     for (const [key, text] of Object.entries(read(folder, "fr"))) assert.doesNotMatch(text, informal, `${folder}: ${key}`);
 });
+
+test("src/i18n.ts loads its catalogues without default imports (iOS widget layout bundle)", () => {
+  // expo-widgets' layout registry resolves no packages, so Babel's
+  // interopRequireDefault (used for `import x from`) is empty there and the
+  // iOS build fails (release 1.0.15).
+  const source = readFileSync("src/i18n.ts", "utf8");
+  assert.doesNotMatch(source, /^import\s+(?!type\b)[\w$]+\s*(,|from)/m);
+  assert.doesNotMatch(source, /^import\s+\*\s+as/m);
+});

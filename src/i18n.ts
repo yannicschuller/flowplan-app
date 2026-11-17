@@ -6,10 +6,17 @@
 // and Google's names: 小组件, 实时活动, 灵动岛, 控制中心). Translations come in
 // as pull requests from translate.flowplan.org; test/catalogues.test.ts keeps
 // the four files in step.
-import de from "../locales/ui/de.json";
-import enText from "../locales/ui/en.json";
-import frText from "../locales/ui/fr.json";
-import zhText from "../locales/ui/zh.json";
+//
+// Loaded with require(), not `import x from`: Babel turns a default import
+// into a call of @babel/runtime's interopRequireDefault, and the bundle of
+// the iOS widget layouts (expo-widgets' layout registry) resolves no
+// packages – the helper is empty there, so the layouts threw "t is not a
+// function" and the iOS build failed (release 1.0.15).
+/* eslint-disable @typescript-eslint/no-require-imports */
+const de: typeof import("../locales/ui/de.json") = require("../locales/ui/de.json");
+const enText: typeof import("../locales/ui/en.json") = require("../locales/ui/en.json");
+const frText: typeof import("../locales/ui/fr.json") = require("../locales/ui/fr.json");
+const zhText: typeof import("../locales/ui/zh.json") = require("../locales/ui/zh.json");
 
 type Key = keyof typeof de;
 
