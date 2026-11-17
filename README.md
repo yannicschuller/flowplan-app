@@ -12,6 +12,9 @@
 
 <img src="store/preview/flowplan-en.gif" width="280" alt="Flowplan on an iPhone: home, widgets, projects board, a document, a whiteboard and profiles">
 
+[![Français](https://translate.flowplan.org/api/badge?repo=flowplan-app&lang=fr)](https://translate.flowplan.org/c/flowplan-app-ui/fr) [![简体中文](https://translate.flowplan.org/api/badge?repo=flowplan-app&lang=zh)](https://translate.flowplan.org/c/flowplan-app-ui/zh)  
+Help translate on [translate.flowplan.org](https://translate.flowplan.org).
+
 </div>
 
 The app shows a Flowplan instance in the system web view and adds what only a native app can do. All data stays on the server; Flowplan itself, and every new feature of it, arrives with the server and needs no app update. The app:
