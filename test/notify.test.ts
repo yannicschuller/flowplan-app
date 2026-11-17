@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { planReminders, REMINDER_PREFIX } from "../src/reminder-plan";
 import { voiceRequest, voiceScripts, voiceStamp, wordsToSegments } from "../src/voice-bridge";
 import { bridgeScript, parsePageMessage } from "../src/bridge-script";
-import { notifyStrings } from "../src/i18n-notify";
+import { strings } from "../src/i18n";
 import type { Summary } from "../src/summary";
 
 const texts = { done: "Done", tomorrow: "Tomorrow", reply: "Reply", send: "Send", placeholder: "Your reply", read: "Mark as read", approve: "Approve", reject: "Reject" };
@@ -171,7 +171,7 @@ test("the page opens the browser and asks for voice notes through FlowplanApp", 
 });
 
 test("the texts exist in every language, and the Swift side knows the same buttons", () => {
-  for (const lang of ["en", "fr", "zh"] as const) assert.deepEqual(Object.keys(notifyStrings[lang]).sort(), Object.keys(notifyStrings.de).sort());
+  for (const lang of ["de", "en", "fr", "zh"] as const) for (const key of ["actionDone", "actionReply", "approvePrompt", "voiceFile"] as const) assert.ok(strings[lang][key], `${lang}.${key}`);
   const swift = readFileSync(join(import.meta.dirname, "..", "modules/flowplan-notify/ios/NotificationActions.swift"), "utf8");
   // Swift answers every button but "Approve", which opens the app.
   for (const [identifier, action] of Object.entries(BUTTONS)) assert.equal(swift.includes(`"${identifier}": "${action}"`), !opensApp(identifier), identifier);

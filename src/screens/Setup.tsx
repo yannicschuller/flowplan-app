@@ -14,7 +14,6 @@ import { t } from "../i18n";
 import { findByServer, MAX_PROFILES, ownName, profileLabel, ProfileError, type Profile, type ProfileState } from "../profiles";
 import { DEFAULT_SERVER, fetchRequest as request, isPlainHttp, normalizeServer, ServerError, shortServer } from "../server";
 import { CertificateRefused, checkServerTrusting } from "../certs/review";
-import { tc } from "../i18n-certs";
 import { Button, Logo, Screen, styles, usePalette } from "../ui";
 import { ProfileList } from "./Profiles";
 
@@ -107,7 +106,7 @@ export function Setup({
       else onConnect(origin, name);
     } catch (e) {
       if (e instanceof ProfileError) setError(t("tooManyProfiles", { count: MAX_PROFILES }));
-      else if (e instanceof CertificateRefused) setError(tc("certRefused", { server: shortServer(origin) }));
+      else if (e instanceof CertificateRefused) setError(t("certRefused", { server: shortServer(origin) }));
       else {
         const code = e instanceof ServerError ? e.code : "unreachable";
         setError(t(code, { server: shortServer(origin || value), detail: e instanceof ServerError ? shortServer(e.detail) : "" }));

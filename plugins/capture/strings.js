@@ -1,48 +1,15 @@
 // The texts of the share extension (plugins/capture/*.swift) in German,
-// English, French and Simplified Chinese; plugins/with-capture.js writes
-// them into the extension as Swift (ShareStrings.swift). {name} marks a
-// value.
+// English, French and Simplified Chinese: plugins/capture/locales/<lang>.json
+// (German is the source; translations come in as pull requests from
+// translate.flowplan.org). plugins/with-capture.js writes them into the
+// extension as Swift (ShareStrings.swift). {name} marks a value.
 const LANGS = ["de", "en", "fr", "zh"];
+const catalogues = Object.fromEntries(LANGS.map((lang) => [lang, require(`./locales/${lang}.json`)]));
 
-const strings = {
-  heading: ["In Flowplan sichern", "Save to Flowplan", "Enregistrer dans Flowplan", "保存到 Flowplan"],
-  cancel: ["Abbrechen", "Cancel", "Annuler", "取消"],
-  save: ["Sichern", "Save", "Enregistrer", "保存"],
-  close: ["Schließen", "Close", "Fermer", "关闭"],
-  titleField: ["Titel (optional)", "Title (optional)", "Titre (facultatif)", "标题（可选）"],
-  textField: ["Text (optional)", "Text (optional)", "Texte (facultatif)", "正文（可选）"],
-  target: ["Sichern in", "Save to", "Enregistrer dans", "保存到"],
-  inbox: ["Eingang", "Inbox", "Boîte de réception", "收件箱"],
-  search: ["Seite oder Datenbank suchen", "Search for a page or database", "Rechercher une page ou une base de données", "搜索页面或数据库"],
-  database: ["Datenbank · neuer Eintrag", "Database · new record", "Base de données · nouvel enregistrement", "数据库 · 新记录"],
-  page: ["Seite · neue Unterseite", "Page · new sub page", "Page · nouvelle sous-page", "页面 · 新子页面"],
-  loading: ["Wird geladen …", "Loading …", "Chargement …", "正在加载…"],
-  saving: ["Wird gesichert …", "Saving …", "Enregistrement …", "正在保存…"],
-  saved: ["Gesichert in {target}", "Saved to {target}", "Enregistré dans {target}", "已保存到 {target}"],
-  failed: ["Nicht gesichert: {error}", "Not saved: {error}", "Non enregistré : {error}", "未保存：{error}"],
-  signIn: [
-    "Öffne Flowplan und melde dich an, dann kannst du hierher teilen.",
-    "Open Flowplan and sign in, then you can share here.",
-    "Ouvre Flowplan et connecte-toi pour pouvoir partager ici.",
-    "请打开 Flowplan 并登录，然后就可以分享到这里。",
-  ],
-  offline: ["Flowplan ist gerade nicht erreichbar.", "Flowplan cannot be reached right now.", "Flowplan est injoignable pour le moment.", "暂时无法访问 Flowplan。"],
-  nothing: ["Hier gibt es nichts zu sichern.", "There is nothing to save here.", "Il n’y a rien à enregistrer ici.", "这里没有可保存的内容。"],
-  noTargets: [
-    "Kein Ziel: Lege in Flowplan eine Seite oder Datenbank an.",
-    "Nowhere to save: create a page or database in Flowplan.",
-    "Aucune destination : crée une page ou une base de données dans Flowplan.",
-    "没有可保存的位置：请在 Flowplan 中创建一个页面或数据库。",
-  ],
-  skipped: [
-    "Einige Dateien wurden ausgelassen: nur Bilder und PDFs.",
-    "Some files were left out: only images and PDFs.",
-    "Certains fichiers ont été ignorés : seulement des images et des PDF.",
-    "部分文件被略过：仅支持图片和 PDF。",
-  ],
-  tooMany: ["Höchstens {count} Dateien auf einmal.", "At most {count} files at once.", "Au maximum {count} fichiers à la fois.", "一次最多 {count} 个文件。"],
-  tooLarge: ["{name} ist größer als {mb} MB.", "{name} is larger than {mb} MB.", "{name} dépasse {mb} Mo.", "{name} 超过 {mb} MB。"],
-};
+// key → [de, en, fr, zh]; a missing or empty translation reads as English.
+const strings = Object.fromEntries(
+  Object.keys(catalogues.de).map((key) => [key, LANGS.map((lang) => catalogues[lang][key] || catalogues.en[key] || catalogues.de[key])]),
+);
 
 const escape = (value) => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 

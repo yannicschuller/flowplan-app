@@ -4,7 +4,6 @@
 // trust the certificate on iOS. Pure: the texts for a certificate, a
 // platform and a language.
 import { t, type Locale } from "../i18n";
-import { tc } from "../i18n-certs";
 import { formatDay, formatFingerprint, iosProblems, namesCover, pinnableHost, type CertificatePin } from "./pins";
 import type { CertificateDetails } from "./x509";
 
@@ -18,7 +17,7 @@ export type CertificateDialog = {
 };
 
 export function detailsText(details: Pick<CertificateDetails, "subject" | "issuer" | "notBefore" | "notAfter" | "sha256">, lang?: Locale) {
-  return tc(
+  return t(
     "certDetails",
     {
       subject: details.subject || "–",
@@ -43,28 +42,28 @@ export function certificateDialog(input: {
   const { details, lang } = input;
   const host = pinnableHost(input.origin) ?? input.origin;
   const parts: string[] = [];
-  if (input.kind === "changed" && input.pin) parts.push(tc("certChanged", { host, old: formatFingerprint(input.pin.sha256) }, lang));
-  else parts.push(tc("certUntrusted", { host }, lang));
+  if (input.kind === "changed" && input.pin) parts.push(t("certChanged", { host, old: formatFingerprint(input.pin.sha256) }, lang));
+  else parts.push(t("certUntrusted", { host }, lang));
   parts.push(detailsText(details, lang));
   const warnings: string[] = [];
-  if (!namesCover(details, host)) warnings.push(tc("certNameMismatch", { host }, lang));
+  if (!namesCover(details, host)) warnings.push(t("certNameMismatch", { host }, lang));
   if ((Number.isFinite(details.notAfter) && details.notAfter < input.now) || (Number.isFinite(details.notBefore) && details.notBefore > input.now))
-    warnings.push(tc("certExpired", {}, lang));
+    warnings.push(t("certExpired", {}, lang));
   if (warnings.length) parts.push(warnings.join("\n"));
   if (input.platform === "ios") {
-    parts.push(tc("certIosHint", {}, lang));
+    parts.push(t("certIosHint", {}, lang));
     const problems = iosProblems(details, host, input.now).filter((problem) => problem !== "expired");
     const texts = problems.map((problem) =>
-      tc(({ noSubjectAltName: "certIosNoSubjectAltName", otherName: "certIosOtherName", tooLong: "certIosTooLong" } as const)[problem], { host }, lang),
+      t(({ noSubjectAltName: "certIosNoSubjectAltName", otherName: "certIosOtherName", tooLong: "certIosTooLong" } as const)[problem], { host }, lang),
     );
     if (texts.length) parts.push(texts.join("\n"));
-    return { title: tc(input.kind === "changed" ? "certChangedTitle" : "certUntrustedTitle", {}, lang), message: parts.join("\n\n"), trust: null, cancel: tc("certOk", {}, lang) };
+    return { title: t(input.kind === "changed" ? "certChangedTitle" : "certUntrustedTitle", {}, lang), message: parts.join("\n\n"), trust: null, cancel: t("certOk", {}, lang) };
   }
-  if (input.kind === "ask") parts.push(tc("certTrustHint", { host }, lang));
+  if (input.kind === "ask") parts.push(t("certTrustHint", { host }, lang));
   return {
-    title: tc(input.kind === "changed" ? "certChangedTitle" : "certUntrustedTitle", {}, lang),
+    title: t(input.kind === "changed" ? "certChangedTitle" : "certUntrustedTitle", {}, lang),
     message: parts.join("\n\n"),
-    trust: tc(input.kind === "changed" ? "certTrustNew" : "certTrust", {}, lang),
+    trust: t(input.kind === "changed" ? "certTrustNew" : "certTrust", {}, lang),
     // "Abbrechen" – the app's own word (src/i18n.ts).
     cancel: t("cancel", {}, lang),
   };

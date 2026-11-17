@@ -7,7 +7,8 @@
 // (POST /api/mobile/capture/save); the app need not be opened.
 //
 // - plugins/capture/*.swift → ios/FlowplanShare, with ShareStrings.swift
-//   (German, English, French) from plugins/capture/strings.js;
+//   (German, English, French, Simplified Chinese) from
+//   plugins/capture/locales/<lang>.json through plugins/capture/strings.js;
 // - Info.plist (activation rule: up to one link, text, ten images or PDFs),
 //   the entitlements (App Group) and the target, embedded in the app.
 //

@@ -3,9 +3,9 @@
 // as Live Activity) and the app settings with profiles. They are drawn as
 // HTML after the real layouts – the widgets after
 // plugins/widget-suite/ios/SuiteViews.swift with the gallery's sample data
-// (SuiteProvider.swift → FPSamples) and its texts (plugins/widget-suite/strings.js),
-// the settings after src/screens/Settings.tsx and Profiles.tsx with the
-// texts of src/i18n.ts. scripts/screenshots.mjs renders them like any other
+// (SuiteProvider.swift → FPSamples) and its texts (plugins/widget-suite/locales
+// through strings.js), the settings after src/screens/Settings.tsx and
+// Profiles.tsx with the texts of src/i18n.ts (locales/ui). scripts/screenshots.mjs renders them like any other
 // screen; each page fills the whole device screen, status bar included.
 import { createRequire } from "node:module";
 import { homeIndicator, statusBar } from "./frame.mjs";
@@ -17,7 +17,7 @@ const { strings } = require("../plugins/widget-suite/strings.js");
 // The widget texts: English is the key, the other languages the translation.
 const widgetText = (lang) => (english) => (lang === "en" ? english : strings[english]?.[lang] ?? english);
 
-// What the settings screen says (src/i18n.ts).
+// What the settings screen says (src/i18n.ts, locales/ui).
 const SETTINGS = {
   de: {
     settingsTitle: "App-Einstellungen",

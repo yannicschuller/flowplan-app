@@ -24,8 +24,7 @@ import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { getLocales } from "expo-localization";
 import { setActionSession, setActionTexts } from "../../modules/flowplan-notify/src";
-import { locale, pickLocale, setLocale } from "../i18n";
-import { tn } from "../i18n-notify";
+import { locale, pickLocale, setLocale, t } from "../i18n";
 import { approvalRequest, buttonRequest, categoryButtons, notificationData, opensApp, type ButtonRequest } from "../notification-buttons";
 import { approvalOutcome, approveBody } from "../approval-key";
 import { safePath } from "../navigation";
@@ -43,16 +42,16 @@ const answered = new Set<string>();
 // the system keeps them).
 export async function setUpNotificationButtons() {
   const texts = {
-    done: tn("actionDone"),
-    tomorrow: tn("actionTomorrow"),
-    reply: tn("actionReply"),
-    send: tn("actionReplySend"),
-    placeholder: tn("actionReplyPlaceholder"),
-    read: tn("actionRead"),
-    approve: tn("actionApprove"),
-    reject: tn("actionReject"),
+    done: t("actionDone"),
+    tomorrow: t("actionTomorrow"),
+    reply: t("actionReply"),
+    send: t("actionReplySend"),
+    placeholder: t("actionReplyPlaceholder"),
+    read: t("actionRead"),
+    approve: t("actionApprove"),
+    reject: t("actionReject"),
   };
-  setActionTexts({ failedTitle: tn("actionFailedTitle"), failedBody: tn("actionFailedBody") });
+  setActionTexts({ failedTitle: t("actionFailedTitle"), failedBody: t("actionFailedBody") });
   await Promise.allSettled(categoryButtons(texts).map((category) => Notifications.setNotificationCategoryAsync(category.identifier, category.actions)));
 }
 
@@ -113,7 +112,7 @@ export async function answerButton(response: Notifications.NotificationResponse)
   }
   const url = (response.notification.request.content.data as { url?: unknown } | undefined)?.url;
   await Notifications.scheduleNotificationAsync({
-    content: { title: tn("actionFailedTitle"), body: result.error || tn("actionFailedBody"), data: typeof url === "string" ? { url } : {} },
+    content: { title: t("actionFailedTitle"), body: result.error || t("actionFailedBody"), data: typeof url === "string" ? { url } : {} },
     trigger: Platform.OS === "android" ? { channelId: "inbox" } : null,
   }).catch(() => {});
 }
@@ -153,37 +152,37 @@ export async function answerApproval(response: Notifications.NotificationRespons
   const path = tap.url ? safePath(tap.url) : null;
   const fallback = (message = "") => {
     if (path) open(path);
-    if (message) void notice(tn("actionFailedTitle"), message);
+    if (message) void notice(t("actionFailedTitle"), message);
   };
   const profileId = store.profiles().active;
   // A notification of another instance than the active profile's: nothing to approve here.
-  if (!profileId || (tap.origin !== null && tap.origin !== store.server())) return fallback(tn("approveOtherInstance"));
+  if (!profileId || (tap.origin !== null && tap.origin !== store.server())) return fallback(t("approveOtherInstance"));
   if (!approvalVerifier(profileId)) {
     // Android makes the key now (asking for the fingerprint); it reaches the
     // instance with the next registration – this time the view decides.
-    await createApprovalKey(profileId, tn("approvePrompt"));
+    await createApprovalKey(profileId, t("approvePrompt"));
     return fallback();
   }
   let secret: string | null = null;
   try {
-    secret = await readApprovalSecret(profileId, tn("approvePrompt"));
+    secret = await readApprovalSecret(profileId, t("approvePrompt"));
   } catch {
     // Cancelled, or the biometrics did not match.
     return fallback();
   }
-  if (!secret) return fallback(tn("approveSetUpAgain"));
+  if (!secret) return fallback(t("approveSetUpAgain"));
   const result = await ask(approveBody(tap, secret));
   const outcome = approvalOutcome(result.status, result.body as { error?: unknown; decision?: unknown } | null);
   if (outcome.kind === "approved") {
     await Notifications.dismissNotificationAsync(identifier).catch(() => {});
     if (result.ok && result.unread !== null) await Notifications.setBadgeCountAsync(result.unread).catch(() => {});
-    await notice(tn("approvedTitle"), tn("approvedBody"));
+    await notice(t("approvedTitle"), t("approvedBody"));
     return;
   }
   // The instance knows no key of this installation (or no device): the
   // registration goes again, with the verifier.
   if (outcome.register) registerAgain();
-  fallback(outcome.message || tn("actionFailedBody"));
+  fallback(outcome.message || t("actionFailedBody"));
 }
 
 // The buttons while the app runs: Android's (the background task covers a

@@ -7,8 +7,9 @@
 // - plugins/intents/app/*.swift → the app;
 // - plugins/intents/ios/*.swift → expo-widgets' extension; its bundle gets
 //   FlowplanIntentControls after the suite's widgets;
-// - the Siri phrases (plugins/intents/strings.js) join the suite's
-//   AppShortcuts.strings in German, English and French.
+// - the Siri phrases (plugins/intents/locales, through strings.js) join the
+//   suite's AppShortcuts.strings in German, English, French and Simplified
+//   Chinese.
 //
 // Listed before with-widget-suite in app.config.ts: mods run last-added
 // first, so this runs after the suite has written index.swift and

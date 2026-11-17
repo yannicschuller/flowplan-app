@@ -4,7 +4,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 import { t } from "../i18n";
-import { tc } from "../i18n-certs";
 import { formatDay, formatFingerprint, pinFor, type CertificatePin as Pin } from "../certs/pins";
 import { removeCertificatePin } from "../certs/review";
 import { store } from "../store";
@@ -17,10 +16,10 @@ export function CertificatePin({ server }: { server: string | null | undefined }
   if (!pin) return null;
 
   const remove = () =>
-    Alert.alert(tc("certPinRemove"), tc("certPinRemoveConfirm", { host: pin.host }), [
+    Alert.alert(t("certPinRemove"), t("certPinRemoveConfirm", { host: pin.host }), [
       { text: t("cancel"), style: "cancel" },
       {
-        text: tc("certPinRemove"),
+        text: t("certPinRemove"),
         style: "destructive",
         onPress: () => {
           removeCertificatePin(pin.origin);
@@ -31,14 +30,14 @@ export function CertificatePin({ server }: { server: string | null | undefined }
 
   return (
     <>
-      <Text style={[pinStyles.heading, { color: p.muted }]}>{tc("certPinnedTitle")}</Text>
+      <Text style={[pinStyles.heading, { color: p.muted }]}>{t("certPinnedTitle")}</Text>
       <View style={[pinStyles.section, { backgroundColor: p.card, borderColor: p.line }]}>
-        <Text style={[styles.text, { color: p.text }]}>{tc("certPinnedText", { host: pin.host, to: formatDay(pin.notAfter) })}</Text>
+        <Text style={[styles.text, { color: p.text }]}>{t("certPinnedText", { host: pin.host, to: formatDay(pin.notAfter) })}</Text>
         <Text selectable style={[styles.small, pinStyles.fingerprint, { color: p.muted }]}>
           {`SHA-256\n${formatFingerprint(pin.sha256)}`}
         </Text>
         {pin.subject ? <Text style={[styles.small, { color: p.muted, marginTop: 6 }]}>{pin.subject}</Text> : null}
-        <Button title={tc("certPinRemove")} kind="danger" onPress={remove} style={{ marginTop: 12 }} />
+        <Button title={t("certPinRemove")} kind="danger" onPress={remove} style={{ marginTop: 12 }} />
       </View>
     </>
   );

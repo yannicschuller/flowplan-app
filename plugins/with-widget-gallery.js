@@ -1,6 +1,7 @@
 // Android: the widget gallery's labels and descriptions in English (the
 // default strings.xml); the other languages come with the locales
-// (app.config.ts → plugins/widget-suite/strings.js).
+// (app.config.ts → plugins/widget-suite/strings.js, which reads
+// plugins/widget-suite/locales).
 const { AndroidConfig, withStringsXml } = require("expo/config-plugins");
 const { galleryStrings } = require("./widget-suite/strings");
 

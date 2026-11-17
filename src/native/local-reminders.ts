@@ -4,7 +4,7 @@
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
-import { tn } from "../i18n-notify";
+import { t } from "../i18n";
 import { planReminders, REMINDER_PREFIX } from "../reminder-plan";
 import type { Summary } from "../summary";
 
@@ -37,14 +37,14 @@ export async function syncLocalReminders(summary: Summary | null) {
     if ((await Notifications.getPermissionsAsync()).status !== "granted") return;
     if (Platform.OS === "android")
       await Notifications.setNotificationChannelAsync(CHANNEL, {
-        name: tn("channelReminders"),
-        description: tn("channelRemindersText"),
+        name: t("channelReminders"),
+        description: t("channelRemindersText"),
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     for (const reminder of planReminders(summary, new Date()))
       await Notifications.scheduleNotificationAsync({
         identifier: reminder.id,
-        content: { title: tn("reminderDueToday"), body: reminder.page ? `${reminder.text} – ${reminder.page}` : reminder.text, data: { url: reminder.url } },
+        content: { title: t("reminderDueToday"), body: reminder.page ? `${reminder.text} – ${reminder.page}` : reminder.text, data: { url: reminder.url } },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.at, channelId: CHANNEL },
       });
   } catch {}

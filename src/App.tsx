@@ -52,7 +52,6 @@ import { widgetAction } from "./widgets/api";
 import { addFocusFilterListener } from "../modules/flowplan-intents/src";
 import { sendFocusRule, syncIntentProfiles, takeFocusStep } from "./native/intents";
 import { onNotificationButton, setUpNotificationButtons, syncButtonSession } from "./native/notification-actions";
-import { tn } from "./i18n-notify";
 import { forgetApprovalKey, onApprovalKeyChanged, prepareApprovalKey } from "./native/approvals";
 import { setLocalRemindersWanted } from "./native/local-reminders";
 import { originOf } from "./server";
@@ -353,7 +352,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     const { pending, ...push } = await pushFields(profile, { create: !!store.deviceToken() });
     // "Approve" on workflow approvals: the verifier of this profile's
     // confirmation key (native/approvals.ts), made here on iOS.
-    const approvalKey = await prepareApprovalKey(profile.id, tn("approvePrompt"));
+    const approvalKey = await prepareApprovalKey(profile.id, t("approvePrompt"));
     relayPending.current = pending;
     sentRelay.current = !!push.relayToken;
     // Live Activity tokens reach the instance on their own (live-push.ts):

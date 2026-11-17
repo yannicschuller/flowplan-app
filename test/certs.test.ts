@@ -29,7 +29,7 @@ import {
   type CertificatePin,
 } from "../src/certs/pins";
 import { certificateDialog } from "../src/certs/dialog";
-import { certStrings } from "../src/i18n-certs";
+import { strings } from "../src/i18n";
 
 const fixture = (name: string) => readFileSync(join(__dirname, "fixtures/certs", `${name}.pem`), "utf8");
 const derBase64 = (pem: string) => pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
@@ -218,15 +218,15 @@ test("the dialog names host, subject, issuer, validity and fingerprint; only And
 
 test("the certificate texts exist in every language with the same placeholders", () => {
   const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
-  for (const lang of ["en", "fr", "zh"] as const) {
-    assert.deepEqual(Object.keys(certStrings[lang]).sort(), Object.keys(certStrings.de).sort(), lang);
-    for (const [key, text] of Object.entries(certStrings.de))
-      assert.deepEqual(placeholders(certStrings[lang][key as keyof typeof certStrings.de]), placeholders(text), `${lang}.${key}`);
-  }
+  const keys = (Object.keys(strings.de) as (keyof typeof strings.de)[]).filter((key) => key.startsWith("cert"));
+  assert.equal(keys.length, 20);
+  const texts = (lang: keyof typeof strings) => keys.map((key) => strings[lang][key]).join(" ");
+  for (const lang of ["en", "fr", "zh"] as const)
+    for (const key of keys) assert.deepEqual(placeholders(strings[lang][key]), placeholders(strings.de[key]), `${lang}.${key}`);
   // German: informal "du"; French: "tu".
-  assert.match(certStrings.de.certTrustHint, /Vertraue ihm/);
-  assert.match(certStrings.de.certIosHint, /installiere/);
-  assert.doesNotMatch(Object.values(certStrings.de).join(" "), /\b(Sie|Ihnen|Ihr)\b/);
-  assert.doesNotMatch(Object.values(certStrings.fr).join(" "), /\bvous\b/i);
-  assert.equal(certStrings.de.certTrust, "Diesem Zertifikat vertrauen");
+  assert.match(strings.de.certTrustHint, /Vertraue ihm/);
+  assert.match(strings.de.certIosHint, /installiere/);
+  assert.doesNotMatch(texts("de"), /\b(Sie|Ihnen|Ihr)\b/);
+  assert.doesNotMatch(texts("fr"), /\bvous\b/i);
+  assert.equal(strings.de.certTrust, "Diesem Zertifikat vertrauen");
 });

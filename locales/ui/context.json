@@ -1,0 +1,8 @@
+{
+  "actionInbox": "Quick actions (long press on the icon)",
+  "channelInbox": "Notification channels (Android)",
+  "widgetTasks": "Widgets and Live Activity",
+  "widgetOverview": "The overview widget (FlowplanTasks): not \"Aufgaben\" – that is the suite's widget that checks off.",
+  "suiteCapture": "Configurable widgets, capture, Live Activities",
+  "voiceFile": "The file name stays ASCII, like the other languages' names."
+}

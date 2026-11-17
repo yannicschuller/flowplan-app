@@ -1,6 +1,7 @@
 // The texts of the Swift sources that iOS looks up in Localizable.strings
 // (and AppShortcuts.strings): what test/widget-suite-native.test.ts checks
-// against strings.js, so no text is missing in German, English or French.
+// against plugins/widget-suite/locales (through strings.js), so no text is
+// missing in German, English, French or Simplified Chinese.
 // A small reader of Swift string literals: interpolations become %@ (the
 // key a LocalizedStringResource with arguments gets).
 

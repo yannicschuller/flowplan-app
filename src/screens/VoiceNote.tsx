@@ -12,7 +12,6 @@ import { File } from "expo-file-system";
 import { getLocales } from "expo-localization";
 import { canTranscribeOnDevice, transcribeOnDevice } from "../../modules/flowplan-speech/src";
 import { t } from "../i18n";
-import { tn } from "../i18n-notify";
 import { voiceScripts, voiceStamp, wordsToSegments, type VoiceRequest, type VoiceResult, type VoiceTranscript } from "../voice-bridge";
 import { Button, SheetBody, styles, usePalette } from "../ui";
 import { modalAnimation } from "../motion";
@@ -75,7 +74,7 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
       await recorder.prepareToRecordAsync();
       recorder.record();
     } catch {
-      return setMessage(tn("voiceFailed"));
+      return setMessage(t("voiceFailed"));
     }
     setSince(Date.now());
     setPhase("recording");
@@ -97,14 +96,14 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
     setPhase("working");
     let transcript: VoiceTranscript | null = null;
     if (toText && onDevice) {
-      setMessage(tn("voiceTranscribing"));
+      setMessage(t("voiceTranscribing"));
       try {
         const result = await transcribeOnDevice(uri, speechLanguage());
         const segments = wordsToSegments(result.words);
         const end = segments.length ? segments[segments.length - 1].end : undefined;
         transcript = result.text.trim() ? { text: result.text, segments, ...(end !== undefined ? { duration: end } : {}) } : null;
       } catch (error) {
-        setMessage(String((error as Error)?.message || "").includes("denied") ? tn("voiceSpeechDenied") : tn("voiceSpeechFailed"));
+        setMessage(String((error as Error)?.message || "").includes("denied") ? t("voiceSpeechDenied") : t("voiceSpeechFailed"));
       }
     }
     try {
@@ -112,9 +111,9 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
       deleteFile(uri);
       // Without text from the phone the instance may still transcribe
       // (`text`); it only does so where the person wanted text.
-      send({ status: "done", name: tn("voiceFile", { stamp: voiceStamp(new Date()) }), mime: "audio/mp4", transcript, text: toText && canText, summarize: summarize && toText && canText }, base64);
+      send({ status: "done", name: t("voiceFile", { stamp: voiceStamp(new Date()) }), mime: "audio/mp4", transcript, text: toText && canText, summarize: summarize && toText && canText }, base64);
     } catch {
-      send({ status: "failed", error: tn("voiceFailed") });
+      send({ status: "failed", error: t("voiceFailed") });
     }
   };
 
@@ -125,7 +124,7 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
         <ScrollView contentContainerStyle={{ padding: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={[styles.title, { color: p.text, textAlign: "left", flex: 1, marginTop: 4 }]} accessibilityRole="header">
-              {tn("voiceTitle")}
+              {t("voiceTitle")}
             </Text>
             <Button title={t("cancel")} kind="secondary" disabled={phase === "working"} onPress={() => void close()} />
           </View>
@@ -133,9 +132,9 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
             <Text style={{ fontSize: 44, fontWeight: "700", color: recording ? "#e5484d" : p.muted, fontVariant: ["tabular-nums"] }} accessibilityLiveRegion="polite">
               {recording ? <Elapsed since={since} /> : "0:00"}
             </Text>
-            <Text style={[styles.small, { color: p.muted, marginTop: 6 }]}>{tn("voiceLimit", { minutes: MAX_MINUTES })}</Text>
+            <Text style={[styles.small, { color: p.muted, marginTop: 6 }]}>{t("voiceLimit", { minutes: MAX_MINUTES })}</Text>
             {phase === "idle" || recording ? (
-              <Button title={recording ? tn("voiceStop") : tn("voiceStart")} onPress={() => void (recording ? stop() : record())} style={{ marginTop: 24, minWidth: 220 }} />
+              <Button title={recording ? t("voiceStop") : t("voiceStart")} onPress={() => void (recording ? stop() : record())} style={{ marginTop: 24, minWidth: 220 }} />
             ) : null}
           </View>
           {phase === "recorded" || phase === "working" ? (
@@ -143,21 +142,21 @@ export function VoiceNote({ request, onResult }: { request: VoiceRequest | null;
               {canText ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.text, { color: p.text }]}>{tn("voiceText")}</Text>
-                    <Text style={[styles.small, { color: p.muted }]}>{onDevice ? tn("voiceOnDevice") : tn("voiceOnServer")}</Text>
+                    <Text style={[styles.text, { color: p.text }]}>{t("voiceText")}</Text>
+                    <Text style={[styles.small, { color: p.muted }]}>{onDevice ? t("voiceOnDevice") : t("voiceOnServer")}</Text>
                   </View>
-                  <Switch value={toText} onValueChange={setToText} disabled={phase === "working"} accessibilityLabel={tn("voiceText")} />
+                  <Switch value={toText} onValueChange={setToText} disabled={phase === "working"} accessibilityLabel={t("voiceText")} />
                 </View>
               ) : null}
               {canText && request?.summarize ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <Text style={[styles.text, { color: p.text, flex: 1 }]}>{tn("voiceSummarize")}</Text>
-                  <Switch value={summarize && toText} onValueChange={setSummarize} disabled={!toText || phase === "working"} accessibilityLabel={tn("voiceSummarize")} />
+                  <Text style={[styles.text, { color: p.text, flex: 1 }]}>{t("voiceSummarize")}</Text>
+                  <Switch value={summarize && toText} onValueChange={setSummarize} disabled={!toText || phase === "working"} accessibilityLabel={t("voiceSummarize")} />
                 </View>
               ) : null}
-              <Button title={tn("voiceInsert")} busy={phase === "working"} onPress={() => void insert()} />
+              <Button title={t("voiceInsert")} busy={phase === "working"} onPress={() => void insert()} />
               <Button
-                title={tn("voiceDiscard")}
+                title={t("voiceDiscard")}
                 kind="secondary"
                 disabled={phase === "working"}
                 onPress={() => {
