@@ -22,6 +22,8 @@
   "offlineHint": "你的设备是否已联网，并与该实例处于同一网络中，或已连接到访问它所需的 VPN？Flowplan 会在后台继续重试。",
   "offlineNoCopy": "此设备上没有离线副本。若要在没有连接时打开你的页面，请在联网时于 Flowplan 的 设置 → 离线与设备 中开启离线使用。",
   "offlineCopyFailed": "无法打开此设备上的离线副本。请在联网时打开一次 Flowplan 以更新它。",
+  "offlineErrorPage": "{server} 返回了错误页面，而不是 Flowplan（HTTP {status}）——通常来自其前面的反向代理。",
+  "offlineErrorPageHint": "请重试或切换账户。如果反复出现，可能是代理没有将此地址转发给 Flowplan。",
   "offerTitle": "在此设备上保存页面？",
   "offerText": "这样即使没有连接，你也能阅读和编辑它们。大约需要 20 MB，外加你的页面。你可以随时在 Flowplan 的 设置 → 离线与设备 中更改。",
   "offerSave": "保存",

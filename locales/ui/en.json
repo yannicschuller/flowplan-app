@@ -22,6 +22,8 @@
   "offlineHint": "Is your device online and on the same network as the instance – or connected to the VPN you use to reach it? Flowplan keeps trying in the background.",
   "offlineNoCopy": "There’s no offline copy on this device. To open your pages without a connection, turn on offline use in Flowplan under Settings → Offline & devices while you’re connected.",
   "offlineCopyFailed": "The offline copy on this device couldn’t be opened. Open Flowplan once with a connection to renew it.",
+  "offlineErrorPage": "{server} answered with an error page instead of Flowplan (HTTP {status}) – usually from the reverse proxy in front of it.",
+  "offlineErrorPageHint": "Try again, or switch profile. If it keeps happening, the proxy may not be passing this address on to Flowplan.",
   "offerTitle": "Save pages on this device?",
   "offerText": "Then you can read and edit them without a connection too. This takes about 20 MB, plus your pages. You can change it any time in Flowplan under Settings → Offline & devices.",
   "offerSave": "Save",

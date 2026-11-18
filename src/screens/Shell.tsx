@@ -51,7 +51,7 @@ import {
 import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
-import { decide, httpErrorNeedsCheck, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
+import { decide, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
 import { checkServer, fetchRequest, instanceAnswers, originOf } from "../server";
 import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, signInAnswerScript, SignInStarts, signInVia } from "../sign-in";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
@@ -59,6 +59,7 @@ import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
 import { switcherRequest } from "../profile-picker";
 import { Offline, type OfflineReason } from "./Offline";
+import { errorPageStep, httpErrorOnInstance, probePage, RELOAD_AGAIN_MS } from "../error-page";
 import { Connecting } from "./Connecting";
 import { connectStep, nextTick, PROBE_TIMEOUT_MS, retryDelay, startConnect, type ConnectEvent } from "../connecting";
 import { networkConnected, onNetworkChange } from "../network-changes";
@@ -167,6 +168,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // A new key loads the page again even when the address stays the same.
   const [attempt, setAttempt] = useState(0);
   const [offline, setOffline] = useState<OfflineReason | false>(false);
+  // The status of the proxy's error page the offline screen names (#373),
+  // and when the window last loaded again because of one.
+  const [errorStatus, setErrorStatus] = useState(0);
+  const reloadedForError = useRef(0);
   // "Connecting to …" over the window until a page is there (#203); a new
   // run starts with every fresh load (a new key, a crashed web view).
   const [connecting, setConnecting] = useState(true);
@@ -806,7 +811,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     setSource({ uri: server });
     setAttempt((value) => value + 1);
   }, [server]);
-  if (offline) return <Offline server={server} reason={offline} onRetry={retry} onProfiles={onProfiles} />;
+  if (offline) return <Offline server={server} reason={offline} status={errorStatus} onRetry={retry} onProfiles={onProfiles} />;
 
   return (
     <View
@@ -920,15 +925,32 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
           // down, a domain that serves something else now): when no Flowplan
           // answers there, the offline screen (or the stored copy) – it has
           // "Try again" and "Switch profile"; the error page has neither.
+          // The proxy's own page ("404 page not found" after signing out,
+          // #373) is told from Flowplan's by asking the address again
+          // (error-page.ts).
           onHttpError={(event) => {
             const { url, statusCode } = event.nativeEvent;
-            if (showingCopyRef.current || !httpErrorNeedsCheck(url, statusCode, server)) return;
-            void checkServer(server, fetchRequest).then(
-              () => {},
-              () => {
-                if (serverRef.current === server && !showingCopyRef.current && originOf(pageUrl.current || url) === server) void showCopy();
+            if (showingCopyRef.current || !httpErrorOnInstance(url, statusCode, server)) return;
+            void errorPageStep(
+              { url, status: statusCode },
+              {
+                probe: (address) => probePage(address),
+                health: () => checkServer(server, fetchRequest).then(() => true, () => false),
+                reloadedRecently: () => Date.now() - reloadedForError.current < RELOAD_AGAIN_MS,
               },
-            );
+            ).then((step) => {
+              if (serverRef.current !== server || showingCopyRef.current || originOf(pageUrl.current || url) !== server) return;
+              if (step === "reload") {
+                reloadedForError.current = Date.now();
+                setSource({ uri: url });
+                setAttempt((value) => value + 1);
+              } else if (step === "copy") void showCopy();
+              else if (step === "errorPage") {
+                settle();
+                setErrorStatus(statusCode);
+                setOffline("errorPage");
+              }
+            });
           }}
           // The page loads again from scratch: "Connecting" until it is there.
           onContentProcessDidTerminate={() => {

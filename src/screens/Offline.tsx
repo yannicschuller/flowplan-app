@@ -26,18 +26,22 @@ const flowplanAnswers = (server: string) =>
   ]);
 
 // Why there is no page to show: no offline copy on this device (offline use
-// is switched on in Flowplan, per device – #203), or a copy that could not
-// be opened.
-export type OfflineReason = "noCopy" | "copyFailed";
+// is switched on in Flowplan, per device – #203), a copy that could not be
+// opened, or an error page of the reverse proxy where Flowplan's page
+// should be although Flowplan answers there (#373, src/error-page.ts).
+export type OfflineReason = "noCopy" | "copyFailed" | "errorPage";
 
 export function Offline({
   server,
   reason,
+  status = 0,
   onRetry,
   onProfiles,
 }: {
   server: string;
   reason: OfflineReason;
+  // The error page's HTTP status ("errorPage").
+  status?: number;
   onRetry: () => void;
   onProfiles: () => void;
 }) {
@@ -46,6 +50,9 @@ export function Offline({
   const retryRef = useRef(onRetry);
   retryRef.current = onRetry;
   useEffect(() => {
+    // Flowplan answers its health check already: trying again by itself
+    // would only bring the same error page back.
+    if (reason === "errorPage") return;
     let stopped = false;
     let checking = false;
     let attempt = 0;
@@ -85,7 +92,7 @@ export function Offline({
       removeNetwork();
       foreground.remove();
     };
-  }, [server]);
+  }, [server, reason]);
   return (
     <View style={{ flex: 1, backgroundColor: p.background }}>
       <ScrollView contentContainerStyle={[styles.center, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28, paddingLeft: insets.left + 24, paddingRight: insets.right + 24 }]}>
@@ -93,11 +100,22 @@ export function Offline({
         <Text accessibilityRole="header" style={[styles.title, { color: p.text }]}>
           {t("offlineTitle")}
         </Text>
-        <Text style={[styles.text, styles.centered, { color: p.text, fontWeight: "600" }]} selectable>
-          {t("offlineServer", { server: shortServer(server) })}
-        </Text>
-        <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineHint")}</Text>
-        <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t(reason === "copyFailed" ? "offlineCopyFailed" : "offlineNoCopy")}</Text>
+        {reason === "errorPage" ? (
+          <>
+            <Text style={[styles.text, styles.centered, { color: p.text, fontWeight: "600" }]} selectable>
+              {t("offlineErrorPage", { server: shortServer(server), status: String(status || "") })}
+            </Text>
+            <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineErrorPageHint")}</Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.text, styles.centered, { color: p.text, fontWeight: "600" }]} selectable>
+              {t("offlineServer", { server: shortServer(server) })}
+            </Text>
+            <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineHint")}</Text>
+            <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t(reason === "copyFailed" ? "offlineCopyFailed" : "offlineNoCopy")}</Text>
+          </>
+        )}
         <Button title={t("retry")} onPress={onRetry} style={{ marginTop: 22 }} />
         <Button title={t("switchProfile")} kind="secondary" onPress={onProfiles} style={{ marginTop: 10 }} />
       </ScrollView>

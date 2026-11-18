@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bridgeScript, parsePageMessage } from "../src/bridge-script";
-import { decide, httpErrorNeedsCheck, navigationState } from "../src/navigation";
+import { decide, navigationState } from "../src/navigation";
 import { profilesRequest, unsignedProfile } from "../src/profile-picker";
 import { addProfile, ownName, parseSignedIn, ProfileError, replaceProfile, withSignedIn, type ProfileState } from "../src/profiles";
 import { t, setLocale } from "../src/i18n";
@@ -110,19 +110,6 @@ test("the profiles signed in once: a checked list of ids", () => {
   const many = Array.from({ length: 50 }, (_, i) => `p${i}`).reduce((list, id) => withSignedIn(list, id, true), [] as string[]);
   assert.equal(many.length, 40);
   assert.equal(many.at(-1), "p49");
-});
-
-test("an error page instead of the instance is checked; Flowplan's own errors are not", () => {
-  assert.equal(httpErrorNeedsCheck(`${server}/`, 502, server), true);
-  assert.equal(httpErrorNeedsCheck(`${server}/login`, 503, server), true);
-  assert.equal(httpErrorNeedsCheck(`${server}/`, 404, server), true);
-  // A missing page of a working instance is Flowplan's own page.
-  assert.equal(httpErrorNeedsCheck(`${server}/share/x`, 404, server), false);
-  assert.equal(httpErrorNeedsCheck(`${server}/`, 200, server), false);
-  // Another site (the identity provider) is not the instance.
-  assert.equal(httpErrorNeedsCheck("https://login.example/", 500, server), false);
-  assert.equal(httpErrorNeedsCheck(`${server}/`, Number.NaN, server), false);
-  assert.equal(httpErrorNeedsCheck(`${server}/`, 500, null), false);
 });
 
 test("the texts of the profile screen exist in German, English, French and Chinese", () => {
