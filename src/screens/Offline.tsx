@@ -7,10 +7,10 @@
 // soon as Flowplan answers there.
 import { useEffect, useRef } from "react";
 import { AppState, ScrollView, Text, View } from "react-native";
-import * as Network from "expo-network";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { retryDelay } from "../connecting";
 import { t } from "../i18n";
+import { networkConnected, onNetworkChange } from "../network-changes";
 import { checkServer, fetchRequest, shortServer } from "../server";
 import { Button, Logo, styles, usePalette } from "../ui";
 
@@ -65,8 +65,8 @@ export function Offline({
     };
     schedule();
     let wasOnline: boolean | null = null;
-    const subscription = Network.addNetworkStateListener((state) => {
-      const online = !!state.isConnected && state.isInternetReachable !== false;
+    const removeNetwork = onNetworkChange((state) => {
+      const online = networkConnected(state);
       // Another network (Wi-Fi ↔ cellular, a VPN): asked again at once.
       if (online && wasOnline !== null) {
         attempt = 0;
@@ -82,7 +82,7 @@ export function Offline({
     return () => {
       stopped = true;
       if (timer) clearTimeout(timer);
-      subscription.remove();
+      removeNetwork();
       foreground.remove();
     };
   }, [server]);

@@ -259,6 +259,15 @@ try {
   await context.unrouteAll({ behavior: "ignoreErrors" });
   await context.setOffline(false);
   await page.evaluate(reachedScript);
+  // The stored page itself sends the waiting rating once the app says the
+  // instance answers (#353), before it gives way to the live page.
+  const ratedOn = async () => Number((await get(`/api/pages/${deck.id}/study?limit=0&zone=Europe%2FBerlin`)).done?.all) >= 2;
+  let ratedCopy = false;
+  for (let i = 0; i < 40 && !ratedCopy; i++) {
+    ratedCopy = await ratedOn();
+    if (!ratedCopy) await page.waitForTimeout(500);
+  }
+  check("Offline-Wertung von der gespeicherten Seite übertragen", ratedCopy);
   await page.locator("body").click({ position: { x: 5, y: 5 } }).catch(() => {});
   await page.evaluate("document.activeElement && document.activeElement.blur && document.activeElement.blur()");
   await page.evaluate(returnScript);
@@ -273,12 +282,12 @@ try {
   }
   check("Offline getippter Text abgeglichen", synced);
   // The live page, loaded anew as the app does after giving up the copy
-  // (the hash change above stays in the stored document): the waiting
-  // rating goes out as the page starts.
+  // (the hash change above stays in the stored document): the rating is
+  // there (a rating the stored page could not send goes out as it starts).
   await page.goto(`${origin}/?live=1#page=${deck.id}`);
   let rated = false;
   for (let i = 0; i < 60 && !rated; i++) {
-    rated = Number((await get(`/api/pages/${deck.id}/study?limit=0&zone=Europe%2FBerlin`)).done?.all) >= 2;
+    rated = await ratedOn();
     if (!rated) await page.waitForTimeout(500);
   }
   check("Offline-Wertung übertragen (study.reviews)", rated);

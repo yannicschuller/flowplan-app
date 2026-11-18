@@ -60,7 +60,8 @@ import { useWindowFeatures } from "../window-features";
 import { switcherRequest } from "../profile-picker";
 import { Offline, type OfflineReason } from "./Offline";
 import { Connecting } from "./Connecting";
-import { connectStep, nextTick, PROBE_TIMEOUT_MS, startConnect, type ConnectEvent } from "../connecting";
+import { connectStep, nextTick, PROBE_TIMEOUT_MS, retryDelay, startConnect, type ConnectEvent } from "../connecting";
+import { networkConnected, onNetworkChange } from "../network-changes";
 import { certificateLoadError } from "../certs/shell";
 import { copyDocument } from "../offline/copy";
 import { refreshScript, reachedScript, returnScript } from "../offline/loader";
@@ -123,8 +124,6 @@ function luminance(color: string) {
 }
 const transparent = (color: string) => color.replace(/^rgba?\(([^,]+),([^,]+),([^,)]+).*$/, "rgba($1,$2,$3,0)");
 
-// Whether the network lets the instance be tried at all.
-const connected = (state: Network.NetworkState) => !!state.isConnected && state.isInternetReachable !== false;
 
 // Whether the instance answers (its health check, without cookies), and
 // the build it runs (null on older instances).
@@ -396,7 +395,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     let stale = false;
     void Network.getNetworkStateAsync()
       .then((state) => {
-        if (!stale && !connected(state)) void showCopy();
+        if (!stale && !networkConnected(state)) void showCopy();
       })
       .catch(() => {});
     return () => {
@@ -449,34 +448,64 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   // live page follows (returnScript waits until nobody types). A copy of
   // another build than the instance runs gives way at once: what was changed
   // offline is kept by the page (IndexedDB, the queue of record changes) and
-  // sent by the live one. Checked once right away as well – the network's
-  // state at the start may have been wrong.
+  // sent by the live one. Checked right away, at every change of the
+  // network, in the foreground and – until the instance answers – again and
+  // again like the offline screen (#353: the first request after the network
+  // comes back often fails, and without another network event the stored
+  // page never heard that it was online, so its waiting flashcard ratings
+  // stayed until the live page came).
   useEffect(() => {
     if (!showingCopy) return;
     let checking = false;
+    let again = false;
     let stopped = false;
-    const check = async () => {
-      if (checking) return;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void check(), retryDelay(attempt++));
+    };
+    const check = async (): Promise<void> => {
+      if (stopped) return;
+      // Asked while a check runs: once more after it (a network event is
+      // not lost).
+      if (checking) return void (again = true);
       checking = true;
+      if (timer) clearTimeout(timer);
+      let answer: Awaited<ReturnType<typeof reachable>> = { ok: false, build: null };
       try {
-        const answer = await reachable(server);
-        if (answer.ok && !stopped) {
-          run(reachedScript);
-          if (copyOnReach(copyBuild.current, answer.build) === "now") goLive();
-          else run(returnScript);
-        }
+        answer = await reachable(server);
       } finally {
         checking = false;
       }
+      if (stopped) return;
+      if (answer.ok) {
+        run(reachedScript);
+        if (copyOnReach(copyBuild.current, answer.build) === "now") goLive();
+        else run(returnScript);
+        return;
+      }
+      if (again) {
+        again = false;
+        return check();
+      }
+      schedule();
     };
     void check();
-    const subscription = Network.addNetworkStateListener((state) => {
-      if (connected(state)) void check();
+    const removeNetwork = onNetworkChange((state) => {
+      if (!networkConnected(state)) return;
+      attempt = 0;
+      void check();
     });
-    const foreground = AppState.addEventListener("change", (state) => state === "active" && void check());
+    const foreground = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      attempt = 0;
+      void check();
+    });
     return () => {
       stopped = true;
-      subscription.remove();
+      if (timer) clearTimeout(timer);
+      removeNetwork();
       foreground.remove();
     };
   }, [showingCopy, server, run, goLive]);
