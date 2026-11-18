@@ -1,4 +1,6 @@
 What's new:
-• French: the app, widgets, Siri, the share extension and the system prompts now consistently use the formal "vous", like Flowplan in the browser and on desktop
-• Translations can now come from the community: anyone can improve the app's texts at translate.flowplan.org
+• Switch instance: from Flowplan's workspace menu, the "Switch profile" quick action or ⇧⌘P on iPad, a list of your profiles opens – one tap switches
+• Flashcards: a "Cards due" widget, a "Study" quick action, the "Study due cards" shortcut and a daily study reminder, also without push
+• Study flashcards without a connection; ratings are sent later
+• Flashcards and the workspace menu entry need Flowplan 0.9.9 or later
 • Minor improvements and bug fixes

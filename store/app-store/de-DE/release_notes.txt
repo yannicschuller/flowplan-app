@@ -1,4 +1,6 @@
 Neu in dieser Version:
-• Französisch: Die App, die Widgets, Siri, die Share-Erweiterung und die Systemabfragen sprechen dich jetzt durchgehend mit „vous“ an, wie Flowplan im Browser und auf dem Desktop
-• Übersetzungen kommen ab jetzt auch aus der Community: Auf translate.flowplan.org kann jede und jeder die Texte der App verbessern
+• Instanz wechseln: Im Arbeitsbereich-Menü von Flowplan, mit der Schnellaktion „Profil wechseln“ oder auf dem iPad mit ⇧⌘P öffnet sich die Liste deiner Profile – ein Tippen wechselt
+• Lernkarten: Widget „Karten fällig“, Schnellaktion „Lernen“, Kurzbefehl „Fällige Karten lernen“ und eine tägliche Lernerinnerung, auch ohne Push
+• Lernkarten lassen sich ohne Verbindung lernen, die Wertungen werden später gesendet
+• Lernkarten und der Eintrag im Arbeitsbereich-Menü brauchen Flowplan 0.9.9 oder neuer
 • Kleinere Verbesserungen und Fehlerbehebungen

@@ -1,4 +1,6 @@
 Nouveautés :
-• Français : l’app, les widgets, Siri, l’extension de partage et les demandes d’autorisation utilisent désormais partout le vouvoiement, comme Flowplan dans le navigateur et sur ordinateur
-• Les traductions peuvent désormais venir de la communauté : chacun peut améliorer les textes de l’app sur translate.flowplan.org
+• Changer d’instance : depuis le menu de l’espace de travail de Flowplan, l’action rapide « Changer de profil » ou ⇧⌘P sur iPad, la liste de vos profils s’ouvre – un toucher suffit pour changer
+• Cartes mémoire : widget « Cartes à réviser », action rapide « Étudier », raccourci « Réviser les cartes du jour » et un rappel quotidien, même sans notifications push
+• Révisez vos cartes sans connexion ; les évaluations sont envoyées plus tard
+• Les cartes mémoire et l’entrée du menu de l’espace de travail nécessitent Flowplan 0.9.9 ou version ultérieure
 • Améliorations mineures et corrections de bugs
