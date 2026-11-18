@@ -55,6 +55,8 @@
   "signInNoBrowser": "Impossible d’ouvrir le navigateur pour la connexion. Vérifiez qu’un navigateur est installé et activé, puis réessayez.",
   "signInFailed": "Échec de la connexion",
   "signInAgain": "Veuillez vous reconnecter.",
+  "passkeyImpossible": "Clé d’accès impossible",
+  "passkeyNoSheet": "Impossible d’ouvrir la fenêtre de connexion pour la clé d’accès. Vérifiez qu’un navigateur est installé et activé, puis réessayez.",
   "settingsTitle": "Réglages de l’app",
   "done": "OK",
   "notifications": "Notifications",

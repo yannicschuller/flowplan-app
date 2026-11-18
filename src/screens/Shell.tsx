@@ -54,6 +54,7 @@ import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
 import { checkServer, fetchRequest, instanceAnswers, originOf } from "../server";
 import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, signInAnswerScript, SignInStarts, signInVia } from "../sign-in";
+import { openPasskeySheet, passkeyAnswerScript, passkeySheetUrl, passkeyState, PendingPasskey, type PasskeyStatus } from "../passkey";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
@@ -80,6 +81,8 @@ export type ShellHandle = {
   reload: () => void;
   // Handles flowplan://sign-in links that arrive from outside.
   signInLink: (link: string) => void;
+  // Handles flowplan://passkey, the callback of "Passkey hinzufügen" (passkey.ts).
+  passkeyLink: (link: string) => void;
   // Registers this installation for the page's session (device token, push).
   register: (body: Record<string, unknown>) => void;
   unregister: (installationId: string) => void;
@@ -200,6 +203,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const bounced = useRef("");
   const pending = useRef(new PendingSignIns());
   const signInStarts = useRef(new SignInStarts());
+  const pendingPasskey = useRef(new PendingPasskey());
+  // Android: the Custom Tab covered the app since the sheet opened.
+  const passkeyAway = useRef(false);
   // The page that linked a hand-off the app stopped only at its load.
   const beforeHandOff = useRef("");
   const redeemWhenLoaded = useRef<string | null>(null);
@@ -308,6 +314,84 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     [server, redeem],
   );
 
+  // "Passkey hinzufügen" (passkey.ts): the system's sign-in sheet makes the
+  // passkey; the page hears how it went and reloads its list.
+  const passkeyAnswer = useCallback(
+    (status: PasskeyStatus) => {
+      if (onServer()) run(passkeyAnswerScript(status));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [run],
+  );
+  const passkeyLink = useCallback(
+    (link: string) => {
+      const status = pendingPasskey.current.accept(link);
+      if (!status) return;
+      passkeyAway.current = false;
+      passkeyAnswer(status);
+    },
+    [passkeyAnswer],
+  );
+  const addPasskey = useCallback(
+    async (link: unknown) => {
+      // An earlier sheet nobody came back from (Android) gives way.
+      if (pendingPasskey.current.end()) passkeyAnswer("cancelled");
+      const state = passkeyState(Crypto.getRandomBytes(24));
+      const url = passkeySheetUrl(link, server, state);
+      if (!url) {
+        console.warn("addPasskey: not a passkey link of this instance");
+        return passkeyAnswer("failed");
+      }
+      pendingPasskey.current.start(state);
+      passkeyAway.current = false;
+      const outcome = await openPasskeySheet(url, {
+        platform: Platform.OS,
+        // Not ephemeral: the passkey is stored in the iCloud Keychain.
+        authSession: (address, redirect) => WebBrowser.openAuthSessionAsync(address, redirect, { preferEphemeralSession: false }),
+        // Without waiting for the tab to close: the callback comes as an app link.
+        customTab: (address) => WebBrowser.openBrowserAsync(address, { showTitle: true, createTask: false }).then(() => undefined),
+        browser: (address) => Linking.openURL(address),
+      }).catch((e: unknown) => ({ opened: false as const, error: e instanceof Error ? e.message : String(e) }));
+      if (!outcome.opened) {
+        console.warn("addPasskey: the sheet did not open:", outcome.error);
+        pendingPasskey.current.clear();
+        passkeyAnswer("failed");
+        Alert.alert(t("passkeyImpossible"), t("passkeyNoSheet"));
+        return;
+      }
+      if (outcome.link) passkeyLink(outcome.link);
+      // iOS: closed without the callback.
+      if (outcome.closed && pendingPasskey.current.end()) passkeyAnswer("cancelled");
+    },
+    [server, passkeyAnswer, passkeyLink],
+  );
+  // Android: back in the app without the callback (the tab was closed) –
+  // the callback, if any, arrives within moments of coming back.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (!pendingPasskey.current.waiting()) return;
+      if (state !== "active") {
+        passkeyAway.current = true;
+        return;
+      }
+      if (!passkeyAway.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (passkeyAway.current && pendingPasskey.current.end()) {
+          passkeyAway.current = false;
+          passkeyAnswer("cancelled");
+        }
+      }, 2500);
+    });
+    return () => {
+      subscription.remove();
+      if (timer) clearTimeout(timer);
+    };
+  }, [passkeyAnswer]);
+
   // Passkeys and SSO: the system's sign-in sheet (ASWebAuthenticationSession,
   // Custom Tab), which hands flowplan://sign-in back. Every failure is shown
   // and told to the page, which reports it to the instance's log (#109).
@@ -353,6 +437,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         }
       },
       signInLink,
+      passkeyLink,
       register: (body) => {
         if (onServer()) run(registerScript(body));
       },
@@ -381,7 +466,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navigate, signInLink, server, run, goLive],
+    [navigate, signInLink, passkeyLink, server, run, goLive],
   );
 
   // A new instance (another profile): start there, forget pending sign-ins,
@@ -391,6 +476,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     pending.current.clear();
     navigation.current = navigationState();
     redeemWhenLoaded.current = null;
+    pendingPasskey.current.clear();
     pageUrl.current = "";
     setSource({ uri: server });
     setOffline(false);
@@ -729,6 +815,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "ai") handleAi(message);
     else if (message.type === "signIn") void startSignIn(signInVia(message), "bridge");
+    else if (message.type === "addPasskey") void addPasskey(message.url);
     else if (message.type === "openProfileSwitcher") {
       if (switcherRequest(message, switcherToken)) onProfileSwitcher("page");
     } else if (message.type === "openWindow") {

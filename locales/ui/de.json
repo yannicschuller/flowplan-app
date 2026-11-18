@@ -55,6 +55,8 @@
   "signInNoBrowser": "Der Browser für die Anmeldung ließ sich nicht öffnen. Prüfe, ob ein Browser installiert und aktiviert ist, und versuche es noch einmal.",
   "signInFailed": "Anmeldung fehlgeschlagen",
   "signInAgain": "Bitte erneut anmelden.",
+  "passkeyImpossible": "Passkey nicht möglich",
+  "passkeyNoSheet": "Das Anmeldefenster für den Passkey ließ sich nicht öffnen. Prüfe, ob ein Browser installiert und aktiviert ist, und versuche es noch einmal.",
   "settingsTitle": "App-Einstellungen",
   "done": "Fertig",
   "notifications": "Mitteilungen",
