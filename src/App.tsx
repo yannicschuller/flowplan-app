@@ -60,7 +60,7 @@ import { originOf } from "./server";
 import { voiceRequest, type VoiceRequest } from "./voice-bridge";
 import { pathOn } from "./ipad";
 import { useHandoff } from "./window-features";
-import { useAppWindow, useSharedState, WindowContext, type WindowProps } from "./windows";
+import { mainRequests, useAppWindow, useSharedState, WindowContext, type MainRequest, type WindowProps } from "./windows";
 import { syncCertificatePins } from "./certs/review";
 
 setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
@@ -598,6 +598,22 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     afterSwitcher.current = null;
     next?.();
   };
+  // A further window's switcher (#354, screens/PageWindow.tsx): the sheet is
+  // that window's, what it asks for happens here.
+  const fromWindow = useRef((_request: MainRequest) => {});
+  fromWindow.current = (request) => {
+    if (request.type === "switchProfile") {
+      const choice = switcherChoice(store.profiles(), request.id);
+      if (choice) switchTo(choice.switchTo);
+    } else if (request.type === "addProfile") {
+      setSettings(false);
+      setSetup(true);
+    } else {
+      setSetup(false);
+      setSettings(true);
+    }
+  };
+  useEffect(() => mainRequests.listen((request) => fromWindow.current(request)), []);
 
   // A new instance from the setup (checked there): a new profile, active.
   const connect = (origin: string, name: string) => {

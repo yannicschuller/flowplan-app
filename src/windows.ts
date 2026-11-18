@@ -93,3 +93,25 @@ export function useSharedState<T>(key: string, initial: () => T): [T, SetShared<
   });
   return [value, set];
 }
+
+// What a further window asks of the main window (#354): its own profile
+// switcher sheet opens where it was asked for (screens/PageWindow.tsx), but
+// switching the profile (push, widgets, the instance's entry for this
+// device), adding one and the app settings belong to the main window
+// (App.tsx → Root). Heard only by the main window; dropped without one.
+export type MainRequest = { type: "switchProfile"; id: string } | { type: "addProfile" } | { type: "manageProfiles" };
+export function requestChannel<T>() {
+  const listeners = new Set<(request: T) => void>();
+  return {
+    send(request: T): boolean {
+      if (!listeners.size) return false;
+      listeners.forEach((listener) => listener(request));
+      return true;
+    },
+    listen(listener: (request: T) => void) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+}
+export const mainRequests = requestChannel<MainRequest>();

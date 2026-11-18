@@ -129,3 +129,26 @@ test("the switcher's texts exist in German, English, French and Chinese", () => 
   assert.equal(t("switcherManage"), "Profile verwalten");
   setLocale("en");
 });
+
+test("#354: a further iPad window opens its own switcher; the switch happens in the main window", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { requestChannel } = await import("../src/windows");
+  // The channel: heard by the main window only while it listens.
+  const channel = requestChannel<{ type: string }>();
+  assert.equal(channel.send({ type: "addProfile" }), false);
+  const heard: string[] = [];
+  const stop = channel.listen((request) => heard.push(request.type));
+  assert.equal(channel.send({ type: "switchProfile" }), true);
+  stop();
+  assert.equal(channel.send({ type: "manageProfiles" }), false);
+  assert.deepEqual(heard, ["switchProfile"]);
+  // The window that asked shows the sheet – not the system's way to the main window.
+  const window = readFileSync("src/screens/PageWindow.tsx", "utf8");
+  assert.match(window, /<ProfileSwitcher\b/);
+  assert.match(window, /onProfileSwitcher=\{\(from\) => openSwitcher\(from\)\}/);
+  assert.doesNotMatch(window, /openURL\(SWITCHER_LINK\)/);
+  assert.match(window, /mainRequests\.send\(/);
+  // The main window does what the sheet asks (App.tsx switchTo).
+  const app = readFileSync("src/App.tsx", "utf8");
+  assert.match(app, /mainRequests\.listen\(/);
+});
