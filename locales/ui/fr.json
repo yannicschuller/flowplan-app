@@ -38,6 +38,8 @@
   "namePlaceholder": "Travail",
   "addProfile": "Ajouter un profil",
   "addProfileText": "Saisissez l’adresse d’une autre instance Flowplan. Chaque profil a sa propre connexion.",
+  "switcherAdd": "Ajouter un profil…",
+  "switcherManage": "Gérer les profils",
   "add": "Ajouter",
   "yourProfiles": "Vos profils",
   "profiles": "Profils",

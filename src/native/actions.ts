@@ -30,7 +30,8 @@ export function haptic(kind: string) {
 
 // Long press on the app icon. Paths open in the instance (hash routes of the
 // web app), links the app's own screens (capture: a note, a voice memo);
-// "server" opens the profiles (switch or add one). iOS shows the first four.
+// "server" opens the profile switcher (switch, add or manage; App.tsx). iOS
+// shows the first four.
 // `study`: the person has flashcards (summary.study) – "Lernen" (#study)
 // takes the third place, search moves behind the note.
 export function setQuickActions(signedIn: boolean, study = false) {

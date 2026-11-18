@@ -57,6 +57,7 @@ import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, sig
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
+import { switcherRequest } from "../profile-picker";
 import { Offline, type OfflineReason } from "./Offline";
 import { Connecting } from "./Connecting";
 import { connectStep, nextTick, PROBE_TIMEOUT_MS, startConnect, type ConnectEvent } from "../connecting";
@@ -100,6 +101,9 @@ type Props = {
   onMessage: (message: PageMessage) => void;
   onAppLink: (link: string) => void;
   onProfiles: () => void;
+  // The app's profile switcher (profile-picker.ts): the page's
+  // openProfileSwitcher from its top frame, and ⇧⌘P on a hardware keyboard.
+  onProfileSwitcher: (from: "page" | "keyboard") => void;
   onPageLoaded: () => void;
   // The window is in front (no app settings, lock or setup over it): only
   // then does the edge swipe go back in the page.
@@ -143,7 +147,7 @@ async function reachable(server: string): Promise<{ ok: boolean; build: string |
 // files (/_next/static, immutable) stay cacheable.
 const FRESH_DOCUMENT = { "Cache-Control": "no-cache" };
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onPageLoaded, active }, ref) {
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onProfileSwitcher, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const motion = useMotion();
@@ -244,7 +248,16 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const [size, setSize] = useState({ width: 0, height: 0 });
   // iPad and iPhone Duo: key commands, Handoff and further windows
   // (window-features.ts). A page UIKit opened no window for opens here.
-  const features = useWindowFeatures({ run, server, active, size, refused: (url) => void route(url, true, true) });
+  const features = useWindowFeatures({
+    run,
+    server,
+    active,
+    size,
+    refused: (url) => void route(url, true, true),
+    switcher: { title: t("switchProfile"), open: () => onProfileSwitcher("keyboard") },
+  });
+  // Only the top frame's bridge knows it (bridge-script.ts): made once per window.
+  const [switcherToken] = useState(() => base64Url(Crypto.getRandomBytes(24)));
   const windowsAvailable = useRef(features.windowsAvailable);
   windowsAvailable.current = features.windowsAvailable;
   useEffect(() => {
@@ -682,7 +695,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "recognizeInk") handleInk(message);
     else if (message.type === "ai") handleAi(message);
     else if (message.type === "signIn") void startSignIn(signInVia(message), "bridge");
-    else if (message.type === "openWindow") {
+    else if (message.type === "openProfileSwitcher") {
+      if (switcherRequest(message, switcherToken)) onProfileSwitcher("page");
+    } else if (message.type === "openWindow") {
       if (!features.openWindow(message.url)) route(message.url, true, true);
     } else onMessage(message);
   };
@@ -795,6 +810,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             ai: deviceAi,
             offline: !!copy,
             deviceKey,
+            switcherToken,
           })}
           injectedJavaScriptForMainFrameOnly
           injectedJavaScriptBeforeContentLoadedForMainFrameOnly

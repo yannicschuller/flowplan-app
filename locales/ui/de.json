@@ -38,6 +38,8 @@
   "namePlaceholder": "Arbeit",
   "addProfile": "Profil hinzufügen",
   "addProfileText": "Gib die Adresse einer weiteren Flowplan-Instanz ein. Jedes Profil hat seine eigene Anmeldung.",
+  "switcherAdd": "Profil hinzufügen …",
+  "switcherManage": "Profile verwalten",
   "add": "Hinzufügen",
   "yourProfiles": "Deine Profile",
   "profiles": "Profile",

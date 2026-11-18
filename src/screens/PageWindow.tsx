@@ -10,6 +10,7 @@ import type { PageMessage } from "../bridge-script";
 import { pathOn } from "../ipad";
 import { haptic, saveFile } from "../native/actions";
 import { refresh } from "../native/sync";
+import { SWITCHER_LINK } from "../profile-picker";
 import { activeProfile, type ProfileState } from "../profiles";
 import { store } from "../store";
 import { usePalette } from "../ui";
@@ -55,6 +56,8 @@ export function PageWindow({ url }: { url: string | null }) {
         onAppLink={(link) => void Linking.openURL(link).catch(() => {})}
         // The profiles are the main window's (the offline screen's "Switch profile").
         onProfiles={() => void Linking.openURL("flowplan://change-server").catch(() => {})}
+        // So is the profile switcher (the page's openProfileSwitcher, ⇧⌘P).
+        onProfileSwitcher={() => void Linking.openURL(SWITCHER_LINK).catch(() => {})}
         onPageLoaded={() => {
           const path = pendingPath.current;
           pendingPath.current = null;

@@ -38,6 +38,8 @@
   "namePlaceholder": "Work",
   "addProfile": "Add profile",
   "addProfileText": "Enter the address of another Flowplan instance. Each profile has its own sign-in.",
+  "switcherAdd": "Add profile…",
+  "switcherManage": "Manage profiles",
   "add": "Add",
   "yourProfiles": "Your profiles",
   "profiles": "Profiles",

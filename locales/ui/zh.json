@@ -38,6 +38,8 @@
   "namePlaceholder": "工作",
   "addProfile": "添加账户",
   "addProfileText": "输入另一个 Flowplan 实例的地址。每个账户单独登录。",
+  "switcherAdd": "添加账户…",
+  "switcherManage": "管理账户",
   "add": "添加",
   "yourProfiles": "你的账户",
   "profiles": "账户",

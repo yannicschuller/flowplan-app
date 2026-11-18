@@ -2,7 +2,9 @@
 // iPhone Duo (modules/flowplan-ipad, decisions in ipad.ts):
 //
 // - the page's keyboard shortcuts as key commands of this window, listed in
-//   the overlay that holding ⌘ shows, and run in this window's page;
+//   the overlay that holding ⌘ shows, and run in this window's page – with
+//   the app's own ⇧⌘P for its profile switcher (profile-picker.ts), also
+//   on instances that list no shortcuts;
 // - Handoff: the page this window shows, while it is in front of the lock
 //   and the app settings;
 // - "Open in new window" (FlowplanApp.openWindow, links with target=_blank
@@ -28,6 +30,7 @@ import {
   type KeyCommand,
 } from "../modules/flowplan-ipad/src";
 import { handoffPage, handoffTarget, keyCommandsFrom, shortcutScript } from "./ipad";
+import { SWITCHER_ACTION, withSwitcherCommand } from "./profile-picker";
 import type { ProfileState } from "./profiles";
 import { originOf } from "./server";
 import { useAppWindowContext, windows } from "./windows";
@@ -38,6 +41,7 @@ export function useWindowFeatures({
   active,
   size,
   refused,
+  switcher,
 }: {
   run: (script: string) => void;
   server: string;
@@ -46,12 +50,16 @@ export function useWindowFeatures({
   size: { width: number; height: number };
   // An address UIKit opened no window for: this window shows it.
   refused: (url: string) => void;
+  // ⇧⌘P: the app's profile switcher, under this title in the ⌘ overlay.
+  switcher?: { title: string; open: () => void };
 }) {
   const appWindow = useAppWindowContext();
   const multiple = useMemo(supportsWindows, []);
   const [available, setAvailable] = useState(false);
   const onRefused = useRef(refused);
   onRefused.current = refused;
+  const onSwitcher = useRef(switcher);
+  onSwitcher.current = switcher;
   const commands = useRef<KeyCommand[]>([]);
   const page = useRef<{ url: string; title: string } | null>(null);
   const state = useRef({ active, main: appWindow.main });
@@ -62,7 +70,9 @@ export function useWindowFeatures({
     setWindowPage(appWindow.scene, active && page.current ? { ...page.current, restore: !main } : null);
   }, [appWindow.scene]);
   const publishCommands = useCallback(() => {
-    setKeyCommands(appWindow.scene, state.current.active ? commands.current : []);
+    const own = onSwitcher.current;
+    const list = own ? withSwitcherCommand(commands.current, own.title) : commands.current;
+    setKeyCommands(appWindow.scene, state.current.active ? list : []);
   }, [appWindow.scene]);
 
   useEffect(() => {
@@ -108,7 +118,9 @@ export function useWindowFeatures({
   useEffect(() => {
     const subscription = addKeyCommandListener((scene, action) => {
       const mine = appWindow.scene ? scene === appWindow.scene : state.current.main;
-      if (mine && state.current.active) run(shortcutScript(action));
+      if (!mine || !state.current.active) return;
+      if (action === SWITCHER_ACTION) onSwitcher.current?.open();
+      else run(shortcutScript(action));
     });
     return () => subscription.remove();
   }, [appWindow.scene, run]);

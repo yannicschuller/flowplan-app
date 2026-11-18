@@ -4,6 +4,7 @@
 import type { Shortcut } from "../../modules/flowplan-android/src";
 import { t } from "../i18n";
 import { appLink } from "../navigation";
+import { SWITCHER_LINK } from "../profile-picker";
 
 export type RecentPage = { id: string; title: string; kind: string };
 export const RECENT_PAGES = 3;
@@ -37,7 +38,7 @@ export function shortcutList(input: { signedIn: boolean; profile: string | null;
           item("voice", t("actionVoice"), "flowplan://capture?mode=voice&record=1", "voice"),
         ]
       : []),
-    item("server", t("switchProfile"), "flowplan://change-server", "profile"),
+    item("server", t("switchProfile"), SWITCHER_LINK, "profile"),
   ];
 }
 

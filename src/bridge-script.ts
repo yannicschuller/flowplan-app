@@ -18,7 +18,11 @@
 //   event "flowplan:ai"; and it opens the app's profiles (openProfiles: switch
 //   to or add another instance, or – for a profile never signed in – change
 //   its address; the sign-in pages' "Other server?", #69), with the page's
-//   path to come back to; it starts the sign-in with passkeys or SSO
+//   path to come back to, and the app's own sheet of the profiles
+//   (openProfileSwitcher: "Instanz wechseln …" in Flowplan's workspace menu,
+//   a long press on the own account row; profile-picker.ts) – it takes
+//   nothing and answers nothing, and carries a token only this top frame's
+//   bridge knows; it starts the sign-in with passkeys or SSO
 //   (signIn, #109), answering with the event "flowplan:sign-in"; it takes
 //   what the swipe from the left edge does (edgeSwipe, #285: the page's
 //   sidebar, or back – the app's back swipe on iOS, the system's gesture on
@@ -53,6 +57,9 @@ export type PageMessage =
   // The app's profiles from the sign-in pages (#69): the path of the page
   // to come back to (profile-picker.ts profilesRequest checks it).
   | { type: "openProfiles"; path?: string }
+  // The app's profile switcher (profile-picker.ts switcherRequest checks
+  // the token of the top frame's bridge).
+  | { type: "openProfileSwitcher"; token?: unknown }
   | { type: "registered"; status: number; body: unknown }
   | { type: "downloadFailed"; name: string }
   | { type: "signedOut" }
@@ -118,12 +125,15 @@ export function bridgeScript(options: {
   // This device's key for the instance (app-device.ts): the sign-in form
   // sends it with the password, so the sign-in lasts as long as the app's.
   deviceKey?: { id: string; secret: string } | null;
+  // The profile switcher's token (profile-picker.ts switcherRequest): made
+  // once per window, known only to this frame's bridge.
+  switcherToken?: string;
 }) {
   return `(() => {
   if (window.top !== window || location.origin !== ${JSON.stringify(options.server)} || window.FlowplanApp) return;
   const post = (message) => {
     try { window.ReactNativeWebView.postMessage(JSON.stringify(message)); } catch (e) {}
-  };${options.offline ? offlineScript() : ""}${
+  };${options.switcherToken ? `\n  const switcherToken = ${JSON.stringify(String(options.switcherToken))};` : ""}${options.offline ? offlineScript() : ""}${
     options.windows
       ? `
   // Whether this window can open another one now (windowsScript: the app
@@ -204,7 +214,9 @@ export function bridgeScript(options: {
     saveFile: (name, base64, mime) => post({ type: "saveFile", name: String(name), base64: String(base64), mime: String(mime || "") }),
     haptic: (kind) => post({ type: "haptic", kind: String(kind || "light") }),
     openSettings: () => post({ type: "openSettings" }),
-    openProfiles: () => post({ type: "openProfiles", path: String(location.pathname || "") + String(location.search || "") + String(location.hash || "") }),
+    openProfiles: () => post({ type: "openProfiles", path: String(location.pathname || "") + String(location.search || "") + String(location.hash || "") }),${
+      options.switcherToken ? `\n    openProfileSwitcher: () => { post({ type: "openProfileSwitcher", token: switcherToken }); },` : ""
+    }
     backState: (canGoBack) => post({ type: "backState", canGoBack: canGoBack === true }),
     edgeSwipe: (mode, options) => post({ type: "edgeSwipe", mode: mode === "drawer" ? "drawer" : "back", android: !!(options && options.android === true) }),${
       options.scanner

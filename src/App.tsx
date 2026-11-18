@@ -23,7 +23,7 @@ import { reportMotion, setMotionProfile } from "./native/motion";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
 import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
 import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile, switchProfile, type ProfileState } from "./profiles";
-import { profilesRequest, unsignedProfile } from "./profile-picker";
+import { mayOpenSwitcher, profilesRequest, switcherChoice, SWITCHER_LINK, unsignedProfile } from "./profile-picker";
 import { checkAndroidUpdate } from "./android-update";
 import { store } from "./store";
 import { studyOf } from "./summary";
@@ -31,6 +31,7 @@ import { BACKGROUND } from "./ui";
 import { Cover, Lock } from "./screens/Lock";
 import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
+import { ProfileSwitcher } from "./screens/ProfileSwitcher";
 import { Shell, type ShellHandle } from "./screens/Shell";
 import { Capture } from "./screens/Capture";
 import { ShareCapture, type ShareRequest } from "./screens/ShareCapture";
@@ -91,6 +92,11 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   const server = activeProfile(profiles)?.server ?? null;
   const [setup, setSetup] = useState(!store.server());
   const [settings, setSettings] = useState(false);
+  // The profile switcher (profile-picker.ts), when it was last closed, and
+  // what waits for it to be gone (iOS presents no screen while a sheet leaves).
+  const [switcher, setSwitcher] = useState(false);
+  const switcherClosedAt = useRef(0);
+  const afterSwitcher = useRef<(() => void) | null>(null);
   const [locked, setLocked] = useSharedState("locked", () => store.appLock());
   const [lockOn, setLockOn] = useState(store.appLock());
   const [appState, setAppState] = useState<AppStateStatus>((AppState.currentState as AppStateStatus | null) || "active");
@@ -168,6 +174,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     (link: string) => {
       if (link.startsWith("flowplan://sign-in")) return shell.current?.signInLink(link);
       if (link.startsWith("flowplan://change-server")) return setSetup(true);
+      // Android's shortcut "Switch profile" (android/shortcut-list.ts).
+      if (link === SWITCHER_LINK) return openSwitcher.current("app");
       shortcutLinkOpened(link);
       if (link === "flowplan://quick-capture") return setShareRequest({ kind: "quick" });
       // Capture (widgets, controls, Siri), steps of the app (focus, stop),
@@ -201,7 +209,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     const opened = onNotificationOpened(open);
     const received = onNotificationReceived(() => void refresh());
     const buttons = onNotificationButton(open);
-    const quickAction = ({ id, path, link }: QuickAction) => (id === "server" ? setSetup(true) : link ? appLink(link) : path && open(path));
+    // "Switch profile": the profile switcher (the profile screen before there is a profile).
+    const quickAction = ({ id, path, link }: QuickAction) => (id === "server" ? openSwitcher.current("app") : link ? appLink(link) : path && open(path));
     const first = started.current;
     started.current = null;
     if (first && (first.id === "server" || first.link)) quickAction(first);
@@ -305,7 +314,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   // Offline use, offered once per profile (#203, offline-offer.ts): when its
   // page reports that it can and it is off, the window is in front and
   // nothing else asks. A moment after the report, so the page is there.
-  const front = !!server && !setup && !settings && !locked && appState === "active" && !capture && !shareRequest && !scan && !voice;
+  const front = !!server && !setup && !settings && !switcher && !locked && appState === "active" && !capture && !shareRequest && !scan && !voice;
   const activeId = profiles.active;
   const status = offlineStatus && offlineStatus.profile === activeId ? offlineStatus.status : null;
   useEffect(() => {
@@ -560,6 +569,36 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     void refreshSuite({ force: true });
   };
 
+  // The profile switcher: from the page (its top frame, only while the window
+  // is in front and not right after the last one closed), from the quick
+  // action, Android's shortcut and ⇧⌘P. Without a profile: the setup.
+  const openSwitcher = useRef((_from: "page" | "app" | "keyboard") => {});
+  openSwitcher.current = (from) => {
+    if (!activeProfile(store.profiles())) return setSetup(true);
+    const fromPage = from === "page";
+    const inFront = !setup && !settings && !locked && !covered;
+    if (!mayOpenSwitcher({ open: switcher, front: inFront, closedAt: switcherClosedAt.current, now: Date.now(), fromPage })) return;
+    if (!fromPage) {
+      setSettings(false);
+      setSetup(false);
+    }
+    afterSwitcher.current = null;
+    setSwitcher(true);
+  };
+  // Closes the sheet; `next` runs once it is gone.
+  const closeSwitcher = (next?: () => void) => {
+    switcherClosedAt.current = Date.now();
+    afterSwitcher.current = next ?? null;
+    setSwitcher(false);
+    // Android has no onDismiss: the next screen at once.
+    if (Platform.OS !== "ios") switcherGone();
+  };
+  const switcherGone = () => {
+    const next = afterSwitcher.current;
+    afterSwitcher.current = null;
+    next?.();
+  };
+
   // A new instance from the setup (checked there): a new profile, active.
   const connect = (origin: string, name: string) => {
     const current = store.profiles();
@@ -669,10 +708,12 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           server={server}
           profile={activeProfile(profiles)?.id ?? ""}
           onMessage={(message) => void onMessage(message)}
-          onAppLink={appLink}
+          // The page's own link to the switcher counts as the page's request.
+          onAppLink={(link) => (link === SWITCHER_LINK ? openSwitcher.current("page") : appLink(link))}
           onProfiles={() => setSetup(true)}
+          onProfileSwitcher={(from) => openSwitcher.current(from)}
           onPageLoaded={onPageLoaded}
-          active={!settings && !locked && !covered}
+          active={!settings && !switcher && !locked && !covered}
         />
       )}
       {server ? (
@@ -700,6 +741,21 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
             setSettings(false);
             open(OFFLINE_SETTINGS_PATH);
           }}
+        />
+      ) : null}
+      {server ? (
+        <ProfileSwitcher
+          visible={switcher && !locked}
+          profiles={profiles}
+          onSwitch={(id) => {
+            const choice = switcherChoice(store.profiles(), id);
+            closeSwitcher();
+            if (choice) switchTo(choice.switchTo);
+          }}
+          onAdd={() => closeSwitcher(() => setSetup(true))}
+          onManage={() => closeSwitcher(() => setSettings(true))}
+          onClose={() => closeSwitcher()}
+          onDismiss={switcherGone}
         />
       ) : null}
       {server ? <Capture request={locked ? null : capture} onClose={() => setCapture(null)} onOpen={open} /> : null}
