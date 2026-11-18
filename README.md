@@ -219,7 +219,7 @@ WKWebView runs service workers only for a fixed list of domains, so Flowplan's o
 - **Without a connection** (the web view fails, or no network at start): the stored app page loads at the instance's address (`loadHTMLString` with the instance as base URL) – same origin, so the session, the documents in IndexedDB and the queued record changes are the page's own. Its scripts and style sheets come from the copy ([`src/offline/document.ts`](src/offline/document.ts), the loader); the instance's Content-Security-Policy stays as a `<meta>`.
 - **Back online:** once `/api/health` answers, the page hears it and sends what was changed offline; the app loads the live page when nobody is typing. The copy is refreshed while the app is open and at every foreground.
 - **Gone** with **Sign out** in Flowplan or **Sign out and remove the profile** in the app.
-- **Check:** `FLOWPLAN_DIR=../flowplan npm run check:offline` runs a production build of Flowplan in Chromium with the bridge and the copy simulated (`CHROMIUM_PATH` for another Chromium).
+- **Check:** `FLOWPLAN_DIR=../flowplan npm run check:offline` runs a production build of Flowplan (`npm run build` or `npm run build:e2e` there) in Chromium with the bridge and the copy simulated (`CHROMIUM_PATH` for another Chromium, `OFFLINE_PORT` for the server's port).
 
 ## Development
 

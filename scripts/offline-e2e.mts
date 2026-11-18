@@ -7,7 +7,9 @@
 //
 //   FLOWPLAN_DIR=../flowplan npm run check:offline
 //
-// FLOWPLAN_DIR is a Flowplan checkout after `npm run build`.
+// FLOWPLAN_DIR is a Flowplan checkout after `npm run build` (.next) or
+// `npm run build:e2e` (.next-e2e, the browser specs' build). OFFLINE_PORT
+// sets the server's port (default: a free one between 3900 and 3989).
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -24,17 +26,18 @@ import { OfflineCopy } from "../src/offline/store";
 import { nodeFiles, sha256 } from "../test/offline-files";
 
 const flowplan = resolve(process.env.FLOWPLAN_DIR || "../flowplan");
-if (!existsSync(join(flowplan, ".next/standalone/server.js"))) {
+const dist = [".next", ".next-e2e"].find((d) => existsSync(join(flowplan, d, "standalone/server.js")));
+if (!dist) {
   console.error(`No standalone build in ${flowplan} – run \`npm run build\` there first (FLOWPLAN_DIR).`);
   process.exit(1);
 }
 const work = mkdtempSync(join(tmpdir(), "flowplan-app-offline-"));
 const app = join(work, "app"),
   data = join(work, "data");
-cpSync(join(flowplan, ".next/standalone"), app, { recursive: true });
-cpSync(join(flowplan, ".next/static"), join(app, ".next/static"), { recursive: true });
+cpSync(join(flowplan, dist, "standalone"), app, { recursive: true });
+cpSync(join(flowplan, dist, "static"), join(app, dist, "static"), { recursive: true });
 cpSync(join(flowplan, "public"), join(app, "public"), { recursive: true });
-const port = 3900 + Math.floor(Math.random() * 90);
+const port = Number(process.env.OFFLINE_PORT) || 3900 + Math.floor(Math.random() * 90);
 const origin = `http://127.0.0.1:${port}`;
 let failures = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -168,8 +171,12 @@ try {
   // A script and a style sheet of the app this page never loaded, added
   // the way Turbopack adds them: the copy answers, the page hears no error.
   const loaded = new Set((await page.evaluate("[...document.scripts].map((s) => s.getAttribute('src'))")) as string[]);
-  const script = staticKeys.find((k) => k.startsWith("/_next/static/chunks/") && k.endsWith(".js") && !loaded.has(k) && !k.includes("turbopack"));
-  const sheet = staticKeys.find((k) => k.endsWith(".css") && k.startsWith("/_next/"));
+  // Keys carry the build's ?dpl= (Next.js deploymentId, skew protection)
+  // as the page asks for them; the type is in the path.
+  const pathOf = (key: string) => key.split("?")[0];
+  const script = staticKeys.find((k) => pathOf(k).startsWith("/_next/static/chunks/") && pathOf(k).endsWith(".js") && !loaded.has(k) && !k.includes("turbopack"));
+  const sheet = staticKeys.find((k) => pathOf(k).endsWith(".css") && k.startsWith("/_next/"));
+  if (!script || !sheet) check("App-Datei und Stilvorlage zum Nachladen in der Kopie gefunden", false, `${script} ${sheet}`);
   fromCopy = 0;
   // A string: page functions must not carry tsx's helpers.
   const outcome = await page.evaluate(`new Promise((resolve) => {
@@ -205,7 +212,8 @@ try {
   await page.route(`${origin}/`, (route) => route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html || "" }));
   const before = errors.length;
   await page.goto(`${origin}/#page=${doc.id}`);
-  check("Offline-Hinweis sichtbar", await page.locator(".offline-banner").first().waitFor({ timeout: 20000 }).then(() => true, () => false));
+  // Offline is a small icon in the top bar (Flowplan #296), no banner.
+  check("Offline-Hinweis sichtbar", await page.locator(".offline-status-button").first().waitFor({ timeout: 20000 }).then(() => true, () => false));
   check("Dokument offline lesbar", await seen(page, "Zug um 8 Uhr"));
   await page.evaluate((id) => (location.hash = `#page=${id}`), table.id);
   check("Datenbank offline lesbar", await page.locator(".data-table").getByText("Reisepass").first().waitFor({ timeout: 20000 }).then(() => true, () => false));
