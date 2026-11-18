@@ -53,7 +53,11 @@ concurrency:
 jobs:
   ios:
     if: inputs.platform == 'both' || inputs.platform == 'ios'
-    runs-on: macos-latest
+    # Xcode 27 and the iOS 27 SDKs (#351; App Store uploads need the iOS 27
+    # SDK from April 2027): GitHub's xcode-27 image (macOS 27, Apple
+    # silicon). macos-latest is still macOS 26 with Xcode 26 only; back to
+    # it once it carries Xcode 27.
+    runs-on: xcode-27
     timeout-minutes: 90
     env:
       FLOWPLAN_BUILD: ${{ inputs.build }}

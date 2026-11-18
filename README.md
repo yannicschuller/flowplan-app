@@ -260,7 +260,7 @@ The version lives in `package.json`; `app.config.ts` takes it for both platforms
 
 ## Build machine
 
-Every build runs **only by hand** on GitHub's runners: iOS on `macos-latest`, Android on `ubuntu-latest` (free for public repositories; a private repository pays macOS minutes at ten times the Linux rate). Pushes and pull requests run quick checks on Linux ([`ci.yml`](.github/workflows/ci.yml): tests, TypeScript, the JavaScript bundle and the generated native projects). Nothing has to be installed: the workflows set up Node, Ruby (gems from `Gemfile.lock`, cached), the newest stable Xcode on the runner, Java and the Android SDK; npm, CocoaPods and Gradle downloads are cached between runs.
+Every build runs **only by hand** on GitHub's runners: iOS on `xcode-27` (GitHub's image with Xcode 27 and the iOS 27 SDKs, which App Store uploads need from April 2027; `macos-latest` still has Xcode 26 only), Android on `ubuntu-latest` (free for public repositories; a private repository pays macOS minutes at ten times the Linux rate). Pushes and pull requests run quick checks on Linux ([`ci.yml`](.github/workflows/ci.yml): tests, TypeScript, the JavaScript bundle and the generated native projects). Nothing has to be installed: the workflows set up Node, Ruby (gems from `Gemfile.lock`, cached), the newest stable Xcode on the runner, Java and the Android SDK; npm, CocoaPods and Gradle downloads are cached between runs.
 
 Builds never touch a keychain of their own beyond the run: certificates from match or secrets go to a temporary keychain that is deleted afterwards, the Android upload key is deleted after the build.
 
