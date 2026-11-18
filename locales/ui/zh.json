@@ -3,7 +3,7 @@
   "setupText": "连接到 app.flowplan.org，或输入你自己的 Flowplan 实例的地址。",
   "setupHint": "以后可以在 应用设置的“账户”中添加更多实例。在那里切换，或按住 应用图标选择“切换账户”。",
   "label": "实例地址",
-  "placeholder": "flowplan.your-company.com",
+  "placeholder": "https://flowplan.your-company.com",
   "connect": "连接",
   "connecting": "正在连接…",
   "cancel": "取消",

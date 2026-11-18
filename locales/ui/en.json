@@ -3,7 +3,7 @@
   "setupText": "Connect to app.flowplan.org or enter the address of your own Flowplan instance.",
   "setupHint": "You can add more instances later in the app settings under “Profiles”. Switch there or by pressing and holding the app icon: “Switch profile”.",
   "label": "Instance address",
-  "placeholder": "flowplan.your-company.com",
+  "placeholder": "https://flowplan.your-company.com",
   "connect": "Connect",
   "connecting": "Connecting …",
   "cancel": "Cancel",

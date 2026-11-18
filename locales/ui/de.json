@@ -3,7 +3,7 @@
   "setupText": "Verbinde dich mit app.flowplan.org oder gib die Adresse deiner eigenen Flowplan-Instanz ein.",
   "setupHint": "Weitere Instanzen fügst du später in den App-Einstellungen unter „Profile“ hinzu. Wechseln kannst du dort oder, indem du das App-Symbol gedrückt hältst: „Profil wechseln“.",
   "label": "Adresse der Instanz",
-  "placeholder": "flowplan.deine-firma.de",
+  "placeholder": "https://flowplan.deine-firma.de",
   "connect": "Verbinden",
   "connecting": "Verbinde …",
   "cancel": "Abbrechen",
