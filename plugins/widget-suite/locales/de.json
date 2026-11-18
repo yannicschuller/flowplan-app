@@ -184,6 +184,8 @@
   "gallery.FlowplanTasks.description": "Fällige und offene Aufgaben, Posteingang und Timer auf einen Blick. Zum Abhaken das Widget „Aufgaben“ hinzufügen.",
   "gallery.FlowplanInbox.label": "Flowplan Posteingang",
   "gallery.FlowplanInbox.description": "Ungelesene Mitteilungen.",
+  "gallery.FlowplanStudy.label": "Flowplan Karten fällig",
+  "gallery.FlowplanStudy.description": "Lernkarten, die heute dran sind.",
   "gallery.FlowplanInstance.label": "Flowplan Instanz",
   "gallery.FlowplanInstance.description": "Für Administratoren: Zustand, Version und letzte Sicherung.",
   "gallery.FlowplanLive.label": "Flowplan Live",

@@ -31,15 +31,19 @@ export function haptic(kind: string) {
 // Long press on the app icon. Paths open in the instance (hash routes of the
 // web app), links the app's own screens (capture: a note, a voice memo);
 // "server" opens the profiles (switch or add one). iOS shows the first four.
-export function setQuickActions(signedIn: boolean) {
+// `study`: the person has flashcards (summary.study) – "Lernen" (#study)
+// takes the third place, search moves behind the note.
+export function setQuickActions(signedIn: boolean, study = false) {
   const ios = Platform.OS === "ios";
+  const search: QuickActions.Action = { id: "search", title: t("actionSearch"), icon: ios ? "symbol:magnifyingglass" : null, params: { path: "/#search" } };
   const items: QuickActions.Action[] = [
     ...(signedIn
       ? [
           { id: "inbox", title: t("actionInbox"), icon: ios ? "symbol:tray" : null, params: { path: "/#inbox" } },
           { id: "tasks", title: t("actionTasks"), icon: ios ? "symbol:checklist" : null, params: { path: "/#tasks" } },
-          { id: "search", title: t("actionSearch"), icon: ios ? "symbol:magnifyingglass" : null, params: { path: "/#search" } },
+          ...(study ? [{ id: "study", title: t("actionStudy"), icon: ios ? "symbol:rectangle.on.rectangle.angled" : null, params: { path: "/#study" } }] : [search]),
           { id: "note", title: t("actionNote"), icon: ios ? "symbol:square.and.pencil" : null, params: { link: "flowplan://capture?mode=note" } },
+          ...(study ? [search] : []),
         ]
       : []),
     { id: "server", title: t("switchProfile"), icon: ios ? "symbol:server.rack" : null, params: { path: "" } },

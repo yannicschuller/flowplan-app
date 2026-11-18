@@ -25,6 +25,8 @@
   "%@ results for “%@”": "Search",
   "Search in the app": "Search",
   "Opens Flowplan's search with this text.": "Search",
+  "Study due cards": "Study due cards",
+  "Opens Flowplan's flashcards with the cards due today.": "Study due cards",
   "Flowplan focus": "Focus filter",
   "Shows one profile or workspace while this Focus is on.": "Focus filter",
   "Profile or workspace": "Focus filter",

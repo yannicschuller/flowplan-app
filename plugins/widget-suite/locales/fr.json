@@ -184,6 +184,8 @@
   "gallery.FlowplanTasks.description": "Tâches à faire, boîte de réception et chrono en un coup d’œil. Pour cocher, ajoutez le widget « Tâches ».",
   "gallery.FlowplanInbox.label": "Flowplan Boîte de réception",
   "gallery.FlowplanInbox.description": "Notifications non lues.",
+  "gallery.FlowplanStudy.label": "Flowplan Cartes à réviser",
+  "gallery.FlowplanStudy.description": "Les cartes mémoire à réviser aujourd’hui.",
   "gallery.FlowplanInstance.label": "Flowplan Instance",
   "gallery.FlowplanInstance.description": "Pour les administrateurs : état, version et dernière sauvegarde.",
   "gallery.FlowplanLive.label": "Flowplan Live",

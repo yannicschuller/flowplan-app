@@ -20,7 +20,31 @@ export type Summary = {
   // The person administers the instance (newer instances): the app also
   // fetches the administrators' widgets (admin.ts).
   admin?: boolean;
+  // Flashcards (newer instances, only for a person with decks): cards left
+  // today in all decks, the new ones among them, study days in a row, the
+  // deck with the most left and the daily reminder's time ('HH:MM', null
+  // off). Read through studyOf – an older instance sends none, a broken
+  // value counts as none.
+  study?: { due: number; new: number; streak: number; deck?: string; remindAt?: string | null };
 };
+
+// The flashcards part of a summary, checked (never trusted as it comes).
+export function studyOf(summary: Summary | null): { due: number; new: number; streak: number; deck: string; remindAt: string | null } | null {
+  const s = summary?.study as Record<string, unknown> | undefined;
+  if (!s || typeof s !== "object") return null;
+  const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null);
+  const due = count(s.due),
+    fresh = count(s.new),
+    streak = count(s.streak);
+  if (due === null || fresh === null || streak === null) return null;
+  return {
+    due,
+    new: Math.min(fresh, due),
+    streak,
+    deck: typeof s.deck === "string" ? s.deck.slice(0, 80) : "",
+    remindAt: typeof s.remindAt === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s.remindAt) ? s.remindAt : null,
+  };
+}
 
 export function isSummary(value: unknown): value is Summary {
   const s = value as Summary;
@@ -129,6 +153,25 @@ export function inboxWidget(summary: Summary | null, locale: Locale): InboxWidge
   };
 }
 
+// "Karten fällig": the flashcards left today – one number, the deck with
+// the most and the streak; a tap opens #study. Without decks (or on an
+// older instance) it says so and opens the app.
+export type StudyWidgetProps = { signedIn: boolean; title: string; count: number; label: string; detail: string; url: string };
+export function studyWidget(summary: Summary | null, locale: Locale): StudyWidgetProps {
+  const title = t("widgetStudy", {}, locale);
+  if (!summary) return { signedIn: false, title, count: 0, label: t("widgetSignIn", {}, locale), detail: "", url: appLink("/") };
+  const study = studyOf(summary);
+  if (!study) return { signedIn: true, title, count: 0, label: t("widgetStudyNone", {}, locale), detail: "", url: appLink("/#study") };
+  return {
+    signedIn: true,
+    title,
+    count: study.due,
+    label: study.due ? (study.deck ? study.deck : t("widgetStudyDue", { count: study.due }, locale)) : t("widgetStudyDone", {}, locale),
+    detail: study.streak ? t("widgetStudyStreak", { count: study.streak }, locale) : "",
+    url: appLink("/#study"),
+  };
+}
+
 // The running timer as Live Activity (iOS) or ongoing notification (Android).
 export type TimerProps = { title: string; database: string; start: number; label: string; url: string };
 export function timerProps(summary: Summary | null, locale: Locale): TimerProps | null {
@@ -171,6 +214,7 @@ export function sampleSummary(locale: Locale, now = new Date()): Summary {
     timer: null,
     today,
     at: now.getTime(),
+    study: { due: 12, new: 5, streak: 4, deck: { de: "Spanisch A1", en: "Spanish A1", fr: "Espagnol A1", zh: "西班牙语 A1" }[locale] },
   };
 }
 

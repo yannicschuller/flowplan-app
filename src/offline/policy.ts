@@ -30,7 +30,8 @@ const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-
 const DATA_KEYS = [
   /^\/$/,
   /^\/api\/bootstrap(\?[^#]*)?$/,
-  new RegExp(`^/api/pages/${UUID}(/rows/${UUID})?(\\?[^#]*)?$`),
+  // A page, a record, or a flashcard deck for studying offline (/study?offline=1).
+  new RegExp(`^/api/pages/${UUID}(/rows/${UUID}|/study)?(\\?[^#]*)?$`),
   new RegExp(`^/api/files/${UUID}(\\?[^#]*)?$`),
 ];
 const STATIC_KEYS = [/^\/_next\/static\/[^?#]+(\?[^#]*)?$/, /^\/fonts\.css$/, /^\/fonts\/[^/?#]+$/, /^\/icons\/[^/?#]+$/];

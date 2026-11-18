@@ -184,6 +184,8 @@
   "gallery.FlowplanTasks.description": "Due and open tasks, inbox and timer at a glance. To check off tasks, add the “Tasks” widget.",
   "gallery.FlowplanInbox.label": "Flowplan Inbox",
   "gallery.FlowplanInbox.description": "Unread notifications.",
+  "gallery.FlowplanStudy.label": "Flowplan Cards due",
+  "gallery.FlowplanStudy.description": "Flashcards to study today.",
   "gallery.FlowplanInstance.label": "Flowplan Instance",
   "gallery.FlowplanInstance.description": "For administrators: state, version and last backup.",
   "gallery.FlowplanLive.label": "Flowplan Live",

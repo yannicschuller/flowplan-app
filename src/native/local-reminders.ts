@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import { t } from "../i18n";
-import { planReminders, REMINDER_PREFIX } from "../reminder-plan";
+import { planReminders, planStudyReminder, REMINDER_PREFIX, STUDY_REMINDER_ID } from "../reminder-plan";
 import type { Summary } from "../summary";
 
 const KEY = "flowplan.localReminders";
@@ -31,7 +31,7 @@ export async function syncLocalReminders(summary: Summary | null) {
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     await Promise.allSettled(
-      scheduled.filter((n) => n.identifier.startsWith(REMINDER_PREFIX)).map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+      scheduled.filter((n) => n.identifier.startsWith(REMINDER_PREFIX) || n.identifier === STUDY_REMINDER_ID).map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
     );
     if (!summary || !wanted()) return;
     if ((await Notifications.getPermissionsAsync()).status !== "granted") return;
@@ -46,6 +46,14 @@ export async function syncLocalReminders(summary: Summary | null) {
         identifier: reminder.id,
         content: { title: t("reminderDueToday"), body: reminder.page ? `${reminder.text} – ${reminder.page}` : reminder.text, data: { url: reminder.url } },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.at, channelId: CHANNEL },
+      });
+    // The daily study reminder of flashcards, at the time set on #study.
+    const study = planStudyReminder(summary, new Date());
+    if (study)
+      await Notifications.scheduleNotificationAsync({
+        identifier: study.id,
+        content: { title: t("reminderStudy"), body: study.deck ? `${t("reminderStudyBody", { count: study.count })} – ${study.deck}` : t("reminderStudyBody", { count: study.count }), data: { url: study.url } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: study.at, channelId: CHANNEL },
       });
   } catch {}
 }

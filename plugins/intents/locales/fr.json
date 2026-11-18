@@ -25,6 +25,8 @@
   "%@ results for “%@”": "%@ résultats pour « %@ »",
   "Search in the app": "Rechercher dans l’app",
   "Opens Flowplan's search with this text.": "Ouvre la recherche de Flowplan avec ce texte.",
+  "Study due cards": "Réviser les cartes du jour",
+  "Opens Flowplan's flashcards with the cards due today.": "Ouvre les cartes mémoire de Flowplan avec les cartes à réviser aujourd’hui.",
   "Flowplan focus": "Concentration Flowplan",
   "Shows one profile or workspace while this Focus is on.": "Affiche un profil ou un espace de travail tant que cette concentration est active.",
   "Profile or workspace": "Profil ou espace de travail",

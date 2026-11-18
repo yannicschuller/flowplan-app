@@ -25,20 +25,20 @@ export async function fetchRecentPages(target: Connection): Promise<RecentPage[]
 // The last pages that were shown, so an offline start keeps them.
 let lastRecent: { profile: string | null; pages: RecentPage[] } = { profile: null, pages: [] };
 
-export async function syncShortcuts(signedIn: boolean) {
+export async function syncShortcuts(signedIn: boolean, study = false) {
   if (Platform.OS !== "android") return;
   const profile = store.profiles().active;
   const target = signedIn ? connection() : null;
   if (lastRecent.profile !== profile) lastRecent = { profile, pages: [] };
   // The shortcuts change at once (signed in or out, another profile) …
-  setNativeShortcuts(shortcutList({ signedIn, profile, recent: lastRecent.pages }), signedIn ? profile : null);
+  setNativeShortcuts(shortcutList({ signedIn, profile, recent: lastRecent.pages, study }), signedIn ? profile : null);
   if (!target) return;
   // … and again with the pages the instance knows.
   const pages = await fetchRecentPages(target).catch(() => null);
   if (!pages || store.profiles().active !== profile) return;
   if (JSON.stringify(pages) === JSON.stringify(lastRecent.pages)) return;
   lastRecent = { profile, pages };
-  setNativeShortcuts(shortcutList({ signedIn, profile, recent: pages }), profile);
+  setNativeShortcuts(shortcutList({ signedIn, profile, recent: pages, study }), profile);
 }
 
 // A link of a shortcut was opened (from the shortcut or elsewhere): the

@@ -97,6 +97,24 @@ try {
   const today = new Date().toISOString().slice(0, 10);
   await post({ action: "row.create", pageId: table.id, cells: { title: "Abfahrt", [dateField.id]: today } });
   const dashboard = await post({ action: "page.create", workspaceId: workspace.id, spaceId: space, title: "Übersicht", kind: "dashboard" });
+  // Flashcards (Flowplan docs/specs/flashcards.md §10.4): a deck studied
+  // lately goes into the copy whole and can be studied offline.
+  const deck = await post({ action: "page.create", workspaceId: workspace.id, spaceId: space, title: "Vokabeln", kind: "database", databaseKind: "empty" });
+  const deckDb = (await get(`/api/pages/${deck.id}`)).database;
+  await post({
+    action: "database.update",
+    pageId: deck.id,
+    version: deckDb.version,
+    fields: [
+      { id: "title", name: "Wort", type: "text" },
+      { id: "answer", name: "Übersetzung", type: "text" },
+    ],
+    views: [{ id: "study", name: "Lernen", type: "study", filters: [], sorts: [], default: true }],
+  });
+  await post({ action: "study.settings", pageId: deck.id, settings: { version: 1, front: { field: "title" }, back: { field: "answer" } } });
+  const hola = await post({ action: "row.create", pageId: deck.id, cells: { title: "hola", answer: "hallo" } });
+  await post({ action: "row.create", pageId: deck.id, cells: { title: "perro", answer: "Hund" } });
+  await post({ action: "study.review", pageId: deck.id, rowId: hola.id, sub: "", rating: 3, id: randomUUID(), zone: "Europe/Berlin" });
   db.close();
 
   // The app's side: the copy in files, the bridge in every page.
@@ -132,6 +150,7 @@ try {
   const statics = names.filter((n) => n.startsWith("flowplan-static-"));
   const staticKeys = statics.length ? await copy.keys(statics[0]) : [];
   check("Alle App-Dateien und Schriften gespeichert", staticKeys.some((k) => k === "/fonts.css") && staticKeys.filter((k) => k.startsWith("/_next/static/")).length > 50, `${staticKeys.length} Dateien`);
+  check("Lernstapel für offline gespeichert", (await copy.keys(DATA_CACHE)).includes(`/api/pages/${deck.id}/study?offline=1`));
   // Opened online: kept like the service worker keeps them.
   await page.goto(`${origin}/?w=${workspace.id}#page=${doc.id}`);
   check("Dokument online", await seen(page, "Zug um 8 Uhr"));
@@ -203,6 +222,17 @@ try {
     .then(() => seen(page, "Abfahrt"))
     .catch(() => false);
   check("Kalender offline", calendar);
+  // Flashcards: studied from the copy, the rating waits on the device.
+  await page.evaluate((id) => (location.hash = `#page=${id}`), deck.id);
+  const studied = await page
+    .getByRole("button", { name: "Lernen starten" })
+    .click({ timeout: 20000 })
+    .then(() => page.getByRole("button", { name: /^Antwort zeigen/ }).click({ timeout: 10000 }))
+    .then(() => page.getByRole("button", { name: /^Gut/ }).click({ timeout: 10000 }))
+    .then(() => seen(page, "1 Wertung wartet auf Verbindung"))
+    .catch(() => false);
+  check("Lernkarten offline gelernt, Wertung wartet", studied);
+  await page.getByRole("button", { name: "Sitzung beenden" }).click({ timeout: 5000 }).catch(() => {});
   // React #418: a recoverable hydration mismatch (React renders the page
   // anew on the device) – the stored page starts with navigator.onLine
   // false; everything else counts.
@@ -234,6 +264,16 @@ try {
     if (!synced) await page.waitForTimeout(500);
   }
   check("Offline getippter Text abgeglichen", synced);
+  // The live page, loaded anew as the app does after giving up the copy
+  // (the hash change above stays in the stored document): the waiting
+  // rating goes out as the page starts.
+  await page.goto(`${origin}/?live=1#page=${deck.id}`);
+  let rated = false;
+  for (let i = 0; i < 60 && !rated; i++) {
+    rated = Number((await get(`/api/pages/${deck.id}/study?limit=0&zone=Europe%2FBerlin`)).done?.all) >= 2;
+    if (!rated) await page.waitForTimeout(500);
+  }
+  check("Offline-Wertung übertragen (study.reviews)", rated);
 
   // 5. Switching it off removes the copy.
   await page.goto(`${origin}/?w=${workspace.id}&v=2#settings/devices`);

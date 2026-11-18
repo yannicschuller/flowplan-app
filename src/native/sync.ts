@@ -10,11 +10,13 @@ import { hideTimer, showTimer } from "../../modules/flowplan-native/src";
 import { locale, t } from "../i18n";
 import { timeoutSignal } from "../server";
 import { store } from "../store";
-import { inboxWidget, isSummary, localDay, tasksWidget, timerProps, widgetProps, type Summary } from "../summary";
+import { inboxWidget, isSummary, localDay, studyOf, studyWidget, tasksWidget, timerProps, widgetProps, type Summary } from "../summary";
 import { adminLiveWidget, adminStatusWidget, adminStorageWidget, isAdminSummary, nextAdminState, type AdminState } from "../admin";
-import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
+import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderStudy, renderTasks } from "../widgets/android";
+import { setQuickActions } from "./actions";
+import { syncShortcuts } from "../android/shortcuts";
 import type * as IosWidgets from "../widgets/ios";
-import { refreshSuite } from "./suite";
+import { refreshSuite, timeZone } from "./suite";
 import { syncSpotlight } from "./spotlight";
 import { syncLocalReminders } from "./local-reminders";
 import { endLiveActivity, watchLiveActivity, type PushTokenActivity } from "./live-push";
@@ -31,7 +33,8 @@ export type FetchResult = { summary: Summary } | { signedOut: true } | { failed:
 export async function fetchSummary(server: string | null = store.server(), token: string | null = store.deviceToken()): Promise<FetchResult> {
   if (!server || !token) return { signedOut: true };
   try {
-    const response = await fetch(`${server}/api/mobile/summary?today=${localDay()}`, {
+    // The time zone: the study day of flashcards (summary.study).
+    const response = await fetch(`${server}/api/mobile/summary?today=${localDay()}&zone=${encodeURIComponent(timeZone())}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal: timeoutSignal(15_000),
     });
@@ -123,13 +126,27 @@ export async function apply(summary: Summary | null, admin: AdminState = null) {
     syncSpotlight(summary),
     // Due tasks as the phone's own reminders, where the instance cannot push.
     syncLocalReminders(summary),
+    studyActions(summary),
   ]);
+}
+
+// "Lernen" among the quick actions (iOS) and app shortcuts (Android) once
+// the person has flashcards – and away again without.
+let lastStudy: boolean | null = null;
+async function studyActions(summary: Summary | null) {
+  if (!summary) return;
+  const study = !!studyOf(summary);
+  if (study === lastStudy) return;
+  lastStudy = study;
+  if (Platform.OS === "android") await syncShortcuts(true, study);
+  else setQuickActions(true, study);
 }
 
 export async function updateWidgets(summary: Summary | null = store.summary(), admin: AdminState = store.adminState()) {
   const lang = locale();
   const tasks = tasksWidget(summary, lang),
     inbox = inboxWidget(summary, lang),
+    study = studyWidget(summary, lang),
     status = adminStatusWidget(admin, lang),
     live = adminLiveWidget(admin, lang),
     storage = adminStorageWidget(admin, lang);
@@ -142,6 +159,7 @@ export async function updateWidgets(summary: Summary | null = store.summary(), a
     const updates: [string, { updateSnapshot: (props: never) => void }, object][] = [
       ["tasks", ios.tasksWidget, tasks],
       ["inbox", ios.inboxWidget, inbox],
+      ["study", ios.studyWidget, study],
       ["instance", ios.adminStatusWidget, status],
       ["live", ios.adminLiveWidget, live],
       ["storage", ios.adminStorageWidget, storage],
@@ -158,6 +176,7 @@ export async function updateWidgets(summary: Summary | null = store.summary(), a
   await Promise.allSettled([
     requestWidgetUpdate({ widgetName: "FlowplanTasks", renderWidget: (info) => renderTasks(tasks, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanInbox", renderWidget: () => renderInbox(inbox) }),
+    requestWidgetUpdate({ widgetName: "FlowplanStudy", renderWidget: () => renderStudy(study) }),
     requestWidgetUpdate({ widgetName: "FlowplanInstance", renderWidget: () => renderAdminStatus(status) }),
     requestWidgetUpdate({ widgetName: "FlowplanLive", renderWidget: (info) => renderAdminLive(live, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanStorage", renderWidget: () => renderAdminStorage(storage) }),

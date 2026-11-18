@@ -184,6 +184,8 @@
   "gallery.FlowplanTasks.description": "Description of the widget in the widget gallery",
   "gallery.FlowplanInbox.label": "Name of the widget in the widget gallery",
   "gallery.FlowplanInbox.description": "Description of the widget in the widget gallery",
+  "gallery.FlowplanStudy.label": "Name of the widget in the widget gallery",
+  "gallery.FlowplanStudy.description": "Description of the widget in the widget gallery",
   "gallery.FlowplanInstance.label": "Name of the widget in the widget gallery",
   "gallery.FlowplanInstance.description": "Description of the widget in the widget gallery",
   "gallery.FlowplanLive.label": "Name of the widget in the widget gallery",

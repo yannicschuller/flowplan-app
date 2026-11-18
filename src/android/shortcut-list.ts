@@ -13,7 +13,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // (disabled) until that profile is active again.
 export const pageShortcutId = (profile: string, pageId: string) => `page:${profile}:${pageId}`;
 
-export function shortcutList(input: { signedIn: boolean; profile: string | null; recent: RecentPage[] }): Shortcut[] {
+// `study`: the person has flashcards (summary.study): "Lernen" (#study) after
+// my tasks.
+export function shortcutList(input: { signedIn: boolean; profile: string | null; recent: RecentPage[]; study?: boolean }): Shortcut[] {
   const item = (id: string, label: string, url: string, icon: Shortcut["icon"], longLabel = label): Shortcut => ({ id, label, longLabel, url, icon });
   const pages =
     input.signedIn && input.profile
@@ -30,6 +32,7 @@ export function shortcutList(input: { signedIn: boolean; profile: string | null;
       ? [
           item("inbox", t("actionInbox"), appLink("/#inbox"), "inbox"),
           item("tasks", t("actionTasks"), appLink("/#tasks"), "tasks"),
+          ...(input.study ? [item("study", t("actionStudy"), appLink("/#study"), "database")] : []),
           item("search", t("actionSearch"), appLink("/#search"), "search"),
           item("voice", t("actionVoice"), "flowplan://capture?mode=voice&record=1", "voice"),
         ]
@@ -57,6 +60,7 @@ export function shortcutOfLink(link: string, profile: string | null): string | n
     [appLink("/#inbox")]: "inbox",
     [appLink("/#tasks")]: "tasks",
     [appLink("/#search")]: "search",
+    [appLink("/#study")]: "study",
   };
   return ids[link] ?? null;
 }

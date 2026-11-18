@@ -32,7 +32,7 @@ import {
   type AdminStorageProps,
 } from "../admin";
 import type { FocusProps, IncidentProps, JobsProps, MeetingProps, RecordingProps } from "../activities";
-import { inboxWidget as inboxProps, sampleSummary, tasksWidget as tasksProps, widgetProps, type InboxWidgetProps, type TasksWidgetProps, type TimerProps } from "../summary";
+import { inboxWidget as inboxProps, sampleSummary, studyWidget as studyProps, tasksWidget as tasksProps, widgetProps, type InboxWidgetProps, type StudyWidgetProps, type TasksWidgetProps, type TimerProps } from "../summary";
 
 // Settings of the widgets below (iOS 17: long press → Edit Widget; the
 // values come in environment.configuration, app.config.ts declares them).
@@ -178,6 +178,48 @@ function FlowplanInbox(props: InboxWidgetProps, environment: WidgetEnvironment) 
         <Image systemName="person.crop.circle.badge.exclamationmark" modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} />
       )}
       <Text modifiers={[font({ size: 12 }), foregroundStyle(secondary), lineLimit(2)]}>{props.label}</Text>
+    </VStack>
+  );
+}
+
+// "Karten fällig" (flashcards): the cards left today, the next deck and the
+// streak; a tap opens #study.
+function FlowplanStudy(props: StudyWidgetProps, environment: WidgetEnvironment) {
+  "widget";
+  const family = environment.widgetFamily || "systemSmall";
+  const dark = environment.colorScheme === "dark";
+  const brand = environment.widgetRenderingMode === "accented" ? { type: "hierarchical" as const, style: "primary" as const } : dark ? "#8f93ff" : "#4146e6";
+  const secondary = { type: "hierarchical" as const, style: "secondary" as const };
+  const background = dark ? "#16151b" : "#fcfbf8";
+  if (!props || !props.title)
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(background, "widget")]}>
+        <Image systemName="rectangle.on.rectangle.angled" modifiers={[foregroundStyle(brand), font({ size: 15 })]} />
+        <Text modifiers={[font({ size: 15, weight: "semibold" })]}>Flowplan</Text>
+      </VStack>
+    );
+  if (family === "accessoryInline") return <Text modifiers={[widgetURL(props.url)]}>{props.signedIn ? `${props.count} · ${props.title}` : props.label}</Text>;
+  if (family === "accessoryCircular")
+    return (
+      <VStack spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget"), accessibilityLabel(`${props.title}: ${props.count}`)]}>
+        <Image systemName={props.signedIn ? "rectangle.on.rectangle.angled" : "person.crop.circle.badge.exclamationmark"} modifiers={[font({ size: 12 })]} />
+        {props.signedIn ? <Text modifiers={[font({ size: 20, weight: "bold" }), monospacedDigit()]}>{String(props.count)}</Text> : null}
+      </VStack>
+    );
+  return (
+    <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
+      <HStack spacing={5}>
+        <Image systemName="rectangle.on.rectangle.angled" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
+        <Text modifiers={[font({ size: 12, weight: "semibold" }), foregroundStyle(brand), lineLimit(1)]}>{props.title}</Text>
+      </HStack>
+      <Spacer />
+      {props.signedIn ? (
+        <Text modifiers={[font({ size: 44, weight: "bold", design: "rounded" }), monospacedDigit(), lineLimit(1), minimumScaleFactor(0.5)]}>{String(props.count)}</Text>
+      ) : (
+        <Image systemName="person.crop.circle.badge.exclamationmark" modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} />
+      )}
+      <Text modifiers={[font({ size: 12 }), foregroundStyle(secondary), lineLimit(2)]}>{props.label}</Text>
+      {props.detail ? <Text modifiers={[font({ size: 11 }), foregroundStyle(secondary), lineLimit(1)]}>{props.detail}</Text> : null}
     </VStack>
   );
 }
@@ -741,6 +783,7 @@ const samples = (lang: Locale) => {
   return {
     tasks: widgetProps(tasksProps(summary, lang)),
     inbox: widgetProps(inboxProps(summary, lang)),
+    study: widgetProps(studyProps(summary, lang)),
     status: widgetProps(statusProps(admin, lang)),
     live: widgetProps(liveProps(admin, lang)),
     storage: widgetProps(storageProps(admin, lang)),
@@ -749,6 +792,7 @@ const samples = (lang: Locale) => {
 const english = samples("en");
 export let tasksWidget = createWidget<TasksWidgetProps, TasksConfig>("FlowplanTasks", FlowplanTasks, english.tasks);
 export let inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, english.inbox);
+export let studyWidget = createWidget<StudyWidgetProps>("FlowplanStudy", FlowplanStudy, english.study);
 export let adminStatusWidget = createWidget<AdminStatusProps, InstanceConfig>("FlowplanInstance", FlowplanInstance, english.status);
 export let adminLiveWidget = createWidget<AdminLiveProps, LiveConfig>("FlowplanLive", FlowplanLive, english.live);
 export let adminStorageWidget = createWidget<AdminStorageProps, StorageConfig>("FlowplanStorage", FlowplanStorage, english.storage);
@@ -759,6 +803,7 @@ export function localizeSamples(lang: Locale) {
   const sample = samples(lang);
   tasksWidget = createWidget<TasksWidgetProps, TasksConfig>("FlowplanTasks", FlowplanTasks, sample.tasks);
   inboxWidget = createWidget<InboxWidgetProps>("FlowplanInbox", FlowplanInbox, sample.inbox);
+  studyWidget = createWidget<StudyWidgetProps>("FlowplanStudy", FlowplanStudy, sample.study);
   adminStatusWidget = createWidget<AdminStatusProps, InstanceConfig>("FlowplanInstance", FlowplanInstance, sample.status);
   adminLiveWidget = createWidget<AdminLiveProps, LiveConfig>("FlowplanLive", FlowplanLive, sample.live);
   adminStorageWidget = createWidget<AdminStorageProps, StorageConfig>("FlowplanStorage", FlowplanStorage, sample.storage);

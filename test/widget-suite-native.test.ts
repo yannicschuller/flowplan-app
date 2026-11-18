@@ -65,7 +65,7 @@ test("Siri phrases exist in German, English, French and Chinese and name the app
 });
 
 test("every widget has a gallery name and description in every language", () => {
-  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
+  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanStudy", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
   assert.deepEqual(Object.keys(gallery).sort(), [...names].sort());
   for (const lang of ["de", "en", "fr", "zh"]) {
     const android = galleryStrings(lang);

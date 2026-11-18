@@ -25,6 +25,8 @@
   "%@ results for “%@”": "找到 %@ 个与“%@”相关的结果",
   "Search in the app": "在应用中搜索",
   "Opens Flowplan's search with this text.": "用此文本打开 Flowplan 的搜索。",
+  "Study due cards": "学习待复习卡片",
+  "Opens Flowplan's flashcards with the cards due today.": "打开 Flowplan 的抽认卡，显示今天待复习的卡片。",
   "Flowplan focus": "Flowplan 专注模式",
   "Shows one profile or workspace while this Focus is on.": "此专注模式打开时，只显示一个账户或工作区。",
   "Profile or workspace": "账户或工作区",

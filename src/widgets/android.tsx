@@ -3,7 +3,7 @@
 // a widget is added, every 30 minutes, on resize); the handler then reads the
 // summary fresh from the instance when it can.
 import { FlexWidget, TextWidget, type WidgetTaskHandlerProps } from "react-native-android-widget";
-import type { InboxWidgetProps, TasksWidgetProps } from "../summary";
+import type { InboxWidgetProps, StudyWidgetProps, TasksWidgetProps } from "../summary";
 import type { AdminLiveProps, AdminStatusProps, AdminStorageProps } from "../admin";
 import { materialColors } from "../../modules/flowplan-android/src";
 import { materialThemes } from "../android/theme";
@@ -101,6 +101,36 @@ function InboxView({ props, theme }: { props: InboxWidgetProps; theme: Theme }) 
       <TextWidget text={props.label} maxLines={2} style={{ fontSize: 13, color: hex(theme.muted) }} />
     </FlexWidget>
   );
+}
+
+// "Karten fällig" (flashcards): the cards left today, the next deck, the
+// streak; a tap opens #study.
+function StudyView({ props, theme }: { props: StudyWidgetProps; theme: Theme }) {
+  return (
+    <FlexWidget
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: props.url }}
+      style={{
+        height: "match_parent",
+        width: "match_parent",
+        flexDirection: "column",
+        padding: 14,
+        backgroundColor: hex(theme.background),
+        borderRadius: 22,
+      }}
+    >
+      <TextWidget text={props.title} maxLines={1} style={{ fontSize: 13, fontWeight: "600", color: hex(theme.brand) }} />
+      <FlexWidget style={{ flex: 1 }} />
+      {props.signedIn ? <TextWidget text={String(props.count)} style={{ fontSize: 40, fontWeight: "700", color: hex(theme.text) }} /> : null}
+      <TextWidget text={props.label} maxLines={2} style={{ fontSize: 13, color: hex(theme.muted) }} />
+      {props.detail ? <TextWidget text={props.detail} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted) }} /> : null}
+    </FlexWidget>
+  );
+}
+
+export function renderStudy(props: StudyWidgetProps) {
+  const themes = widgetThemes();
+  return { light: <StudyView props={props} theme={themes.light} />, dark: <StudyView props={props} theme={themes.dark} /> };
 }
 
 // ---- Administrators' widgets (admin.ts): simpler than on iOS ----

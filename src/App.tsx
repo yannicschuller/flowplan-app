@@ -26,6 +26,7 @@ import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile
 import { profilesRequest, unsignedProfile } from "./profile-picker";
 import { checkAndroidUpdate } from "./android-update";
 import { store } from "./store";
+import { studyOf } from "./summary";
 import { BACKGROUND } from "./ui";
 import { Cover, Lock } from "./screens/Lock";
 import { Settings } from "./screens/Settings";
@@ -235,7 +236,13 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   }, [appLink, open, share]);
 
   // Android: app shortcuts with the recently opened pages (android/shortcuts.ts).
-  useEffect(() => (Platform.OS === "android" ? void syncShortcuts(signedIn) : setQuickActions(signedIn)), [signedIn]);
+  // "Lernen" with flashcards (summary.study); native/sync.ts updates it
+  // when a summary changes that.
+  useEffect(() => {
+    const study = !!studyOf(store.summary());
+    if (Platform.OS === "android") void syncShortcuts(signedIn, study);
+    else setQuickActions(signedIn, study);
+  }, [signedIn]);
 
   // Handoff: a page from the Mac or another device, on its profile.
   useHandoff(

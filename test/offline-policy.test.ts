@@ -29,6 +29,8 @@ test("each cache holds its own kind of key", () => {
     ["flowplan-data-v1", `/api/pages/${PAGE}`],
     ["flowplan-data-v1", `/api/pages/${PAGE}?view=v`],
     ["flowplan-data-v1", `/api/pages/${PAGE}/rows/${PAGE}`],
+    // A flashcard deck for studying offline (Flowplan lib/offline-plan.ts planStudy).
+    ["flowplan-data-v1", `/api/pages/${PAGE}/study?offline=1`],
     ["flowplan-data-v1", `/api/files/${PAGE}?thumb=1`],
     ["flowplan-static-B1", "/_next/static/chunks/0a-rekt06v0sv.js"],
     ["flowplan-static-B1", "/_next/static/media/KaTeX_Main-Regular.1ryv.woff2"],
@@ -45,6 +47,7 @@ test("each cache holds its own kind of key", () => {
     ["flowplan-data-v1", "/api/mobile/register"],
     ["flowplan-data-v1", "/api/pages/not-a-uuid"],
     ["flowplan-data-v1", `/api/pages/${PAGE}/export`],
+    ["flowplan-data-v1", `/api/pages/${PAGE}/study/export?format=apkg`],
     ["flowplan-data-v1", "/settings"],
     ["flowplan-data-v1", "/_next/static/chunks/a.js"],
     ["flowplan-static-B1", "/api/bootstrap"],

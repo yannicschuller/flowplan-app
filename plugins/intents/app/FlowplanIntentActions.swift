@@ -6,7 +6,9 @@ import SwiftUI
 // to a list or database, what is due today (spoken, with a list), open a
 // page, search. Writing goes through the widgets' actions
 // (POST /api/mobile/widgets/action), reading through the intents API of the
-// instance (FlowplanIntentEntities.swift).
+// instance (FlowplanIntentEntities.swift). "Study due cards" opens #study
+// (flashcards); it is an action of the Shortcuts app, not an App Shortcut
+// with phrases of its own: an app has at most 10 of those, all taken.
 
 struct FPAddTaskIntent: AppIntent {
   static var title: LocalizedStringResource = "Add a task"
@@ -238,6 +240,22 @@ struct FPOpenSearchIntent: AppIntent {
   @MainActor
   func perform() async throws -> some IntentResult {
     FPAppLink.open(FPIntentLinks.search(String(query.prefix(200))))
+    return .result()
+  }
+}
+
+/// "Fällige Karten lernen": the screen #study of the web app (flashcards),
+/// where the decks with cards due today wait.
+struct FPStudyIntent: AppIntent {
+  static var title: LocalizedStringResource = "Study due cards"
+  static var description = IntentDescription("Opens Flowplan's flashcards with the cards due today.")
+  static var openAppWhenRun = true
+
+  init() {}
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    FPAppLink.open(FPIntentLinks.open("/#study"))
     return .result()
   }
 }

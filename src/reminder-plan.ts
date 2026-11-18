@@ -1,8 +1,9 @@
 // Local reminders for due tasks when the instance sends no push (no Expo
 // project in the build, MOBILE_PUSH=off, Android without Firebase): from the
-// summary's tasks, one notification at 09:00 on the day each is due. Pure –
+// summary's tasks, one notification at 09:00 on the day each is due, and
+// the daily study reminder of flashcards (planStudyReminder). Pure –
 // src/native/local-reminders.ts schedules them.
-import type { Summary } from "./summary";
+import { studyOf, type Summary } from "./summary";
 
 export const REMINDER_PREFIX = "flowplan-due-";
 export const REMINDER_HOUR = 9;
@@ -22,4 +23,21 @@ export function planReminders(summary: Summary | null, now: Date, hour = REMINDE
     out.push({ id: `${REMINDER_PREFIX}${index}`, at, text: item.text, page: item.page, url: item.url });
   });
   return out;
+}
+
+// Flashcards (Flowplan docs/specs/flashcards.md §10.3): without push, the
+// daily study reminder the person set on #study (summary.study.remindAt)
+// as a reminder of the phone – today at that time, while it is still to
+// come and cards are left. A summary later in the day plans it again (or
+// not: studied, nothing left, switched off). The instance never sends one
+// when it can push.
+export const STUDY_REMINDER_ID = "flowplan-study-today";
+export type PlannedStudyReminder = { id: string; at: Date; count: number; deck: string; url: string };
+export function planStudyReminder(summary: Summary | null, now: Date): PlannedStudyReminder | null {
+  const study = studyOf(summary);
+  if (!study || !study.remindAt || study.due <= 0) return null;
+  const [hour, minute] = study.remindAt.split(":").map(Number);
+  const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
+  if (Number.isNaN(at.getTime()) || at.getTime() <= now.getTime()) return null;
+  return { id: STUDY_REMINDER_ID, at, count: study.due, deck: study.deck, url: "/#study" };
 }

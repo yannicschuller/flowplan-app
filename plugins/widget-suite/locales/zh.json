@@ -184,6 +184,8 @@
   "gallery.FlowplanTasks.description": "一览到期和未完成的任务、收件箱和计时器。要勾选任务，请添加“任务”小组件。",
   "gallery.FlowplanInbox.label": "Flowplan 收件箱",
   "gallery.FlowplanInbox.description": "未读通知。",
+  "gallery.FlowplanStudy.label": "Flowplan 待复习卡片",
+  "gallery.FlowplanStudy.description": "今天要复习的抽认卡。",
   "gallery.FlowplanInstance.label": "Flowplan 实例",
   "gallery.FlowplanInstance.description": "供管理员使用：状态、版本和上次备份。",
   "gallery.FlowplanLive.label": "Flowplan 实时",

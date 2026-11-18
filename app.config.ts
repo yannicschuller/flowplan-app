@@ -326,6 +326,14 @@ const config: ExpoConfig = {
             ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
+          // Flashcards: the cards due today (summary.study), opens #study.
+          {
+            name: "FlowplanStudy",
+            displayName: nativeStrings.gallery.FlowplanStudy.label[1],
+            description: nativeStrings.gallery.FlowplanStudy.description[1],
+            ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
+            android: null,
+          },
           // Administrators of the instance (src/admin.ts); others see
           // "Administrators only". One thing each, chosen in the settings.
           {
@@ -411,6 +419,7 @@ const config: ExpoConfig = {
         widgets: [
           androidWidget("FlowplanTasks", { minWidth: "250dp", minHeight: "110dp", targetCellWidth: 4, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "500dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanInbox", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, resizeMode: "none" }),
+          androidWidget("FlowplanStudy", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, resizeMode: "none" }),
           androidWidget("FlowplanInstance", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanLive", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "300dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanStorage", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),
