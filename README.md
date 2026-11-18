@@ -20,7 +20,7 @@ Help translate on [translate.flowplan.org](https://translate.flowplan.org).
 The app shows a Flowplan instance in the system web view and adds what only a native app can do. All data stays on the server; Flowplan itself, and every new feature of it, arrives with the server and needs no app update. The app:
 
 - remembers one or several instances as **profiles** (e.g. work and private), switches between them with one tap and accepts only a real Flowplan;
-- signs in with passkeys and SSO through the system's sign-in sheet;
+- signs in with passkeys and SSO through the system's sign-in sheet, and adds new passkeys there without leaving the app;
 - receives **push notifications** with the number of unread notifications on the app icon;
 - has **widgets** for the home screen (and the lock screen on iOS), each showing one thing with **settings of its own**: tasks to **check off right there**, today's appointments, a page or the favorites, a database counter with its last 14 days, journal and habits, the time this week with start/stop, mentions to mark read, form responses, quick capture – plus the overview, the inbox, the flashcards due today ("Cards due", all decks or the chosen ones, opens #study) and, for administrators, the instance's state, a live number and storage;
 - shows what runs as **Live Activities** (lock screen, Dynamic Island) on iOS and as ongoing notifications (Live Updates on Android 16) on Android: the timer, focus with its break, the meeting now with "Open notes", imports and exports, a voice memo being recorded, and – for administrators – an incident while it lasts;
@@ -47,7 +47,7 @@ The app is an [Expo](https://expo.dev) SDK 58 project (React Native 0.88, New Ar
 | Which address is accepted | [`src/server.ts`](src/server.ts) | – (tested in [`test/`](test)) |
 | Profiles: several instances, migration of the single address | [`src/profiles.ts`](src/profiles.ts), [`src/store.ts`](src/store.ts) | `expo-secure-store` (tested in [`test/profiles.test.ts`](test/profiles.test.ts)) |
 | Links: app, system browser, sign-in | [`src/navigation.ts`](src/navigation.ts) | `expo-linking` |
-| Passkeys and SSO | [`src/sign-in.ts`](src/sign-in.ts) | `expo-web-browser` (ASWebAuthenticationSession, Custom Tabs), `expo-crypto` |
+| Passkeys and SSO | [`src/sign-in.ts`](src/sign-in.ts), [`src/passkey.ts`](src/passkey.ts) | `expo-web-browser` (ASWebAuthenticationSession, Custom Tabs), `expo-crypto` |
 | Bridge to the page | [`src/bridge-script.ts`](src/bridge-script.ts) | `window.FlowplanApp` in the page, see below |
 | Push notifications | [`src/native/notifications.ts`](src/native/notifications.ts), [`src/push-relay.ts`](src/push-relay.ts), [`src/native/push.ts`](src/native/push.ts), [`modules/flowplan-push`](modules/flowplan-push), [`plugins/with-notification-service.js`](plugins/with-notification-service.js) | `expo-notifications`; the push relay, end-to-end encrypted: CryptoKit (Notification Service Extension), Tink and the Android Keystore |
 | Share extension, scanner, Spotlight | [`plugins/with-capture.js`](plugins/with-capture.js), [`plugins/capture/`](plugins/capture), [`modules/flowplan-capture`](modules/flowplan-capture), [`src/capture.ts`](src/capture.ts), [`src/screens/Scan.tsx`](src/screens/Scan.tsx), [`src/native/spotlight.ts`](src/native/spotlight.ts) | iOS: a share extension (SwiftUI), VisionKit and Vision, CoreSpotlight |
@@ -97,6 +97,17 @@ Passkeys and identity providers that need one do not work inside an app's web vi
 4. The app checks the instance and its own challenge, then redeems the one-time code with its verifier from the instance's page (`/api/auth/desktop-redeem`). The session cookie lands in the app's web view.
 
 The code is valid for one minute, works once and only together with the verifier that never leaves the app.
+
+### Adding a passkey in the app
+
+The web view cannot create passkeys for a self-hosted instance either (WebAuthn in an app's web view only works for its associated domains). Since the app version after 1.0.17, **Settings → Account → Passkeys → Add a passkey** makes it in the same sign-in sheet ([`src/passkey.ts`](src/passkey.ts); server: `lib/app-passkey.ts`, Flowplan 0.10.2 and newer):
+
+1. The page asks its instance for a one-time link (`POST /api/auth/passkey-app-link`): valid five minutes, once, only for registering one passkey of the signed-in account – it is no session.
+2. It calls `FlowplanApp.addPasskey(url)`. The app accepts only `/passkey-add?token=…` of its own instance, adds its callback `return=flowplan://passkey?state=<random>` and opens it in ASWebAuthenticationSession (iOS, not ephemeral, so the passkey goes to the iCloud Keychain) or a Custom Tab (Android: Google Password Manager or the chosen provider).
+3. The page there creates the passkey ("Passkey · iPhone") and goes back to `flowplan://passkey?state=…&status=added|cancelled|failed`. Another state, or a callback the app did not wait for, is ignored. On Android, coming back to the app without a callback (the tab closed) counts as cancelled.
+4. The app tells the page with the event `flowplan:passkey` (`{ status }`), and the page reloads its list of passkeys.
+
+Older apps (no `addPasskey`) keep **Add in the browser**, which opens the settings in Safari or Chrome.
 
 ### How long the app stays signed in
 

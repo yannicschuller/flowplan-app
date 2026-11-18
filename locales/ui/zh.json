@@ -53,6 +53,8 @@
   "signInNoBrowser": "无法打开用于登录的浏览器。请确认已安装并启用浏览器，然后重试。",
   "signInFailed": "登录失败",
   "signInAgain": "请重新登录。",
+  "passkeyImpossible": "无法添加通行密钥",
+  "passkeyNoSheet": "无法打开用于通行密钥的登录窗口。请检查是否已安装并启用浏览器，然后重试。",
   "settingsTitle": "应用设置",
   "done": "完成",
   "notifications": "通知",

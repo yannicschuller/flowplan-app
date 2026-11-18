@@ -173,6 +173,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   const appLink = useCallback(
     (link: string) => {
       if (link.startsWith("flowplan://sign-in")) return shell.current?.signInLink(link);
+      // The callback of "Passkey hinzufügen" (Android: from the Custom Tab).
+      if (link.startsWith("flowplan://passkey")) return shell.current?.passkeyLink(link);
       if (link.startsWith("flowplan://change-server")) return setSetup(true);
       // Android's shortcut "Switch profile" (android/shortcut-list.ts).
       if (link === SWITCHER_LINK) return openSwitcher.current("app");

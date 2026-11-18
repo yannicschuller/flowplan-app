@@ -23,7 +23,9 @@
 //   a long press on the own account row; profile-picker.ts) – it takes
 //   nothing and answers nothing, and carries a token only this top frame's
 //   bridge knows; it starts the sign-in with passkeys or SSO
-//   (signIn, #109), answering with the event "flowplan:sign-in"; it takes
+//   (signIn, #109), answering with the event "flowplan:sign-in", and adds a
+//   passkey there (addPasskey, passkey.ts), answering with the event
+//   "flowplan:passkey"; it takes
 //   what the swipe from the left edge does (edgeSwipe, #285: the page's
 //   sidebar, or back – the app's back swipe on iOS, the system's gesture on
 //   Android; src/back.ts); and it
@@ -78,6 +80,10 @@ export type PageMessage =
   // the system's sheet, without the detour of a navigation the app has to
   // catch; the answer is the event "flowplan:sign-in" (sign-in.ts).
   | { type: "signIn"; via?: string | null }
+  // "Passkey hinzufügen": the one-time link of the instance for the system's
+  // sign-in sheet (passkey.ts checks it); the answer is the event
+  // "flowplan:passkey".
+  | { type: "addPasskey"; url: string }
   | { type: "voiceNote"; id: string; summarize: boolean; serverTranscription: boolean }
   // The page's keyboard shortcuts for the key commands (ipad.ts checks the
   // list), and a page of the instance for a new window (iPad, iPhone Duo).
@@ -226,6 +232,7 @@ export function bridgeScript(options: {
     }${options.inkRecognition ? `\n    recognizeInk,` : ""}${options.ai ? `\n    ai,` : ""}
     openInBrowser: (url) => post({ type: "openInBrowser", url: String(url) }),
     signIn: (via) => post({ type: "signIn", via: via === "sso" ? "sso" : null }),
+    addPasskey: (url) => post({ type: "addPasskey", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),
     offlineStatus: (status) => post({ type: "offlineStatus", status: status && typeof status === "object" ? status : null }),${

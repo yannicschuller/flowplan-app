@@ -53,6 +53,8 @@
   "signInNoBrowser": "The browser for signing in could not be opened. Check that a browser is installed and enabled, then try again.",
   "signInFailed": "Sign-in failed",
   "signInAgain": "Please sign in again.",
+  "passkeyImpossible": "Passkey not possible",
+  "passkeyNoSheet": "The sign-in window for the passkey could not be opened. Check that a browser is installed and enabled, then try again.",
   "settingsTitle": "App settings",
   "done": "Done",
   "notifications": "Notifications",
