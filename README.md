@@ -314,8 +314,16 @@ Play App Signing keeps the actual signing key at Google. Keep the upload keystor
 Android is handed out as an APK, without Google Play: every release attaches the signed `Flowplan-<version>-android.apk`, and the website offers the latest one at **flowplan.org/download/android.apk** (`app/api/android` in flowplan-website reads the latest release of this repository with its `GITHUB_TOKEN` – a fine-grained token with read access to the contents of flowplan-app – and redirects to the file; while the repository is private, nothing else can reach it).
 
 - **Signing:** only `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` are needed (create the key as below). Without Play, this key *is* the app's signing key: Android installs an update only when it is signed with the same key, so keep it and its passwords safe – if it is lost, everybody has to uninstall and install the app again.
-- **Updates:** the app asks `flowplan.org/api/android` once a day (`src/android-update.ts`). When a newer version is out, it offers **Download**: the browser fetches the APK and Android's installer updates the app in place, sign-in and data stay. **Later** asks again for that version after a week.
-- **Store builds:** `FLOWPLAN_ANDROID_UPDATES=0` turns the check off (Play updates by itself). Apps from Play are signed with Google's key and cannot be updated with the APK, and the other way round.
+- **Updates:** the app asks `flowplan.org/api/android` once a day (`src/android-update.ts`). When a newer version is out, it offers **Update** or **Later** (asked again for that version after a week). **Update** installs it in the app:
+  1. If "Install unknown apps" is off for Flowplan, the app explains it and opens that switch (`Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES`); it goes on when the person returns. (If Android restarts the app when the switch changes, the next start asks again right away.)
+  2. The APK downloads into the app's cache (`cache/flowplan-updates/`, `expo-file-system`) with a small sheet showing progress and **Cancel** (`src/screens/UpdateProgress.tsx`).
+  3. Before the installer opens, the file is checked (`AppUpdates.kt` in `modules/flowplan-native`, rules in `src/android/update-check.ts`): it must be this app's package, have a higher versionCode than the installed build, and match the `size` and – when GitHub has a digest for the release asset – the `sha256` the website names.
+  4. Android's package installer opens with a `content://` address of the module's own FileProvider (`ACTION_INSTALL_PACKAGE`, read permission granted). It updates the app in place only when the APK is signed with the same key; sign-in and data stay.
+  5. The APK is deleted when the installer closes, before every download and at the next start (every `*.apk` in the cache), so nothing piles up in Downloads.
+
+  If anything fails, the error is shown with **Download in browser** as a way out (the old way: the browser fetches the APK, then open the file). The builds outside the stores need `REQUEST_INSTALL_PACKAGES` (set in `app.config.ts`).
+- **Obtainium and other updaters:** every release of this repository carries the APK as `Flowplan-<version>-android.apk`, so Obtainium (or a similar app) can follow the GitHub releases of `yannicschuller/flowplan-app` directly – it is the same signed APK, so it updates the app either way.
+- **Store builds:** `FLOWPLAN_ANDROID_UPDATES=0` turns the check off (Play updates by itself) and leaves `REQUEST_INSTALL_PACKAGES` out of the manifest. Apps from Play are signed with Google's key and cannot be updated with the APK, and the other way round.
 
 ## Releasing
 

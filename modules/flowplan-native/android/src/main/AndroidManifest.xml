@@ -11,5 +11,13 @@
         <action android:name="android.service.quicksettings.action.QS_TILE" />
       </intent-filter>
     </service>
+    <!-- The downloaded update for Android's installer (AppUpdates.kt, src/android-update.ts). -->
+    <provider
+      android:name="app.flowplan.nativeshell.UpdateFileProvider"
+      android:authorities="${applicationId}.flowplanupdates"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/flowplan_update_paths" />
+    </provider>
   </application>
 </manifest>

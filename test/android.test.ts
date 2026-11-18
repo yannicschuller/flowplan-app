@@ -158,3 +158,56 @@ test("update check: the website's answer, when to ask, what is offered", async (
   assert.equal(offer(info!, 1010000, { at: 0, skipped: "1.2.0", skippedAt: day }, 9 * day), true);
   assert.equal(offer(info!, 1010000, { at: 0, skipped: "1.1.0", skippedAt: day }, 2 * day), true);
 });
+
+test("in-app update: size and SHA-256 from the website, the downloaded APK checked before the installer", async () => {
+  const { apkProblem, parseUpdateInfo } = await import("../src/android/update-check");
+  const hash = "AB".repeat(32);
+  const info = parseUpdateInfo({ version: "1.2.0", versionCode: 1020000, url: "https://flowplan.org/download/android.apk", size: 4096, sha256: hash, date: "x" })!;
+  assert.deepEqual(info, { version: "1.2.0", versionCode: 1020000, url: "https://flowplan.org/download/android.apk", size: 4096, sha256: "ab".repeat(32) });
+  // Unusable values are left out, not fatal (older website, no digest on the release).
+  assert.deepEqual(parseUpdateInfo({ ...info, size: -1, sha256: "md5:123" }), { version: "1.2.0", versionCode: 1020000, url: info.url });
+  const apk = { packageName: "app.flowplan.mobile", versionCode: 1020000, size: 4096, sha256: "ab".repeat(32) };
+  assert.equal(apkProblem(info, apk, 1010003, "app.flowplan.mobile"), null);
+  assert.equal(apkProblem(info, null, 1010003, "app.flowplan.mobile"), "unreadable");
+  assert.equal(apkProblem(info, { ...apk, packageName: "com.example" }, 1010003, "app.flowplan.mobile"), "package");
+  // Not newer than the installed build (a rebuild of the same version counts).
+  assert.equal(apkProblem(info, apk, 1020000, "app.flowplan.mobile"), "version");
+  assert.equal(apkProblem(info, apk, 1020001, "app.flowplan.mobile"), "version");
+  assert.equal(apkProblem(info, { ...apk, versionCode: 1020001 }, 1020000, "app.flowplan.mobile"), null);
+  assert.equal(apkProblem(info, { ...apk, size: 4095 }, 1010003, "app.flowplan.mobile"), "size");
+  assert.equal(apkProblem(info, { ...apk, sha256: "cd".repeat(32) }, 1010003, "app.flowplan.mobile"), "hash");
+  assert.equal(apkProblem(info, { ...apk, sha256: "AB".repeat(32) }, 1010003, "app.flowplan.mobile"), null);
+  // Without size and hash only package and version count.
+  const bare = { version: "1.2.0", versionCode: 1020000, url: info.url };
+  assert.equal(apkProblem(bare, { ...apk, size: 1, sha256: "00" }, 1010003, "app.flowplan.mobile"), null);
+});
+
+test("in-app update: every APK in the cache goes; file name and progress", async () => {
+  const { apkName, megabytes, progressOf, staleApks } = await import("../src/android/update-check");
+  assert.deepEqual(staleApks(["Flowplan-1.2.0.apk", "OLD.APK", "photo.jpg", "apk", "notes.apk.txt", "Flowplan-1.1.0.apk"]), ["Flowplan-1.2.0.apk", "OLD.APK", "Flowplan-1.1.0.apk"]);
+  assert.equal(apkName("1.2.0"), "Flowplan-1.2.0.apk");
+  // Nothing but digits and dots from the feed in the name.
+  assert.equal(apkName("../1.2.0/"), "Flowplan-..1.2.0.apk");
+  assert.equal(progressOf(50, 200), 0.25);
+  assert.equal(progressOf(300, 200), 1);
+  assert.equal(progressOf(10, -1), null);
+  assert.equal(progressOf(10, 0), null);
+  assert.equal(megabytes(45.6 * 1024 * 1024), "45.6");
+});
+
+test("in-app update: the install permission only for builds outside the stores, the installer's provider in the module", () => {
+  assert.ok(config.android?.permissions?.includes("android.permission.REQUEST_INSTALL_PACKAGES"));
+  assert.ok(!config.android?.blockedPermissions?.includes("android.permission.REQUEST_INSTALL_PACKAGES"));
+  assert.equal(config.extra?.androidUpdates, true);
+  const native = join(root, "modules/flowplan-native/android/src/main");
+  const manifest = readFileSync(join(native, "AndroidManifest.xml"), "utf8");
+  assert.match(manifest, /android:name="app\.flowplan\.nativeshell\.UpdateFileProvider"[\s\S]*android:authorities="\$\{applicationId\}\.flowplanupdates"[\s\S]*android:exported="false"[\s\S]*android:grantUriPermissions="true"/);
+  assert.match(readFileSync(join(native, "res/xml/flowplan_update_paths.xml"), "utf8"), /<cache-path name="updates" path="flowplan-updates\/" \/>/);
+  const kotlin = readFileSync(join(native, "java/app/flowplan/nativeshell/AppUpdates.kt"), "utf8");
+  // The same folder and authority on both sides; the installer may read the file.
+  assert.match(kotlin, /FOLDER = "flowplan-updates"/);
+  assert.match(kotlin, /\.flowplanupdates"/);
+  assert.match(kotlin, /FLAG_GRANT_READ_URI_PERMISSION/);
+  assert.match(kotlin, /ACTION_MANAGE_UNKNOWN_APP_SOURCES/);
+  assert.match(readFileSync(join(root, "src/android-update.ts"), "utf8"), /new Directory\(Paths\.cache, "flowplan-updates"\)/);
+});

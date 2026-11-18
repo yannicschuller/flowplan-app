@@ -63,6 +63,11 @@ const androidWidget = (name: string, size: Record<string, unknown>) => ({
 const { version } = require("./package.json") as { version: string };
 const build = buildNumber(version, process.env.FLOWPLAN_BUILD);
 const BUNDLE_ID = "app.flowplan.mobile";
+// Android outside the stores: the app looks for a newer APK on the website
+// and installs it itself (src/android-update.ts); FLOWPLAN_ANDROID_UPDATES=0
+// for a store build, which leaves updates to the store and has no right to
+// install packages.
+const ANDROID_UPDATES = process.env.FLOWPLAN_ANDROID_UPDATES !== "0";
 // A test build for your own iPhone with a free Apple ID (Xcode "Personal
 // Team", README → Testing on your iPhone): FLOWPLAN_PERSONAL=1. Apple gives
 // free accounts no push, so the build leaves it out, uses a bundle ID of its
@@ -182,11 +187,14 @@ const config: ExpoConfig = {
       "android.permission.POST_PROMOTED_NOTIFICATIONS",
       "android.permission.USE_BIOMETRIC",
       "android.permission.VIBRATE",
+      // Hands the downloaded update to Android's installer (modules/flowplan-native AppUpdates.kt).
+      ...(ANDROID_UPDATES ? ["android.permission.REQUEST_INSTALL_PACKAGES"] : []),
     ],
     blockedPermissions: [
       "android.permission.READ_EXTERNAL_STORAGE",
       "android.permission.WRITE_EXTERNAL_STORAGE",
       "android.permission.SYSTEM_ALERT_WINDOW",
+      ...(ANDROID_UPDATES ? [] : ["android.permission.REQUEST_INSTALL_PACKAGES"]),
     ],
     intentFilters: [
       // "Teilen" from other apps: text and links (the capture screen; before
@@ -451,9 +459,9 @@ const config: ExpoConfig = {
     widgets: WIDGETS,
     // Push through the relay (src/native/push.ts).
     pushRelay: PUSH_RELAY,
-    // Android outside the stores: look for a newer APK on the website
-    // (src/android-update.ts); FLOWPLAN_ANDROID_UPDATES=0 for a store build.
-    androidUpdates: process.env.FLOWPLAN_ANDROID_UPDATES !== "0",
+    // Android outside the stores: look for a newer APK on the website and
+    // install it (src/android-update.ts); FLOWPLAN_ANDROID_UPDATES=0 for a store build.
+    androidUpdates: ANDROID_UPDATES,
     androidUpdateFeed: (process.env.ANDROID_UPDATE_FEED || "https://flowplan.org/api/android").trim(),
     apsEnvironment: APS_ENVIRONMENT,
     // Expo's push service – only for instances without the relay (README →

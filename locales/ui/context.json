@@ -4,5 +4,7 @@
   "widgetTasks": "Widgets and Live Activity",
   "widgetOverview": "The overview widget (FlowplanTasks): not \"Aufgaben\" – that is the suite's widget that checks off.",
   "suiteCapture": "Configurable widgets, capture, Live Activities",
-  "voiceFile": "The file name stays ASCII, like the other languages' names."
+  "voiceFile": "The file name stays ASCII, like the other languages' names.",
+  "updateAllowText": "Android's own names in the settings: \"Install unknown apps\" (de: \"Unbekannte Apps installieren\", fr: \"Installer des applis inconnues\", zh: \"安装未知应用\") and its switch \"Allow from this source\" (de: \"Aus dieser Quelle zulassen\", fr: \"Autoriser cette source\", zh: \"允许来自此来源的应用\").",
+  "updateProgress": "Progress of the update download in megabytes (fr: Mo)."
 }

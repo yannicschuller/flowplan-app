@@ -79,6 +79,10 @@ type NativeModule = {
   inspectCertificate?(origin: string): Promise<InspectedCertificate | null>;
   setCertificatePins?(pins: { host: string; sha256: string }[]): void;
   armWebViews?(): Promise<number>;
+  canInstallUpdates?(): boolean;
+  openInstallSettings?(): Promise<boolean>;
+  inspectUpdate?(uri: string): Promise<UpdateApk | null>;
+  installUpdate?(uri: string): Promise<InstallOutcome>;
   addListener(event: "onPencil", listener: (action: PencilAction) => void): EventSubscription;
   addListener(event: "onEdgeSwipe", listener: () => void): EventSubscription;
   addListener(event: "onAppLink", listener: (event: { url: string }) => void): EventSubscription;
@@ -260,4 +264,40 @@ export async function armWebViews(): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+// Android outside the stores: installing an update in the app
+// (src/android-update.ts, AppUpdates.kt). The APK lies in the cache's
+// flowplan-updates folder; anywhere else the module refuses it.
+export type UpdateApk = { packageName: string; versionCode: number; size: number; sha256: string };
+export type InstallOutcome = "installed" | "cancelled" | "failed";
+export type UpdateInstaller = {
+  // Whether "Install unknown apps" is on for Flowplan.
+  canInstall(): boolean;
+  // Opens that switch in the settings; whether it is on after the person returns.
+  openSettings(): Promise<boolean>;
+  // The APK's package, versionCode, size and SHA-256 (null: not an APK Android can read).
+  inspect(uri: string): Promise<UpdateApk | null>;
+  // Android's installer for it; how it closed.
+  install(uri: string): Promise<InstallOutcome>;
+};
+// null on iOS and on an older build without the functions (then the browser downloads it).
+export function updateInstaller(): UpdateInstaller | null {
+  const m = native;
+  if (Platform.OS !== "android" || !m?.canInstallUpdates || !m.openInstallSettings || !m.inspectUpdate || !m.installUpdate) return null;
+  return {
+    canInstall: () => {
+      try {
+        return m.canInstallUpdates!();
+      } catch {
+        return false;
+      }
+    },
+    openSettings: () => m.openInstallSettings!(),
+    inspect: async (uri) => {
+      const apk = await m.inspectUpdate!(uri);
+      return apk && typeof apk.versionCode === "number" ? apk : null;
+    },
+    install: (uri) => m.installUpdate!(uri),
+  };
 }

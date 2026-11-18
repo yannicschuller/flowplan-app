@@ -26,13 +26,18 @@ import expo.modules.kotlin.records.Record
  * - the same for what else runs now: focus, the meeting now, imports and exports, a voice
  *   memo being recorded, an incident of the instance (src/native/activities.ts);
  * - "New note" as a Quick Settings tile (CaptureTileService);
- * - certificates the person trusted for a self-hosted instance (CertificatePins, PinnedWebViewClient).
+ * - certificates the person trusted for a self-hosted instance (CertificatePins, PinnedWebViewClient);
+ * - installing an update of the APK build in the app (AppUpdates).
  *
  * "Share" from other apps, the app shortcuts and "Quick capture" are modules/flowplan-android's.
  */
 class FlowplanNativeModule : Module() {
   private val context: Context
     get() = appContext.reactContext ?: throw IllegalStateException("No context")
+
+  // The installer or the "Install unknown apps" settings while they are open (AppUpdates).
+  private var pendingInstall: Promise? = null
+  private var pendingSettings: Promise? = null
 
   override fun definition() = ModuleDefinition {
     Name("FlowplanNative")
@@ -68,6 +73,61 @@ class FlowplanNativeModule : Module() {
       val root = appContext.currentActivity?.window?.decorView ?: return@AsyncFunction 0
       PinnedWebViewClient.arm(root)
     }.runOnQueue(Queues.MAIN)
+
+    // Updates of the APK build (src/android-update.ts).
+    Function("canInstallUpdates") { AppUpdates.canInstall(context) }
+
+    // The "Install unknown apps" switch of this app; answers whether it is on after the person returns.
+    AsyncFunction("openInstallSettings") { promise: Promise ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction promise.resolve(AppUpdates.canInstall(context))
+      pendingSettings?.resolve(AppUpdates.canInstall(context))
+      pendingSettings = promise
+      try {
+        activity.startActivityForResult(AppUpdates.settingsIntent(context), AppUpdates.REQUEST_SETTINGS)
+      } catch (_: Exception) {
+        pendingSettings = null
+        promise.resolve(AppUpdates.canInstall(context))
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    // { packageName, versionCode, size, sha256 } of a downloaded APK, off the main thread.
+    AsyncFunction("inspectUpdate") { uri: String, promise: Promise ->
+      Thread {
+        try {
+          promise.resolve(AppUpdates.file(context, uri)?.let { AppUpdates.inspect(context, it) })
+        } catch (_: Exception) {
+          promise.resolve(null)
+        }
+      }.start()
+    }
+
+    // Opens Android's installer for the APK: "installed", "cancelled" or "failed" when it closes
+    // (after a successful update Android usually restarts the app before that).
+    AsyncFunction("installUpdate") { uri: String, promise: Promise ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction promise.reject("ERR_NO_ACTIVITY", "No activity", null)
+      val file = AppUpdates.file(context, uri) ?: return@AsyncFunction promise.reject("ERR_NO_FILE", "No downloaded update", null)
+      pendingInstall?.resolve("cancelled")
+      pendingInstall = promise
+      try {
+        activity.startActivityForResult(AppUpdates.installIntent(context, file), AppUpdates.REQUEST_INSTALL)
+      } catch (error: Exception) {
+        pendingInstall = null
+        promise.reject("ERR_INSTALLER", error.message ?: "No installer", error)
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    OnActivityResult { _, payload ->
+      when (payload.requestCode) {
+        AppUpdates.REQUEST_INSTALL -> {
+          pendingInstall?.resolve(AppUpdates.outcome(payload.resultCode))
+          pendingInstall = null
+        }
+        AppUpdates.REQUEST_SETTINGS -> {
+          pendingSettings?.resolve(AppUpdates.canInstall(context))
+          pendingSettings = null
+        }
+      }
+    }
 
     Function("getManagedServer") {
       val manager = context.getSystemService(Context.RESTRICTIONS_SERVICE) as? RestrictionsManager

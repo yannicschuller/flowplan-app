@@ -32,6 +32,7 @@ import { Cover, Lock } from "./screens/Lock";
 import { Settings } from "./screens/Settings";
 import { Setup } from "./screens/Setup";
 import { ProfileSwitcher } from "./screens/ProfileSwitcher";
+import { UpdateProgress } from "./screens/UpdateProgress";
 import { Shell, type ShellHandle } from "./screens/Shell";
 import { Capture } from "./screens/Capture";
 import { ShareCapture, type ShareRequest } from "./screens/ShareCapture";
@@ -786,6 +787,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           }}
         />
       ) : null}
+      {/* Android outside the stores: the update downloading in the app. */}
+      {Platform.OS === "android" ? <UpdateProgress hidden={locked || covered} /> : null}
       {locked ? <Lock onUnlocked={() => setLocked(false)} /> : null}
       {covered ? <Cover /> : null}
     </>
