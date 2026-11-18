@@ -115,6 +115,21 @@ struct FPFormsWidget: Widget {
   }
 }
 
+// "Karten fällig" (#352): was an expo-widgets widget of the same kind
+// without settings; widgets already on a screen keep their place and count
+// all decks until decks are chosen.
+@available(iOS 17.0, *)
+struct FPStudyWidget: Widget {
+  var body: some WidgetConfiguration {
+    AppIntentConfiguration(kind: "FlowplanStudy", intent: FPStudyConfiguration.self, provider: FPProvider<FPStudyConfiguration>()) { entry in
+      FPSuiteView(entry: entry)
+    }
+    .configurationDisplayName("Flowplan Cards due")
+    .description("Flashcards to study today.")
+    .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+  }
+}
+
 // MARK: - Controls
 
 @available(iOS 18.0, *)
@@ -182,6 +197,7 @@ struct FlowplanSuiteWidgets: WidgetBundle {
       FPTimeWidget()
       FPMentionsWidget()
       FPFormsWidget()
+      FPStudyWidget()
     }
     if #available(iOS 18.0, *) {
       FPNoteControl()

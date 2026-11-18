@@ -427,11 +427,35 @@ actor FPRefresher {
     // Above 16 widgets on screens: the rest follows in a second request.
     for start in stride(from: 0, to: min(requests.count, FPShared.maxPerRequest * 2), by: FPShared.maxPerRequest) {
       let batch = Array(requests[start..<min(requests.count, start + FPShared.maxPerRequest)])
-      guard let results = try? await FPAPI.data(batch, session: session) else { return }
+      let results: [String: FPResult]
+      do {
+        results = try await FPAPI.data(batch, session: session)
+      } catch FPError.http(400, _) where batch.count > 1 {
+        // An instance that does not know one of the kinds refuses the whole
+        // request (e.g. "study" before its flashcards): each widget on its
+        // own, so only that one shows it cannot be reached.
+        results = await oneByOne(batch, session: session)
+      } catch {
+        return
+      }
       FPStore.save(results, profile: session.profile)
     }
     // Fresh answers: what was tapped before is shown as the instance says.
     FPActions.settle(before: started)
+  }
+
+  private static func oneByOne(_ batch: [FPRequest], session: FPSession) async -> [String: FPResult] {
+    var results: [String: FPResult] = [:]
+    for request in batch {
+      do {
+        results.merge(try await FPAPI.data([request], session: session)) { _, new in new }
+      } catch FPError.http(let status, let error) {
+        results[request.key] = FPResult(ok: false, status: status, error: error, data: FPJSON(nil), at: Date())
+      } catch {
+        continue
+      }
+    }
+    return results
   }
 }
 

@@ -92,6 +92,23 @@ export async function widgetData(
       { method: "POST", body: JSON.stringify({ today: day.today, zone: day.zone, lang: connection.lang, widgets: batch }) },
       fetcher,
     );
+    if (!answer.ok && "status" in answer && answer.status === 400 && batch.length > 1) {
+      // An instance that does not know one of the kinds refuses the whole
+      // request (e.g. "study" before its flashcards): each widget on its
+      // own, so only that one shows it cannot be reached.
+      for (const widget of batch) {
+        const alone = await call<{ widgets?: WidgetResult[] }>(
+          connection,
+          "/api/mobile/widgets/data",
+          { method: "POST", body: JSON.stringify({ today: day.today, zone: day.zone, lang: connection.lang, widgets: [widget] }) },
+          fetcher,
+        );
+        if (!alone.ok && "signedOut" in alone) return alone;
+        const result = alone.ok ? alone.value.widgets?.find((w) => w && w.id === widget.id) : null;
+        results.set(widget.id, result ?? { id: widget.id, kind: widget.kind, ok: false, status: alone.ok ? 0 : alone.status, error: alone.ok ? "" : alone.error });
+      }
+      continue;
+    }
     if (!answer.ok) return answer;
     for (const result of answer.value.widgets ?? []) if (result && typeof result.id === "string") results.set(result.id, result);
   }

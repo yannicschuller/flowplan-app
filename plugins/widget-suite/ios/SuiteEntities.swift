@@ -247,6 +247,26 @@ struct FPFormPage: AppEntity {
   }
 }
 
+@available(iOS 17.0, *)
+struct FPDeck: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Deck"
+  static var defaultQuery = FPDeckQuery()
+  var id: String
+  var name: String
+  var detail: String
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
+  init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
+
+  struct FPDeckQuery: EntityQuery {
+    func entities(for identifiers: [String]) async throws -> [FPDeck] {
+      await FPOptions.resolve(identifiers, FPOptions.pages("study", "decks")).map(FPDeck.init)
+    }
+    func suggestedEntities() async throws -> [FPDeck] {
+      await FPOptions.pages("study", "decks").map(FPDeck.init)
+    }
+  }
+}
+
 // MARK: - Views and properties of the chosen database
 
 @available(iOS 17.0, *)

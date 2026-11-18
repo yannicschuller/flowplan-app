@@ -12,7 +12,7 @@
 
 import { activeProfile, type ProfileState } from "../profiles";
 
-export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms"] as const;
+export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms", "study"] as const;
 export type SuiteKind = (typeof SUITE_KINDS)[number];
 // Kinds the app asks for itself: Live Activities and system controls.
 export type ServerKind = SuiteKind | "focus" | "meeting" | "jobs" | "incident";
@@ -28,6 +28,8 @@ export const SUITE_WIDGETS: Record<SuiteKind, string> = {
   time: "FlowplanTime",
   mentions: "FlowplanMentions",
   forms: "FlowplanForms",
+  // "Karten fällig" (#352): all decks, or the chosen ones.
+  study: "FlowplanStudy",
 };
 export const kindOfWidget = (name: string): SuiteKind | null =>
   (Object.entries(SUITE_WIDGETS).find(([, widget]) => widget === name)?.[0] as SuiteKind | undefined) ?? null;
@@ -55,6 +57,8 @@ export type SuiteConfig = {
   time: { timer?: { pageId: string; rowId: string; fieldId: string } };
   mentions: { show: "all" | "mentions" | "assignments"; unreadOnly: boolean; max: number };
   forms: { pageId?: string; max: number };
+  // No decks chosen: all of them.
+  study: { pageIds: string[] };
 };
 
 export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
@@ -67,7 +71,11 @@ export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
   time: {},
   mentions: { show: "all", unreadOnly: true, max: 5 },
   forms: { max: 3 },
+  study: { pageIds: [] },
 };
+
+// The instance takes at most this many decks per widget.
+export const MAX_STUDY_DECKS = 20;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHORT_ID = /^[^\u0000-\u001f]{1,100}$/;
@@ -167,6 +175,9 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
     case "forms":
       out = compact({ pageId: uuid(r.pageId), max: count(r.max, 1, 5, 3) });
       break;
+    case "study":
+      out = { pageIds: [...new Set((Array.isArray(r.pageIds) ? r.pageIds : []).map(uuid).filter((id): id is string => !!id))].slice(0, MAX_STUDY_DECKS) };
+      break;
     default:
       out = d;
   }
@@ -190,6 +201,11 @@ export function serverConfig(kind: SuiteKind, config: SuiteConfig[SuiteKind]): R
       return compact({ targetId: (config as SuiteConfig["capture"]).targetId });
     case "time":
       return {};
+    case "study": {
+      // No decks chosen: the instance counts all of them.
+      const { pageIds } = config as SuiteConfig["study"];
+      return pageIds.length ? { pageIds } : {};
+    }
     default:
       return { ...config };
   }

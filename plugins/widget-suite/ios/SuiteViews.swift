@@ -102,6 +102,7 @@ enum FPKind {
     case "time": return "timer"
     case "mentions": return "at"
     case "forms": return "tray.and.arrow.down"
+    case "study": return "rectangle.on.rectangle.angled"
     default: return "square.grid.2x2"
     }
   }
@@ -117,6 +118,7 @@ enum FPKind {
     case "time": return L("Time this week")
     case "mentions": return L("Mentions")
     case "forms": return L("Form responses")
+    case "study": return L("Cards due")
     default: return "Flowplan"
     }
   }
@@ -280,6 +282,7 @@ struct FPSuiteView: View {
         case "time": FPTimeView(entry: entry)
         case "mentions": FPMentionsView(entry: entry)
         case "forms": FPFormsView(entry: entry)
+        case "study": FPStudyView(entry: entry)
         default: EmptyView()
         }
       }
@@ -1219,6 +1222,78 @@ struct FPFormsView: View {
             }
           }
           .accessibilityElement(children: .combine)
+        }
+        Spacer(minLength: 0)
+      }
+    }
+  }
+}
+
+// MARK: - 10. Cards due
+
+@available(iOS 17.0, *)
+struct FPStudyView: View {
+  let entry: FPEntry
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    let due = entry.data["due"].int ?? 0
+    let streak = entry.data["streak"].int ?? 0
+    let decks = entry.data["decks"].array
+    let title = entry.data["title"].string ?? L("Cards due")
+    let label = due > 0 ? (decks.first?["title"].string ?? FPFormat.count("%d due", due)) : L("All studied for today")
+    let detail = streak > 0 ? FPFormat.count("Streak: %d", streak) : ""
+    switch family {
+    case .accessoryInline:
+      Label("\(due) · \(title)", systemImage: "rectangle.on.rectangle.angled")
+    case .accessoryCircular:
+      ZStack {
+        AccessoryWidgetBackground()
+        VStack(spacing: 0) {
+          Image(systemName: "rectangle.on.rectangle.angled").font(.caption2)
+          Text("\(due)").font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
+        }
+      }
+      .accessibilityLabel("\(title): \(due)")
+    case .accessoryRectangular:
+      VStack(alignment: .leading, spacing: 0) {
+        Text(title).font(.caption).lineLimit(1)
+        Text("\(due)").font(.title2.weight(.bold)).monospacedDigit().lineLimit(1).widgetAccentable()
+        Text(label).font(.caption2).lineLimit(1)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    case .systemSmall:
+      VStack(alignment: .leading, spacing: 2) {
+        FPHeader(icon: "rectangle.on.rectangle.angled", title: title)
+        Spacer(minLength: 0)
+        FPBigNumber(value: "\(due)", size: 44)
+        Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+      }
+      .accessibilityElement(children: .combine)
+    default:
+      // Wider: the number and the decks with cards left (each opens its deck).
+      VStack(alignment: .leading, spacing: 6) {
+        FPHeader(icon: "rectangle.on.rectangle.angled", title: title, trailing: detail)
+        HStack(alignment: .top, spacing: 14) {
+          VStack(alignment: .leading, spacing: 2) {
+            FPBigNumber(value: "\(due)", size: 44)
+            if decks.isEmpty { Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+          }
+          .accessibilityElement(children: .combine)
+          VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(decks.prefix(4).enumerated()), id: \.offset) { _, deck in
+              Link(destination: FPLink.page(deck["url"].string)) {
+                HStack(spacing: 6) {
+                  Text(deck["title"].text).font(.subheadline).lineLimit(1)
+                  Spacer(minLength: 4)
+                  Text("\(deck["due"].int ?? 0)").font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(.secondary)
+                }
+              }
+              .accessibilityElement(children: .combine)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
         Spacer(minLength: 0)
       }

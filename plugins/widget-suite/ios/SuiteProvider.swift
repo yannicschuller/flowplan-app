@@ -162,6 +162,11 @@ enum FPSamples {
         ["id": "2", "title": "Jonas Klein", "createdAt": now - 5 * 3_600_000, "new": true, "url": "/"],
         ["id": "3", "title": "Mia Sommer", "createdAt": now - 30 * 3_600_000, "new": false, "url": "/"],
       ]]
+    case "study":
+      return ["title": L("Cards due"), "due": 12, "new": 5, "streak": 4, "url": "/#study", "more": 0, "decks": [
+        ["pageId": "sample", "title": L("Spanish A1"), "due": 8, "new": 3, "url": "/"],
+        ["pageId": "sample", "title": L("Anatomy"), "due": 4, "new": 2, "url": "/"],
+      ]]
     default:
       return [:]
     }

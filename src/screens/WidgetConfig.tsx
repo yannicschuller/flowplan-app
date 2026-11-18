@@ -11,7 +11,7 @@ import { pickLocale, setLocale, t } from "../i18n";
 import { connection, readConfigs, saveWidgetConfig } from "../native/suite";
 import { store } from "../store";
 import { widgetOptions } from "../widgets/api";
-import { CAPTURE_BUTTONS, kindOfWidget, normalizeConfig } from "../widgets/suite";
+import { CAPTURE_BUTTONS, kindOfWidget, MAX_STUDY_DECKS, normalizeConfig } from "../widgets/suite";
 import { configFor } from "../widgets/widget-config";
 import { Button, styles, usePalette } from "../ui";
 
@@ -284,6 +284,20 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
         </>
       );
       break;
+    case "study": {
+      // "Karten fällig" (#352): none chosen counts all decks.
+      const chosen = (Array.isArray(config.pageIds) ? config.pageIds : []).filter((id): id is string => typeof id === "string");
+      fields = (
+        <Many
+          title={`${t("configDecks")} (${chosen.length ? chosen.length : t("configAll")})`}
+          items={named(o.decks)}
+          values={chosen}
+          max={MAX_STUDY_DECKS}
+          onChange={(pageIds) => set({ pageIds })}
+        />
+      );
+      break;
+    }
   }
 
   return (

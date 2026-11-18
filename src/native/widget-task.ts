@@ -4,9 +4,9 @@ import { getLocales } from "expo-localization";
 import type { WidgetTaskHandlerProps } from "react-native-android-widget";
 import { pickLocale, setLocale } from "../i18n";
 import { store } from "../store";
-import { inboxWidget, studyWidget, tasksWidget } from "../summary";
+import { inboxWidget, tasksWidget } from "../summary";
 import { adminLiveWidget, adminStatusWidget, adminStorageWidget } from "../admin";
-import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderStudy, renderTasks } from "../widgets/android";
+import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, renderTasks } from "../widgets/android";
 import { kindOfWidget } from "../widgets/suite";
 import { adminStateFor, apply, fetchSummary } from "./sync";
 import { handleSuiteClick, refreshAndroidSuite, suiteRender, widgetRemoved } from "./suite";
@@ -14,7 +14,8 @@ import { handleSuiteClick, refreshAndroidSuite, suiteRender, widgetRemoved } fro
 export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget, clickAction, clickActionData }: WidgetTaskHandlerProps) {
   const lang = pickLocale(getLocales().map((l) => l.languageTag));
   setLocale(lang);
-  // The configurable widgets (native/suite.ts): their own requests.
+  // The configurable widgets (native/suite.ts): their own requests – also
+  // "Karten fällig" (FlowplanStudy, #352).
   const kind = kindOfWidget(widgetInfo.widgetName);
   if (kind) {
     if (widgetAction === "WIDGET_DELETED") return widgetRemoved(widgetInfo.widgetId);
@@ -44,8 +45,6 @@ export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget
   renderWidget(
     name === "FlowplanInbox"
       ? renderInbox(inboxWidget(summary, lang))
-      : name === "FlowplanStudy"
-        ? renderStudy(studyWidget(summary, lang))
       : name === "FlowplanInstance"
         ? renderAdminStatus(adminStatusWidget(admin, lang))
         : name === "FlowplanLive"

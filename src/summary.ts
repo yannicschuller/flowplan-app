@@ -153,25 +153,6 @@ export function inboxWidget(summary: Summary | null, locale: Locale): InboxWidge
   };
 }
 
-// "Karten fällig": the flashcards left today – one number, the deck with
-// the most and the streak; a tap opens #study. Without decks (or on an
-// older instance) it says so and opens the app.
-export type StudyWidgetProps = { signedIn: boolean; title: string; count: number; label: string; detail: string; url: string };
-export function studyWidget(summary: Summary | null, locale: Locale): StudyWidgetProps {
-  const title = t("widgetStudy", {}, locale);
-  if (!summary) return { signedIn: false, title, count: 0, label: t("widgetSignIn", {}, locale), detail: "", url: appLink("/") };
-  const study = studyOf(summary);
-  if (!study) return { signedIn: true, title, count: 0, label: t("widgetStudyNone", {}, locale), detail: "", url: appLink("/#study") };
-  return {
-    signedIn: true,
-    title,
-    count: study.due,
-    label: study.due ? (study.deck ? study.deck : t("widgetStudyDue", { count: study.due }, locale)) : t("widgetStudyDone", {}, locale),
-    detail: study.streak ? t("widgetStudyStreak", { count: study.streak }, locale) : "",
-    url: appLink("/#study"),
-  };
-}
-
 // The running timer as Live Activity (iOS) or ongoing notification (Android).
 export type TimerProps = { title: string; database: string; start: number; label: string; url: string };
 export function timerProps(summary: Summary | null, locale: Locale): TimerProps | null {

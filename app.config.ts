@@ -48,6 +48,8 @@ const SUITE_ANDROID: [string, [number, number]][] = [
   ["FlowplanTime", [4, 2]],
   ["FlowplanMentions", [4, 2]],
   ["FlowplanForms", [2, 2]],
+  // "Karten fällig" (#352): settings since it lets you choose the decks.
+  ["FlowplanStudy", [2, 2]],
 ];
 // Android widgets: name, label and description from the gallery table.
 const androidWidget = (name: string, size: Record<string, unknown>) => ({
@@ -326,14 +328,6 @@ const config: ExpoConfig = {
             ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
             android: null,
           },
-          // Flashcards: the cards due today (summary.study), opens #study.
-          {
-            name: "FlowplanStudy",
-            displayName: nativeStrings.gallery.FlowplanStudy.label[1],
-            description: nativeStrings.gallery.FlowplanStudy.description[1],
-            ios: { supportedFamilies: ["systemSmall", "accessoryCircular", "accessoryInline"], initialLayout: "./src/widgets/ios.tsx" },
-            android: null,
-          },
           // Administrators of the instance (src/admin.ts); others see
           // "Administrators only". One thing each, chosen in the settings.
           {
@@ -419,7 +413,6 @@ const config: ExpoConfig = {
         widgets: [
           androidWidget("FlowplanTasks", { minWidth: "250dp", minHeight: "110dp", targetCellWidth: 4, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "500dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanInbox", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, resizeMode: "none" }),
-          androidWidget("FlowplanStudy", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, resizeMode: "none" }),
           androidWidget("FlowplanInstance", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanLive", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "500dp", maxResizeHeight: "300dp", resizeMode: "horizontal|vertical" }),
           androidWidget("FlowplanStorage", { minWidth: "110dp", minHeight: "110dp", targetCellWidth: 2, targetCellHeight: 2, maxResizeWidth: "400dp", maxResizeHeight: "250dp", resizeMode: "horizontal|vertical" }),

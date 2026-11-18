@@ -410,6 +410,27 @@ struct FPFormsConfiguration: FPSuiteConfiguration {
   func perform() async throws -> some IntentResult { .result() }
 }
 
+// MARK: - 10. Cards due
+
+@available(iOS 17.0, *)
+struct FPStudyConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "Cards due"
+  static var description = IntentDescription("Flashcards to study today.")
+  static let kind = "study"
+
+  // None chosen: all decks (#352).
+  @Parameter(title: "Decks")
+  var decks: [FPDeck]?
+
+  var request: FPRequest {
+    // Sorted: the same decks in another order share one answer.
+    let ids = Array(Set((decks ?? []).map(\.id))).sorted().prefix(20)
+    return FPRequest(kind: Self.kind, config: ids.isEmpty ? [:] : ["pageIds": Array(ids)])
+  }
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
 // MARK: - Buttons in widgets (iOS 17: they run here, in the extension)
 //
 // The tapped item is drawn done at once and comes back with a hint when the

@@ -93,7 +93,8 @@ export type SuiteView =
       readAllLabel: string;
       notice?: string;
     })
-  | (Base & { state: "forms"; headline: string; empty: string; items: { title: string; when: string; isNew: boolean; url: string }[] });
+  | (Base & { state: "forms"; headline: string; empty: string; items: { title: string; when: string; isNew: boolean; url: string }[] })
+  | (Base & { state: "study"; count: string; label: string; detail: string; decks: { title: string; due: string; url: string }[] });
 
 const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   capture: "suiteCapture",
@@ -105,6 +106,7 @@ const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   time: "suiteTime",
   mentions: "suiteMentions",
   forms: "suiteForms",
+  study: "widgetStudy",
 };
 export const kindTitle = (kind: SuiteKind, locale: Locale) => t(TITLES[kind], {}, locale);
 
@@ -402,6 +404,24 @@ export function suiteView<K extends SuiteKind>(
         })),
       };
     }
+    case "study": {
+      // "Karten fällig" (#352): the cards left today in all decks or the
+      // chosen ones, the next deck first; a tap opens #study, a deck's row
+      // the deck.
+      const due = Math.max(0, Math.round(num(d.due)));
+      const streak = Math.max(0, Math.round(num(d.streak)));
+      const decks = list(d.decks).map((deck) => ({ title: str(deck.title), due: String(Math.max(0, Math.round(num(deck.due)))), url: pageLink(deck.url) }));
+      return {
+        kind,
+        state: "study",
+        title,
+        url: appLink("/#study"),
+        count: String(due),
+        label: due ? decks[0]?.title || t("widgetStudyDue", { count: due }, locale) : t("widgetStudyDone", {}, locale),
+        detail: streak ? t("widgetStudyStreak", { count: streak }, locale) : "",
+        decks,
+      };
+    }
   }
   return closedView(kind, "offline", locale);
 }
@@ -492,6 +512,18 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
         { id: "2", title: "Jonas Klein", createdAt: now - 5 * 3_600_000, new: true, url: "/" },
         { id: "3", title: "Mia Sommer", createdAt: now - 30 * 3_600_000, new: false, url: "/" },
       ],
+    },
+    study: {
+      title: L("Karten fällig", "Cards due", "Cartes à réviser", "待复习卡片"),
+      due: 12,
+      new: 5,
+      streak: 4,
+      decks: [
+        { pageId: id, title: L("Spanisch A1", "Spanish A1", "Espagnol A1", "西班牙语 A1"), due: 8, new: 3, url: "/" },
+        { pageId: id, title: L("Anatomie", "Anatomy", "Anatomie", "解剖学"), due: 4, new: 2, url: "/" },
+      ],
+      more: 0,
+      url: "/#study",
     },
   };
   return { id: kind, kind, ok: true, data: data[kind] };

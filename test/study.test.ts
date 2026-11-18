@@ -4,9 +4,12 @@
 // app shortcut "Lernen".
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSummary, sampleSummary, studyOf, studyWidget, widgetProps, type Summary } from "../src/summary";
+import { isSummary, studyOf, type Summary } from "../src/summary";
+import { sampleResult, suiteView } from "../src/widgets/present";
+import { DEFAULTS, normalizeConfig, serverConfig, SUITE_WIDGETS, kindOfWidget } from "../src/widgets/suite";
+import { widgetData, type Connection } from "../src/widgets/api";
 import { planStudyReminder, STUDY_REMINDER_ID } from "../src/reminder-plan";
-import { pathOfAppLink, appLink } from "../src/navigation";
+import { appLink, pathOfAppLink } from "../src/navigation";
 import { shortcutList, shortcutOfLink } from "../src/android/shortcut-list";
 
 const base: Summary = {
@@ -32,23 +35,82 @@ test("the summary takes `study` when it is there and works without it", () => {
   assert.ok(isSummary({ ...base, study: null }));
 });
 
+const answer = (data: Record<string, unknown>) => ({ id: "w", kind: "study", ok: true as const, data });
+const options = { locale: "de" as const, today: "2026-11-18", signedIn: true };
+const cards = {
+  title: "Karten fällig",
+  due: 12,
+  new: 5,
+  streak: 4,
+  decks: [
+    { pageId: "11111111-1111-4111-8111-111111111111", title: "Spanisch A1", due: 8, new: 3, url: "/#page=11111111-1111-4111-8111-111111111111" },
+    { pageId: "22222222-2222-4222-8222-222222222222", title: "Anatomie", due: 4, new: 2, url: "/#page=22222222-2222-4222-8222-222222222222" },
+  ],
+  more: 0,
+  url: "/#study",
+};
+
 test("the widget “Karten fällig”: the number, the next deck, the streak, a tap opens #study", () => {
-  const de = studyWidget(withCards, "de");
-  assert.deepEqual(de, { signedIn: true, title: "Karten fällig", count: 12, label: "Spanisch A1", detail: "Serie: 4", url: appLink("/#study") });
-  assert.equal(pathOfAppLink(de.url), "/#study");
-  assert.deepEqual((["de", "en", "fr", "zh"] as const).map((lang) => studyWidget(withCards, lang).title), ["Karten fällig", "Cards due", "Cartes à réviser", "待复习卡片"]);
-  const done = studyWidget({ ...base, study: { due: 0, new: 0, streak: 1 } }, "en");
-  assert.equal(done.label, "All studied for today");
-  assert.equal(done.detail, "Streak: 1");
-  assert.equal(studyWidget({ ...base, study: { due: 2, new: 0, streak: 0 } }, "fr").label, "2 à réviser");
-  assert.equal(studyWidget(base, "en").label, "No flashcards yet");
-  const signedOut = studyWidget(null, "de");
-  assert.equal(signedOut.signedIn, false);
+  assert.equal(kindOfWidget("FlowplanStudy"), "study");
+  assert.equal(SUITE_WIDGETS.study, "FlowplanStudy");
+  const view = suiteView("study", DEFAULTS.study, answer(cards), options);
+  assert.equal(view.state, "study");
+  if (view.state !== "study") return;
+  assert.equal(view.title, "Karten fällig");
+  assert.equal(view.count, "12");
+  assert.equal(view.label, "Spanisch A1");
+  assert.equal(view.detail, "Serie: 4");
+  assert.equal(pathOfAppLink(view.url), "/#study");
+  assert.deepEqual(view.decks.map((d) => [d.title, d.due]), [["Spanisch A1", "8"], ["Anatomie", "4"]]);
+  assert.equal(pathOfAppLink(view.decks[0].url), "/#page=11111111-1111-4111-8111-111111111111");
+  const done = suiteView("study", DEFAULTS.study, answer({ ...cards, due: 0, streak: 1, decks: [] }), { ...options, locale: "en" });
+  assert.ok(done.state === "study" && done.label === "All studied for today" && done.detail === "Streak: 1");
+  const fr = suiteView("study", DEFAULTS.study, answer({ ...cards, decks: [], due: 2, streak: 0 }), { ...options, locale: "fr" });
+  assert.ok(fr.state === "study" && fr.label === "2 à réviser" && fr.detail === "");
+  const signedOut = suiteView("study", DEFAULTS.study, null, { ...options, signedIn: false });
+  assert.equal(signedOut.state, "closed");
   assert.equal(pathOfAppLink(signedOut.url), "/");
   for (const lang of ["de", "en", "fr", "zh"] as const) {
-    const props = widgetProps(studyWidget(sampleSummary(lang), lang));
-    assert.ok(props.count > 0 && props.label, lang);
+    const sample = suiteView("study", DEFAULTS.study, sampleResult("study", lang, options.today), { ...options, locale: lang });
+    assert.ok(sample.state === "study" && Number(sample.count) > 0 && sample.label && sample.decks.length, lang);
   }
+});
+
+test("#352: the widget's decks – none chosen counts all of them", () => {
+  const a = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+  const b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  assert.deepEqual(normalizeConfig("study", undefined), { pageIds: [] });
+  assert.deepEqual(normalizeConfig("study", { pageIds: [a, b, a.toLowerCase(), "not-a-page", 7] }), { pageIds: [a.toLowerCase(), b] });
+  const many = Array.from({ length: 30 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+  assert.equal(normalizeConfig("study", { pageIds: many }).pageIds.length, 20);
+  // As the instance takes it (lib/mobile-widget-schema.ts: pageIds optional).
+  assert.deepEqual(serverConfig("study", normalizeConfig("study", {})), {});
+  assert.deepEqual(serverConfig("study", normalizeConfig("study", { pageIds: [b] })), { pageIds: [b] });
+});
+
+test("#352: an instance that refuses a kind (400) costs only that widget its answer", async () => {
+  const connection: Connection = { server: "https://flowplan.example", token: "t", lang: "de" };
+  const bodies: { widgets: { id: string; kind: string }[] }[] = [];
+  const fetcher = async (_url: string, init: { body?: string | FormData }) => {
+    const body = JSON.parse(String(init.body)) as { widgets: { id: string; kind: string }[] };
+    bodies.push(body);
+    if (body.widgets.some((w) => w.kind === "study")) return { status: 400, ok: false, json: async () => ({ error: "invalid" }) };
+    return { status: 200, ok: true, json: async () => ({ widgets: body.widgets.map((w) => ({ id: w.id, kind: w.kind, ok: true, data: { title: w.kind } })) }) };
+  };
+  const result = await widgetData(
+    connection,
+    [
+      { id: "1", kind: "tasks", config: { source: "mine" } },
+      { id: "2", kind: "study", config: {} },
+    ],
+    { today: "2026-11-18", zone: "Europe/Berlin" },
+    fetcher,
+  );
+  assert.ok(result.ok);
+  if (!result.ok) return;
+  assert.equal(result.value.get("1")?.ok, true);
+  assert.deepEqual({ ...result.value.get("2"), id: "2" }, { id: "2", kind: "study", ok: false, status: 400, error: "invalid" });
+  assert.equal(bodies.length, 3);
 });
 
 test("the study reminder of the phone: today at the time set, while cards are left", () => {

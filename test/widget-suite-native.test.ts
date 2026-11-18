@@ -65,7 +65,8 @@ test("Siri phrases exist in German, English, French and Chinese and name the app
 });
 
 test("every widget has a gallery name and description in every language", () => {
-  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanStudy", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
+  // FlowplanStudy is a widget of the suite (#352).
+  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
   assert.deepEqual(Object.keys(gallery).sort(), [...names].sort());
   for (const lang of ["de", "en", "fr", "zh"]) {
     const android = galleryStrings(lang);
@@ -116,8 +117,10 @@ test("the app config wires the suite: Android settings screens, iOS plugin befor
   const de = (config.locales as Record<string, { ios: Record<string, unknown> }>).de;
   assert.equal((de.ios["Localizable.strings"] as Record<string, string>)["Mark as done"], "Als erledigt markieren");
   // The widget suite lives in the existing extension: no new bundle ID.
-  const widgets = (config.plugins ?? []).find((p) => Array.isArray(p) && p[0] === "expo-widgets") as [string, { bundleIdentifier: string }];
+  const widgets = (config.plugins ?? []).find((p) => Array.isArray(p) && p[0] === "expo-widgets") as [string, { bundleIdentifier: string; widgets: { name: string }[] }];
   assert.equal(widgets[1].bundleIdentifier, "app.flowplan.mobile.widgets");
+  // A kind is either expo-widgets' or the suite's, never both (one bundle).
+  for (const kind of SUITE_KINDS) assert.ok(!widgets[1].widgets.some((w) => w.name === SUITE_WIDGETS[kind]), kind);
 });
 
 test("Swift widget kinds match the app's widget names", () => {

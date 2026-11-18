@@ -330,6 +330,35 @@ function SuiteWidget({ view, size, theme, widgetId }: { view: SuiteView; size: S
           ))}
         </FlexWidget>
       );
+    case "study":
+      // "Karten fällig": the number, the next deck and the streak; wider
+      // widgets list the decks (each opens its deck).
+      return (
+        <FlexWidget style={frame(theme)}>
+          <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }} accessibilityLabel={`${view.title}: ${view.count}`}>
+            <Header title={view.title} trailing={small ? "" : view.detail} theme={theme} />
+          </FlexWidget>
+          {small || !view.decks.length ? (
+            <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ flex: 1, width: "match_parent", flexDirection: "column", justifyContent: "flex-end" }}>
+              <Big value={view.count} label={view.label} theme={theme} />
+              {small && view.detail ? <TextWidget text={view.detail} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted) }} /> : null}
+            </FlexWidget>
+          ) : (
+            <FlexWidget style={{ flex: 1, width: "match_parent", flexDirection: "row" }}>
+              <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: 96, height: "match_parent", flexDirection: "column", justifyContent: "flex-end" }}>
+                <Big value={view.count} label="" theme={theme} />
+              </FlexWidget>
+              <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
+                {view.decks.slice(0, rows).map((deck, index) => (
+                  <FlexWidget key={index} style={{ width: "match_parent", height: 34, flexDirection: "row" }}>
+                    <Row text={deck.title} right={deck.due} url={deck.url} theme={theme} />
+                  </FlexWidget>
+                ))}
+              </FlexWidget>
+            </FlexWidget>
+          )}
+        </FlexWidget>
+      );
   }
 }
 
