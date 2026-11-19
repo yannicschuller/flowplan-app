@@ -109,6 +109,12 @@ export async function widgetData(
       }
       continue;
     }
+    // The only widget is of a kind the instance does not know (an older
+    // Flowplan): that widget says so.
+    if (!answer.ok && "status" in answer && answer.status === 400) {
+      results.set(batch[0].id, { id: batch[0].id, kind: batch[0].kind, ok: false, status: 400, error: answer.error });
+      continue;
+    }
     if (!answer.ok) return answer;
     for (const result of answer.value.widgets ?? []) if (result && typeof result.id === "string") results.set(result.id, result);
   }

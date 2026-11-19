@@ -261,6 +261,9 @@ test("an older instance refuses the new kinds: those widgets ask for an update, 
     assert.deepEqual(result.value.get("2"), { id: "2", kind: "event", ok: false, status: 400, error: "unknown kind" });
   }
   assert.deepEqual(asked, ["tasks,event", "tasks", "event"]);
+  // A screen with only the new widget: its own refusal, not "offline".
+  const alone = await widgetData({ server: "https://notes.example", token: "t", lang: "en" }, [{ id: "2", kind: "event", config: {} }], { today: "2026-11-19", zone: "UTC" }, fetcher);
+  assert.ok(alone.ok && alone.value.get("2")?.ok === false && (alone.value.get("2") as { status: number }).status === 400);
   // Samples of every kind in every language (gallery, Android previews).
   for (const kind of SUITE_KINDS) for (const locale of ["de", "en", "fr", "zh"] as const) assert.notEqual(suiteView(kind, sampleConfig(kind), sampleResult(kind, locale, options.today, now), { ...options, locale }).state, "closed", `${kind} ${locale}`);
 });

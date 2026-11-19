@@ -563,6 +563,10 @@ actor FPRefresher {
         // request (e.g. "study" before its flashcards): each widget on its
         // own, so only that one shows it cannot be reached.
         results = await oneByOne(batch, session: session)
+      } catch FPError.http(400, let error) where batch.count == 1 {
+        // The only widget is of a kind the instance does not know: it says
+        // so (an older Flowplan).
+        results = [batch[0].key: FPResult(ok: false, status: 400, error: error, data: FPJSON(nil), at: Date())]
       } catch {
         return
       }
