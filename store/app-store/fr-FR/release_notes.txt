@@ -1,6 +1,8 @@
 Nouveautés :
-• Changer d’instance : depuis le menu de l’espace de travail de Flowplan, l’action rapide « Changer de profil » ou ⇧⌘P sur iPad, la liste de vos profils s’ouvre – un toucher suffit pour changer
-• Cartes mémoire : widget « Cartes à réviser », action rapide « Étudier », raccourci « Réviser les cartes du jour » et un rappel quotidien, même sans notifications push
-• Révisez vos cartes sans connexion ; les évaluations sont envoyées plus tard
-• Les cartes mémoire et l’entrée du menu de l’espace de travail nécessitent Flowplan 0.9.9 ou version ultérieure
-• Améliorations mineures et corrections de bugs
+• Ajoutez une clé d'accès directement dans l'app : la fenêtre de connexion d'iOS l'enregistre dans le trousseau iCloud – utilisable dans l'app, dans Safari et sur vos autres appareils (nécessite Flowplan 0.10.2 ou ultérieur)
+• Widget « Cartes à réviser » : choisissez les paquets affichés
+• iPad avec plusieurs fenêtres : « Changer d'instance » s'ouvre dans la fenêtre d'où vous l'appelez
+• Si une page d'erreur répond à la place de Flowplan (par exemple celle du proxy inverse), l'app affiche un message avec « Réessayer » et « Changer de profil » au lieu d'une impasse
+• Les évaluations de cartes faites hors connexion sont envoyées plus fiablement dès que l'instance est de nouveau joignable
+• Le champ d'adresse montre désormais une adresse complète avec https:// comme exemple
+• Améliorations et corrections diverses

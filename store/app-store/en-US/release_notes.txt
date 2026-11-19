@@ -1,6 +1,8 @@
 What's new:
-• Switch instance: from Flowplan's workspace menu, the "Switch profile" quick action or ⇧⌘P on iPad, a list of your profiles opens – one tap switches
-• Flashcards: a "Cards due" widget, a "Study" quick action, the "Study due cards" shortcut and a daily study reminder, also without push
-• Study flashcards without a connection; ratings are sent later
-• Flashcards and the workspace menu entry need Flowplan 0.9.9 or later
-• Minor improvements and bug fixes
+• Add a passkey right in the app: the iOS sign-in sheet saves it to iCloud Keychain – usable in the app, in Safari and on your other devices (needs Flowplan 0.10.2 or later)
+• "Cards due" widget: choose which decks it shows
+• iPad with several windows: "Switch instance" opens in the window you called it from
+• If an error page answers instead of Flowplan (e.g. from a reverse proxy), the app shows a note with "Try again" and "Switch profile" instead of a dead end
+• Flashcard ratings made offline are sent more reliably once the instance is reachable again
+• The address field now shows a full address with https:// as an example
+• Smaller improvements and fixes
