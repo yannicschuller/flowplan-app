@@ -1,8 +1,9 @@
-Nouveautés :
-• Ajoutez une clé d'accès directement dans l'app : la fenêtre de connexion d'iOS l'enregistre dans le trousseau iCloud – utilisable dans l'app, dans Safari et sur vos autres appareils (nécessite Flowplan 0.10.2 ou ultérieur)
-• Widget « Cartes à réviser » : choisissez les paquets affichés
-• iPad avec plusieurs fenêtres : « Changer d'instance » s'ouvre dans la fenêtre d'où vous l'appelez
-• Si une page d'erreur répond à la place de Flowplan (par exemple celle du proxy inverse), l'app affiche un message avec « Réessayer » et « Changer de profil » au lieu d'une impasse
-• Les évaluations de cartes faites hors connexion sont envoyées plus fiablement dès que l'instance est de nouveau joignable
-• Le champ d'adresse montre désormais une adresse complète avec https:// comme exemple
-• Améliorations et corrections diverses
+Nouveautés de cette version – les widgets, repensés :
+• Quatre nouveaux widgets : Prochain rendez-vous (avec compte à rebours et « Rejoindre » pour les visioconférences), Reprendre la lecture (pages récentes et livres de la bibliothèque), Indicateur d’un tableau de bord (avec son historique) et Compte à rebours d’échéance
+• Plusieurs instances : chaque widget peut afficher son propre profil – par exemple les tâches pro et perso côte à côte
+• Couleurs : les widgets reprennent la couleur d’accent de votre espace de travail – ou, au choix, une couleur de profil, les couleurs du système ou celles de Flowplan
+• Chaque profil reçoit une pastille de couleur pour distinguer vos instances d’un coup d’œil
+• Toujours à jour : avec iOS 26, votre instance actualise les widgets juste après une modification (nécessite Flowplan 0.10.2 ou ultérieur)
+• Conçu pour iOS 26 : apparences teintée et transparente, widgets dans CarPlay et sur le Mac, meilleures suggestions dans la pile intelligente
+• Espacements, typographie et zones tactiles revus dans tous les widgets
+• Améliorations et corrections mineures

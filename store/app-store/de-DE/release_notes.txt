@@ -1,8 +1,9 @@
-Neu in dieser Version:
-• Passkey hinzufügen direkt in der App: Das Anmeldefenster von iOS legt ihn im iCloud-Schlüsselbund an – nutzbar in der App, in Safari und auf deinen anderen Geräten (braucht Flowplan 0.10.2 oder neuer)
-• Widget „Karten fällig“: Du wählst, welche Stapel es zeigt
-• iPad mit mehreren Fenstern: „Instanz wechseln“ öffnet sich im Fenster, in dem du es aufrufst
-• Antwortet statt Flowplan eine Fehlerseite (z. B. vom Reverse Proxy), zeigt die App einen Hinweis mit „Erneut versuchen“ und „Profil wechseln“ statt einer Sackgasse
-• Ohne Verbindung gelernte Lernkarten werden zuverlässiger gesendet, sobald die Instanz wieder erreichbar ist
-• Das Adressfeld zeigt jetzt die volle Adresse mit https:// als Beispiel
+Neu in dieser Version – die Widgets, neu gemacht:
+• Vier neue Widgets: Nächster Termin (mit Countdown und „Beitreten“ bei Videokonferenzen), Weiterlesen (zuletzt geöffnete Seiten und Bücher der Bibliothek), Kennzahl aus einem Dashboard (mit Verlauf) und Frist-Countdown
+• Mehrere Instanzen: Jedes Widget kann ein eigenes Profil zeigen – z. B. Aufgaben von Arbeit und Privat nebeneinander
+• Farben: Widgets übernehmen die Akzentfarbe deines Arbeitsbereichs – oder wahlweise eine Profilfarbe, die Systemfarben oder Flowplans Farben
+• Jedes Profil bekommt einen Farbpunkt, damit du deine Instanzen auf einen Blick unterscheidest
+• Sofort aktuell: Mit iOS 26 aktualisiert deine Instanz die Widgets direkt nach einer Änderung (braucht Flowplan 0.10.2 oder neuer)
+• Passend zu iOS 26: getönte und klare Darstellung, Widgets in CarPlay und auf dem Mac, bessere Vorschläge im Smart Stack
+• Überarbeitete Abstände, Schriften und größere Tippflächen in allen Widgets
 • Kleinere Verbesserungen und Fehlerbehebungen
