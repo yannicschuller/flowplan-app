@@ -6,6 +6,7 @@
 import * as SecureStore from "expo-secure-store";
 import { getRandomBytes, randomUUID } from "expo-crypto";
 import {
+  ACTIVE_ONLY_KEYS,
   activeProfile,
   LASTING_KEYS,
   lastingKey,
@@ -22,7 +23,7 @@ import {
 } from "./profiles";
 import type { Summary } from "./summary";
 import { parseAdminState, type AdminState } from "./admin";
-import { parseLiveRecords, parseRecord, type LiveRecords, type PushRecord } from "./push-relay";
+import { parseLiveRecords, parseRecord, parseWidgetPushRecord, type LiveRecords, type PushRecord, type WidgetPushRecord } from "./push-relay";
 import { appDeviceEntry, appDeviceFor, type AppDeviceKey } from "./app-device";
 import { parseMotion, type Motion } from "./motion";
 import { parseCopyInfo, type CopyInfo } from "./offline-offer";
@@ -86,6 +87,27 @@ export const store = {
   setDeviceToken(token: string | null) {
     const key = activeKey("deviceToken");
     if (key) write(key, token);
+  },
+  // Any profile's device token: the widgets of a profile that is not active
+  // keep reading with it (it only reads, and is bound to that sign-in).
+  deviceTokenOf: (id: string) => read(profileKey(id, "deviceToken")),
+  setDeviceTokenOf: (id: string, token: string | null) => write(profileKey(id, "deviceToken"), token),
+
+  // The widgets' WidgetKit push registration of a profile (iOS 26).
+  widgetPushRecord: (id: string): WidgetPushRecord | null => parseWidgetPushRecord(read(profileKey(id, "widgetPush"))),
+  setWidgetPushRecord: (id: string, record: WidgetPushRecord | null) => write(profileKey(id, "widgetPush"), record ? JSON.stringify(record) : null),
+  // The instance has not yet heard that this phone, on another profile now,
+  // wants no pushes from it.
+  pushOffPending: (id: string) => read(profileKey(id, "pushOff")) === "1",
+  setPushOffPending: (id: string, pending: boolean) => write(profileKey(id, "pushOff"), pending ? "1" : null),
+  // The accent of a profile's instance as its widgets last saw it.
+  instanceAccent: (id: string) => {
+    const value = read(lastingKey(id, "accent"));
+    return value && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+  },
+  setInstanceAccent(id: string, accent: string) {
+    if (!/^#[0-9a-f]{6}$/i.test(accent) || read(lastingKey(id, "accent")) === accent.toLowerCase()) return;
+    write(lastingKey(id, "accent"), accent.toLowerCase());
   },
 
   summary(): Summary | null {
@@ -171,8 +193,15 @@ export const store = {
   certificatePins: (): CertificatePin[] => parsePins(read(CERTIFICATE_PINS_KEY)),
   setCertificatePins: (pins: CertificatePin[]) => write(CERTIFICATE_PINS_KEY, pins.length ? serializePins(pins) : null),
 
-  // Leaving an instance (another profile, signing out, removing it): nothing
-  // of it stays on the phone.
+  // Another profile becomes active: what only the active profile has goes
+  // (summary, push); the device token stays for the profile's widgets.
+  leaveActive(id: string | null = state().active) {
+    if (!id) return;
+    for (const key of ACTIVE_ONLY_KEYS) write(profileKey(id, key), null);
+  },
+
+  // Leaving an instance (signing out, removing the profile, an instance too
+  // old to keep a phone without push): nothing of it stays on the phone.
   forgetInstance(id: string | null = state().active) {
     if (!id) return;
     for (const key of PROFILE_KEYS) write(profileKey(id, key), null);

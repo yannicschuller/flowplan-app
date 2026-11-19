@@ -6,7 +6,7 @@
 // gets its own settings back when that profile is active again.
 // Pure functions – native/suite.ts reads and writes the file, the tests a
 // string.
-import { normalizeConfig, SUITE_KINDS, type SuiteConfig, type SuiteKind } from "./suite";
+import { isWidgetColor, normalizeConfig, SUITE_KINDS, type SuiteConfig, type SuiteKind, type WidgetColor } from "./suite";
 
 type Stored = { kind: SuiteKind; config: unknown };
 export type ConfigState = Record<string, Record<string, Stored>>;
@@ -53,4 +53,46 @@ export function removeWidget(state: ConfigState, widgetId: number): ConfigState 
 export function forgetProfile(state: ConfigState, profile: string): ConfigState {
   const { [profile]: _gone, ...rest } = state;
   return rest;
+}
+
+// ---- Profile and colour of each widget (Android; iOS keeps them in the
+// widget's AppIntent) ----
+// Kept apart from the settings above, which belong to a profile: these say
+// which profile a widget shows (none chosen: the active one) and which
+// colours it takes. A removed widget takes them along; a removed profile
+// leaves its widgets on the active one.
+export type WidgetBinding = { profile?: string; color: WidgetColor };
+export type Bindings = Record<string, WidgetBinding>;
+const DEFAULT_BINDING: WidgetBinding = { color: "accent" };
+
+export function parseBindings(text: string | null): Bindings {
+  try {
+    const raw = JSON.parse(text || "{}") as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out: Bindings = {};
+    for (const [id, value] of Object.entries(raw as Record<string, Record<string, unknown>>)) {
+      if (!/^\d{1,10}$/.test(id) || !value || typeof value !== "object") continue;
+      const profile = typeof value.profile === "string" && /^[a-z0-9]{1,32}$/.test(value.profile) ? value.profile : undefined;
+      out[id] = { ...(profile ? { profile } : {}), color: isWidgetColor(value.color) ? value.color : "accent" };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export const bindingFor = (bindings: Bindings, widgetId: number): WidgetBinding => bindings[String(widgetId)] ?? { ...DEFAULT_BINDING };
+
+export function setBinding(bindings: Bindings, widgetId: number, binding: Partial<WidgetBinding>): Bindings {
+  const profile = typeof binding.profile === "string" && /^[a-z0-9]{1,32}$/.test(binding.profile) ? binding.profile : undefined;
+  return { ...bindings, [String(widgetId)]: { ...(profile ? { profile } : {}), color: isWidgetColor(binding.color) ? binding.color : "accent" } };
+}
+
+export function removeBinding(bindings: Bindings, widgetId: number): Bindings {
+  const { [String(widgetId)]: _gone, ...rest } = bindings;
+  return rest;
+}
+
+export function forgetProfileBindings(bindings: Bindings, profile: string): Bindings {
+  return Object.fromEntries(Object.entries(bindings).map(([id, b]) => [id, b.profile === profile ? { color: b.color } : b]));
 }

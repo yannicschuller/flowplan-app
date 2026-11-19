@@ -30,6 +30,10 @@ export type WidgetSession = { server: string; token: string | null; profile: str
 // subsystem app.flowplan.mobile). The module reloads the widgets for the
 // first three.
 export type WidgetSessionResult = "written" | "recovered" | "cleared" | "unchanged" | "failed";
+// Every profile for the widgets' "Profile" setting, each with its own
+// session (widgets/suite.ts → widgetProfilesFor). Only on the phone: the
+// extension sends each instance its own token only.
+export type WidgetProfileEntry = { id: string; name: string; color: string; colorDark: string; server: string; token: string | null; lang: string; active: boolean };
 
 // The last action of a widget's button that went wrong (iOS: kept by the
 // widget extension in the App Group). status 0: not reached.
@@ -58,6 +62,9 @@ export type OngoingOptions = {
 type NativeModule = {
   getManagedServer(): string | null;
   setWidgetSession?(session: WidgetSession | null): WidgetSessionResult | null | void;
+  setWidgetProfiles?(profiles: WidgetProfileEntry[]): "written" | "unchanged" | "failed" | null | void;
+  widgetPushToken?(): Promise<string | null>;
+  widgetAccents?(): Record<string, string> | null;
   reloadWidgets?(): void;
   widgetActionError?(): WidgetActionError | null;
   consumePendingLink?(): string | null;
@@ -146,6 +153,41 @@ export function setWidgetSession(session: WidgetSession | null): WidgetSessionRe
     return "failed";
   }
 }
+// iOS: every profile's session for widgets set to a profile (written to the
+// App Group's keychain, the list of names and colours to its defaults);
+// "written" when something changed.
+export function setWidgetProfiles(profiles: WidgetProfileEntry[]): "written" | "unchanged" | "failed" | null {
+  if (Platform.OS !== "ios") return null;
+  try {
+    return native?.setWidgetProfiles?.(profiles) || null;
+  } catch {
+    return "failed";
+  }
+}
+
+// iOS: the instances' accents as the widgets' answers last said (profile id
+// → "#rrggbb").
+export function widgetAccents(): Record<string, string> {
+  if (Platform.OS !== "ios") return {};
+  try {
+    return native?.widgetAccents?.() ?? {};
+  } catch {
+    return {};
+  }
+}
+
+// iOS 26: WidgetKit's push token for the app's widgets (hex), null before
+// iOS 26, before WidgetKit made one, or without a widget on a screen.
+export async function widgetPushToken(): Promise<string | null> {
+  if (Platform.OS !== "ios") return null;
+  try {
+    const token = await native?.widgetPushToken?.();
+    return typeof token === "string" && token ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 export function reloadWidgets() {
   if (Platform.OS !== "ios") return;
   try {

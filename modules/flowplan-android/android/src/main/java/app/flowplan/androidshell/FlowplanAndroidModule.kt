@@ -25,7 +25,8 @@ import java.lang.ref.WeakReference
  * - "Share" from other apps (text, links, photos, PDFs; SEND and SEND_MULTIPLE) for the app's
  *   capture screen, copied off the main thread (ShareIntake);
  * - the dynamic app shortcuts on the launcher icon, recently opened pages among them (Shortcuts);
- * - the Material You palette for the home screen widgets (MaterialColors);
+ * - the Material You palette for the home screen widgets (MaterialColors), their corner radii
+ *   and generated previews in the widget picker (WidgetPreviews);
  * - the "Quick capture" Quick Settings tile (QuickCaptureTileService) and asking to add it;
  * - leaving for the app that shared, once its content is saved;
  * - Android 14's predictive back: while the page has a step back (setPredictiveBack), the back
@@ -116,6 +117,20 @@ class FlowplanAndroidModule : Module() {
 
     Function("materialColors") {
       MaterialColors.palette(context)
+    }
+
+    // The launcher's widget corner radii (Android 12+), in dp; null before.
+    Function("widgetRadii") {
+      WidgetPreviews.radii(context)
+    }
+
+    Function("widgetPreviewsSupported") {
+      WidgetPreviews.supported()
+    }
+
+    // A widget's generated preview for the picker (Android 15+); false when rate-limited.
+    AsyncFunction("setWidgetPreview") { widgetName: String, base64Png: String, description: String ->
+      WidgetPreviews.set(context, widgetName, base64Png, description)
     }
 
     // Android 13+: the system asks whether to add the tile to Quick Settings.

@@ -37,19 +37,26 @@ const locale = (lang: "de" | "en" | "fr" | "zh") => {
     android: { ...json.android, ...nativeStrings.galleryStrings(lang) },
   };
 };
-// The configurable widgets on Android and their first size (cells).
-const SUITE_ANDROID: [string, [number, number]][] = [
-  ["FlowplanCapture", [4, 1]],
-  ["FlowplanTaskList", [4, 2]],
-  ["FlowplanAgenda", [4, 2]],
-  ["FlowplanPinned", [4, 2]],
-  ["FlowplanCounter", [2, 2]],
-  ["FlowplanJournal", [4, 2]],
-  ["FlowplanTime", [4, 2]],
-  ["FlowplanMentions", [4, 2]],
-  ["FlowplanForms", [2, 2]],
+// The configurable widgets on Android: their first size (cells) and the
+// smallest they can be made (dp; plugins/with-android-widget-sizes.js) –
+// lists down to one row, numbers down to a small square.
+const SUITE_ANDROID: [string, [number, number], [number, number]][] = [
+  ["FlowplanCapture", [4, 1], [110, 50]],
+  ["FlowplanTaskList", [4, 2], [180, 110]],
+  ["FlowplanAgenda", [4, 2], [180, 110]],
+  ["FlowplanPinned", [4, 2], [180, 110]],
+  ["FlowplanCounter", [2, 2], [110, 110]],
+  ["FlowplanJournal", [4, 2], [180, 110]],
+  ["FlowplanTime", [4, 2], [110, 110]],
+  ["FlowplanMentions", [4, 2], [180, 110]],
+  ["FlowplanForms", [2, 2], [110, 110]],
   // "Karten fällig" (#352): settings since it lets you choose the decks.
-  ["FlowplanStudy", [2, 2]],
+  ["FlowplanStudy", [2, 2], [110, 110]],
+  // Widgets 2026.
+  ["FlowplanNextEvent", [4, 2], [110, 110]],
+  ["FlowplanReading", [4, 2], [180, 110]],
+  ["FlowplanMetric", [2, 2], [110, 110]],
+  ["FlowplanDeadline", [2, 2], [110, 110]],
 ];
 // Android widgets: name, label and description from the gallery table.
 const androidWidget = (name: string, size: Record<string, unknown>) => ({
@@ -287,7 +294,7 @@ const config: ExpoConfig = {
     // top of the suite (plugins/with-intents.js) – listed before it, so it
     // runs after it.
     WIDGETS && "./plugins/with-intents",
-    WIDGETS && "./plugins/with-widget-suite",
+    WIDGETS && ["./plugins/with-widget-suite", { apsEnvironment: PERSONAL ? null : APS_ENVIRONMENT }],
     // iOS: the share extension (links, text, images and PDFs from other apps
     // into the inbox, a page or a database), in the App Group like the
     // widgets, whose session it reads (plugins/with-capture.js).
@@ -299,6 +306,9 @@ const config: ExpoConfig = {
     !PERSONAL && ["./plugins/with-notification-service", { appGroup: APP_GROUP, bundleIdentifier: `${IOS_BUNDLE_ID}.notifications` }],
     // iOS: home screen and lock screen widgets, and the running timer as Live
     // Activity (lock screen, Dynamic Island) – written with Expo UI (SwiftUI).
+    // The extension also gets push (aps-environment) for WidgetKit pushes
+    // (iOS 26) – plugins/with-widget-suite.js, which also needs its App ID's
+    // Push Notifications capability (fastlane iOS setup).
     WIDGETS && [
       "expo-widgets",
       {
@@ -412,6 +422,9 @@ const config: ExpoConfig = {
     // locales above); before react-native-android-widget so that its
     // untranslatable descriptions are replaced (mods run last-added first).
     "./plugins/with-widget-gallery",
+    // Android: how small each configurable widget can be made (its provider
+    // XML, written by react-native-android-widget – listed after this).
+    ["./plugins/with-android-widget-sizes", Object.fromEntries(SUITE_ANDROID.map(([name, , [width, height]]) => [name, { minResizeWidth: `${width}dp`, minResizeHeight: `${height}dp` }]))],
     // Android: home screen widgets (RemoteViews, rendered from React). The
     // configurable ones have settings per widget ("Configure" on the home
     // screen, src/screens/WidgetConfig.tsx) but work without them.
@@ -427,7 +440,7 @@ const config: ExpoConfig = {
           ...SUITE_ANDROID.map(([name, cells]) =>
             androidWidget(name, {
               minWidth: cells[0] > 2 ? "250dp" : "110dp",
-              minHeight: "110dp",
+              minHeight: cells[1] > 1 ? "110dp" : "50dp",
               targetCellWidth: cells[0],
               targetCellHeight: cells[1],
               maxResizeWidth: "500dp",

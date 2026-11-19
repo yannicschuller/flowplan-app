@@ -10,10 +10,70 @@ import WidgetKit
 // (widgetAccentable). Buttons run in the extension (iOS 17); links open the
 // page in the app (flowplan://open?path=…).
 
+/// The colours a widget takes (its "Colors" setting, FPColorChoice): the
+/// workspace's accent from the instance's answer (theme), the profile's dot,
+/// the system's tint or Flowplan's own. In the tinted and clear looks (iOS
+/// 18, iOS 26's Liquid Glass) the system draws accentable parts in its tint
+/// instead; the rest stays legible in primary and secondary.
+struct FPPalette: Sendable {
+  let light: Color
+  let dark: Color
+  let system: Bool
+
+  static let flowplan = FPPalette(light: FPStyle.brand, dark: FPStyle.brandOnDark, system: false)
+
+  func accent(_ scheme: ColorScheme) -> Color {
+    if system { return Color.accentColor }
+    return scheme == .dark ? dark : light
+  }
+
+  static func hex(_ value: String?) -> Color? {
+    guard let value, value.count == 7, value.hasPrefix("#"), let rgb = UInt32(value.dropFirst(), radix: 16) else { return nil }
+    return Color(red: Double((rgb >> 16) & 0xff) / 255, green: Double((rgb >> 8) & 0xff) / 255, blue: Double(rgb & 0xff) / 255)
+  }
+
+  @available(iOS 17.0, *)
+  static func resolve(_ choice: FPColorChoice, theme: FPJSON, profile: String?) -> FPPalette {
+    switch choice {
+    case .system:
+      return FPPalette(light: Color.accentColor, dark: Color.accentColor, system: true)
+    case .flowplan:
+      return .flowplan
+    case .profile:
+      let info = FPProfiles.info(profile)
+      guard let light = hex(info?.color), let dark = hex(info?.colorDark) else { return .flowplan }
+      return FPPalette(light: light, dark: dark, system: false)
+    case .accent:
+      guard let light = hex(theme["accent"].string), let dark = hex(theme["accentDark"].string) else { return .flowplan }
+      return FPPalette(light: light, dark: dark, system: false)
+    }
+  }
+}
+
+private struct FPPaletteKey: EnvironmentKey {
+  static let defaultValue = FPPalette.flowplan
+}
+private struct FPProfileKey: EnvironmentKey {
+  static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+  var fpPalette: FPPalette {
+    get { self[FPPaletteKey.self] }
+    set { self[FPPaletteKey.self] = newValue }
+  }
+  /// The profile a widget shows (nil: the active one): its buttons act there.
+  var fpProfile: String? {
+    get { self[FPProfileKey.self] }
+    set { self[FPProfileKey.self] = newValue }
+  }
+}
+
 enum FPStyle {
   static let brand = Color(red: 0.255, green: 0.275, blue: 0.902)
   static let brandOnDark = Color(red: 0.561, green: 0.576, blue: 1)
   static let late = Color(red: 0.82, green: 0.26, blue: 0.26)
+  static let good = Color(red: 0.18, green: 0.52, blue: 0.35)
   static let background = Color(UIColor { traits in
     traits.userInterfaceStyle == .dark
       ? UIColor(red: 0.086, green: 0.082, blue: 0.106, alpha: 1)
@@ -103,6 +163,10 @@ enum FPKind {
     case "mentions": return "at"
     case "forms": return "tray.and.arrow.down"
     case "study": return "rectangle.on.rectangle.angled"
+    case "event": return "calendar.badge.clock"
+    case "reading": return "book"
+    case "metric": return "chart.line.uptrend.xyaxis"
+    case "deadline": return "hourglass"
     default: return "square.grid.2x2"
     }
   }
@@ -119,6 +183,10 @@ enum FPKind {
     case "mentions": return L("Mentions")
     case "forms": return L("Form responses")
     case "study": return L("Cards due")
+    case "event": return L("Next appointment")
+    case "reading": return L("Continue reading")
+    case "metric": return L("Key figure")
+    case "deadline": return L("Deadline")
     default: return "Flowplan"
     }
   }
@@ -136,17 +204,18 @@ struct FPHeader: View {
   let title: String
   var trailing = ""
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   var body: some View {
     HStack(spacing: 5) {
       Image(systemName: icon)
         .font(.caption.weight(.semibold))
-        .foregroundStyle(FPStyle.accent(scheme))
+        .foregroundStyle(palette.accent(scheme))
         .widgetAccentable()
         .accessibilityHidden(true)
       Text(title)
         .font(.caption.weight(.semibold))
-        .foregroundStyle(FPStyle.accent(scheme))
+        .foregroundStyle(palette.accent(scheme))
         .lineLimit(1)
         .widgetAccentable()
       Spacer(minLength: 4)
@@ -210,6 +279,7 @@ struct FPBigNumber: View {
   let value: String
   var size: CGFloat = 40
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   var body: some View {
     Text(value)
@@ -232,8 +302,12 @@ struct FPSuiteView: View {
 
   private var link: URL {
     switch entry.state {
-    case .signedOut, .offline, .gone, .setup: return FPLink.page("/")
+    case .signedOut, .offline, .gone, .setup, .outdated: return FPLink.page("/")
     default:
+      if entry.kind == "event" {
+        return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home")
+      }
+      if entry.kind == "reading" { return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home") }
       if entry.kind == "capture" {
         return FPLink.capture(entry.settings.buttons.first ?? "note", target: entry.data["target"]["id"].string)
       }
@@ -250,9 +324,14 @@ struct FPSuiteView: View {
   var body: some View {
     content
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      // In the tinted and clear looks (iOS 18, iOS 26's Liquid Glass) the
+      // system replaces the background; the accents follow its tint
+      // (widgetAccentable).
       .containerBackground(for: .widget) {
         family.isAccessory ? Color.clear : FPStyle.background
       }
+      .environment(\.fpPalette, entry.palette)
+      .environment(\.fpProfile, entry.profile)
       .widgetURL(link)
   }
 
@@ -266,6 +345,8 @@ struct FPSuiteView: View {
       FPClosedView(kind: entry.kind, icon: "exclamationmark.triangle", title: FPKind.title(entry.kind), message: L("No longer available – edit the widget"))
     case .offline:
       FPClosedView(kind: entry.kind, icon: "wifi.slash", title: FPKind.title(entry.kind), message: L("Can’t be reached right now"))
+    case .outdated:
+      FPClosedView(kind: entry.kind, icon: "arrow.up.circle", title: FPKind.title(entry.kind), message: L("This widget needs a newer Flowplan on your instance"))
     case .data, .sample:
       if entry.locked {
         FPClosedView(kind: entry.kind, icon: "lock.fill", title: entry.data["title"].string ?? FPKind.title(entry.kind), message: L("Protected by the journal PIN – unlock it in Flowplan"))
@@ -283,6 +364,15 @@ struct FPSuiteView: View {
         case "mentions": FPMentionsView(entry: entry)
         case "forms": FPFormsView(entry: entry)
         case "study": FPStudyView(entry: entry)
+        case "event": FPEventView(entry: entry)
+        case "reading": FPReadingView(entry: entry)
+        case "metric":
+          if entry.data["available"].raw != nil && !entry.data["available"].bool {
+            FPClosedView(kind: entry.kind, icon: "eye.slash", title: entry.data["title"].string ?? FPKind.title(entry.kind), message: L("No longer available – edit the widget"))
+          } else {
+            FPMetricView(entry: entry)
+          }
+        case "deadline": FPDeadlineView(entry: entry)
         default: EmptyView()
         }
       }
@@ -297,6 +387,7 @@ struct FPCaptureView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   private var buttons: [String] {
     entry.settings.buttons.filter { $0 != "voice" || entry.data["voice"].raw == nil || entry.data["voice"].bool }
@@ -336,7 +427,7 @@ struct FPCaptureView: View {
         Spacer(minLength: 0)
         Image(systemName: Self.icon(first))
           .font(.system(size: 30, weight: .semibold))
-          .foregroundStyle(FPStyle.accent(scheme))
+          .foregroundStyle(palette.accent(scheme))
           .widgetAccentable()
         Text(Self.label(first)).font(.headline).lineLimit(1)
         Text(entry.data["target"]["name"].text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -352,7 +443,7 @@ struct FPCaptureView: View {
               VStack(spacing: 6) {
                 Image(systemName: Self.icon(button))
                   .font(.title3.weight(.semibold))
-                  .foregroundStyle(FPStyle.accent(scheme))
+                  .foregroundStyle(palette.accent(scheme))
                   .widgetAccentable()
                 Text(Self.label(button)).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
               }
@@ -417,6 +508,8 @@ struct FPTaskRow: View {
   let compact: Bool
   let marks: FPMarks
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+  @Environment(\.fpProfile) private var profile
 
   /// The task as FPCompleteTaskIntent names it.
   static func id(_ item: FPJSON) -> String {
@@ -432,7 +525,7 @@ struct FPTaskRow: View {
       // answer no longer lists it.
       Image(systemName: "checkmark.circle.fill")
         .font(.body)
-        .foregroundStyle(FPStyle.accent(scheme))
+        .foregroundStyle(palette.accent(scheme))
         .widgetAccentable()
         .frame(width: 30, height: 26)
         .accessibilityLabel(L("Done"))
@@ -443,12 +536,13 @@ struct FPTaskRow: View {
         rowId: item["rowId"].string ?? "",
         index: item["index"].int ?? -1,
         key: item["key"].text,
-        text: item["text"].text
+        text: item["text"].text,
+        profile: profile
       )
       Toggle(isOn: false, intent: intent) {
         Text(L("Mark as done"))
       }
-      .toggleStyle(FPCheckStyle(accent: FPStyle.accent(scheme)))
+      .toggleStyle(FPCheckStyle(accent: palette.accent(scheme)))
       .accessibilityLabel("\(L("Mark as done")): \(item["text"].text)")
     } else {
       Image(systemName: "circle.dotted")
@@ -544,6 +638,7 @@ struct FPCalendarRow: View {
   let item: FPJSON
   let compact: Bool
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   var body: some View {
     let task = item["type"].string == "task"
@@ -565,7 +660,7 @@ struct FPCalendarRow: View {
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         RoundedRectangle(cornerRadius: 1.5)
-          .fill(task ? Color.secondary : FPStyle.accent(scheme))
+          .fill(task ? Color.secondary : palette.accent(scheme))
           .frame(width: 3, height: 14)
           .widgetAccentable()
         VStack(alignment: .leading, spacing: 0) {
@@ -690,6 +785,7 @@ struct FPPinnedView: View {
 struct FPSparkline: View {
   let history: [FPJSON]
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   private struct Point: Identifiable {
     let id: Int
@@ -711,7 +807,7 @@ struct FPSparkline: View {
     }
     Chart(points) { point in
       LineMark(x: .value("Day", point.id % 100), y: .value("Value", point.value), series: .value("Series", point.series))
-        .foregroundStyle(FPStyle.accent(scheme).opacity(point.series == "estimated" ? 0.35 : 1))
+        .foregroundStyle(palette.accent(scheme).opacity(point.series == "estimated" ? 0.35 : 1))
         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, dash: point.series == "estimated" ? [3, 3] : []))
         .interpolationMethod(.monotone)
     }
@@ -789,6 +885,8 @@ struct FPHabitRow: View {
   let item: FPJSON
   let marks: FPMarks
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+  @Environment(\.fpProfile) private var profile
 
   var body: some View {
     let pageId: String = habits["id"].text
@@ -801,13 +899,13 @@ struct FPHabitRow: View {
     let failed: Bool = !pending && marks.hasFailed(id)
     VStack(alignment: .leading, spacing: 0) {
       if habits["canWrite"].bool, !pageId.isEmpty, !fieldId.isEmpty {
-        Toggle(isOn: done, intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done)) {
+        Toggle(isOn: done, intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done, profile: profile)) {
           HStack(spacing: 0) {
             Text(item["name"].text).font(.subheadline).lineLimit(1)
             Spacer(minLength: 0)
           }
         }
-        .toggleStyle(FPCheckStyle(accent: FPStyle.accent(scheme), showsLabel: true))
+        .toggleStyle(FPCheckStyle(accent: palette.accent(scheme), showsLabel: true))
         .accessibilityLabel(item["name"].text)
         .accessibilityValue(done ? L("Done") : L("Open"))
         .invalidatableContent()
@@ -815,7 +913,7 @@ struct FPHabitRow: View {
         HStack(spacing: 6) {
           Image(systemName: done ? "checkmark.circle.fill" : "circle")
             .font(.body)
-            .foregroundStyle(done ? AnyShapeStyle(FPStyle.accent(scheme)) : AnyShapeStyle(.secondary))
+            .foregroundStyle(done ? AnyShapeStyle(palette.accent(scheme)) : AnyShapeStyle(.secondary))
             .widgetAccentable()
           Text(item["name"].text).font(.subheadline).lineLimit(1)
           Spacer(minLength: 0)
@@ -833,6 +931,7 @@ struct FPJournalView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   private var journalLine: String {
     let journal = entry.data["journal"]
@@ -849,7 +948,7 @@ struct FPJournalView: View {
       VStack(alignment: .leading, spacing: 4) {
         Image(systemName: journal["locked"].bool ? "lock.fill" : journal["written"].bool ? "checkmark.seal.fill" : "square.and.pencil")
           .font(.title2)
-          .foregroundStyle(FPStyle.accent(scheme))
+          .foregroundStyle(palette.accent(scheme))
           .widgetAccentable()
           .accessibilityHidden(true)
         Text(name).font(.headline).lineLimit(1)
@@ -926,6 +1025,8 @@ struct FPTimeView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+  @Environment(\.fpProfile) private var profile
 
   /// The timer "Start" starts: the chosen one, else the most recent.
   private var startTarget: (pageId: String, rowId: String, fieldId: String, title: String)? {
@@ -966,13 +1067,13 @@ struct FPTimeView: View {
             Text(start, style: .timer)
               .font(.headline.weight(.semibold))
               .monospacedDigit()
-              .foregroundStyle(FPStyle.accent(scheme))
+              .foregroundStyle(palette.accent(scheme))
               .widgetAccentable()
             Text(title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
           }
         }
         Spacer(minLength: 4)
-        Button(intent: FPStopTimerIntent()) {
+        Button(intent: FPStopTimerIntent(profile: profile)) {
           Image(systemName: "stop.fill").font(.caption.weight(.bold)).frame(width: 30, height: 30)
             .background(.fill.secondary, in: Circle())
         }
@@ -980,7 +1081,7 @@ struct FPTimeView: View {
         .accessibilityLabel(L("Stop timer"))
       }
     } else if let target = startTarget {
-      Button(intent: FPStartTimerIntent(pageId: target.pageId, rowId: target.rowId, fieldId: target.fieldId)) {
+      Button(intent: FPStartTimerIntent(pageId: target.pageId, rowId: target.rowId, fieldId: target.fieldId, profile: profile)) {
         HStack(spacing: 8) {
           Image(systemName: "play.fill").font(.caption.weight(.bold)).frame(width: 30, height: 30)
             .background(.fill.secondary, in: Circle())
@@ -1003,7 +1104,7 @@ struct FPTimeView: View {
         let today = FPFormat.day(day["day"].string).map(Calendar.current.isDateInToday) ?? false
         VStack(spacing: 3) {
           Capsule()
-            .fill(today ? AnyShapeStyle(FPStyle.accent(scheme)) : AnyShapeStyle(.fill.secondary))
+            .fill(today ? AnyShapeStyle(palette.accent(scheme)) : AnyShapeStyle(.fill.secondary))
             .frame(height: max(3, 44 * CGFloat((day["hours"].double ?? 0) / top)))
             .widgetAccentable(today)
           Text(FPFormat.day(day["day"].string)?.formatted(.dateTime.weekday(.narrow)) ?? "")
@@ -1075,6 +1176,7 @@ struct FPTimeView: View {
 struct FPMentionsView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
+  @Environment(\.fpProfile) private var profile
 
   /// Read on the instance, or just marked read here.
   private func isRead(_ item: FPJSON) -> Bool {
@@ -1129,7 +1231,7 @@ struct FPMentionsView: View {
         HStack {
           FPHeader(icon: "at", title: entry.data["title"].string ?? L("Mentions"), trailing: unread > 0 ? FPFormat.count("%d unread", unread) : "")
           if unread > 0 {
-            Button(intent: FPMarkReadIntent(notificationId: nil)) {
+            Button(intent: FPMarkReadIntent(notificationId: nil, profile: profile)) {
               Image(systemName: "checkmark.circle").font(.caption.weight(.semibold))
             }
             .buttonStyle(.plain)
@@ -1156,7 +1258,7 @@ struct FPMentionsView: View {
             }
             .accessibilityElement(children: .combine)
             if !read, let id = item["id"].string {
-              Button(intent: FPMarkReadIntent(notificationId: id)) {
+              Button(intent: FPMarkReadIntent(notificationId: id, profile: profile)) {
                 Image(systemName: "envelope.open").font(.caption).frame(width: 26, height: 26)
                   .background(.fill.tertiary, in: Circle())
               }
@@ -1179,6 +1281,7 @@ struct FPFormsView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
 
   var body: some View {
     let items = entry.data["items"].array
@@ -1212,7 +1315,7 @@ struct FPFormsView: View {
           Link(destination: FPLink.page(item["url"].string)) {
             HStack(spacing: 8) {
               Circle()
-                .fill(item["new"].bool ? AnyShapeStyle(FPStyle.accent(scheme)) : AnyShapeStyle(.clear))
+                .fill(item["new"].bool ? AnyShapeStyle(palette.accent(scheme)) : AnyShapeStyle(.clear))
                 .frame(width: 6, height: 6)
                 .widgetAccentable()
                 .accessibilityHidden(true)

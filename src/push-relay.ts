@@ -42,7 +42,9 @@ export function rememberShown(seen: readonly string[], id: string): { seen: stri
 export const MAX_KEYS = 10;
 export const LIMITS = { title: 200, body: 2000, id: 128, path: 2000, collapseId: 64, badge: 9999 } as const;
 
-export type RelayPlatform = "ios" | "android" | "ios-liveactivity";
+// ios-widgets: the WidgetKit push token of iOS 26 (widget-push.ts); its
+// relay token only takes pushes of type "widgets" (PROTOCOL.md §6.11).
+export type RelayPlatform = "ios" | "android" | "ios-liveactivity" | "ios-widgets";
 export type PushEnvironment = "production" | "sandbox";
 
 // The relay's address: an origin only, over HTTPS (HTTP only for local
@@ -306,6 +308,126 @@ export function relayMismatch(answer: unknown, relay: string, instance: string):
 export const LIVE_REGISTRATIONS_PER_HOUR = 8;
 export function allowLiveRegistration(history: number[], now = Date.now()): boolean {
   return history.filter((at) => now - at < 60 * 60 * 1000 && at <= now).length < LIVE_REGISTRATIONS_PER_HOUR;
+}
+
+// ---- Widgets (iOS 26): WidgetKit push, one registration per profile ----
+//
+// WidgetKit hands the app one push token for all its widgets
+// (WidgetCenter.currentPushInfo). Each signed-in profile – active or not, its
+// widgets are on the screen either way – registers it with the relay as
+// "ios-widgets" for its instance and hands the relay token to that instance
+// (POST /api/mobile/widget-push with the profile's device token). The push
+// carries no content: WidgetKit reloads the timelines and the widgets ask
+// their instances themselves.
+export type WidgetPushRecord = {
+  v: 1;
+  relay: string;
+  instance: string;
+  environment: PushEnvironment;
+  tokenHash: string;
+  relayToken: string;
+  expiresAt: string;
+  registeredAt: number;
+};
+
+export function parseWidgetPushRecord(raw: string | null): WidgetPushRecord | null {
+  if (!raw) return null;
+  let value: Partial<WidgetPushRecord>;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!value || value.v !== 1 || !relayOrigin(value.relay) || originOf(value.instance) !== value.instance) return null;
+  if (value.environment !== "production" && value.environment !== "sandbox") return null;
+  if (typeof value.tokenHash !== "string" || !/^[0-9a-f]{64}$/.test(value.tokenHash) || !isRelayToken(value.relayToken)) return null;
+  if (typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(value.expiresAt))) return null;
+  if (typeof value.registeredAt !== "number" || !Number.isFinite(value.registeredAt)) return null;
+  return {
+    v: 1,
+    relay: value.relay as string,
+    instance: value.instance as string,
+    environment: value.environment,
+    tokenHash: value.tokenHash,
+    relayToken: value.relayToken,
+    expiresAt: value.expiresAt,
+    registeredAt: value.registeredAt,
+  };
+}
+
+// Registered again for a new token, relay, instance or environment, after
+// 30 days, or when the relay's token is about to run out.
+export function needsWidgetRegistration(
+  record: WidgetPushRecord | null,
+  want: { relay: string; instance: string; tokenHash: string; environment: PushEnvironment },
+  now = Date.now(),
+): boolean {
+  if (!record) return true;
+  if (record.relay !== want.relay || record.instance !== want.instance || record.tokenHash !== want.tokenHash || record.environment !== want.environment) return true;
+  if (now - record.registeredAt >= RENEW_AFTER_MS || now < record.registeredAt) return true;
+  return Date.parse(record.expiresAt) - now < 7 * 24 * 60 * 60 * 1000;
+}
+
+// What the registration with the instance carries for the widgets.
+export const widgetPushField = (record: WidgetPushRecord | null, instance: string) =>
+  record && record.instance === instance ? { widgetPush: { relayToken: record.relayToken, relayUrl: record.relay } } : {};
+
+// POST {instance}/api/mobile/widget-push with a profile's device token: its
+// widgets' relay token (null: none any more). "missing": an older instance
+// without widget push – the widgets keep their timeline updates.
+export async function sendWidgetPushToken(
+  instance: string,
+  deviceToken: string,
+  body: { relayToken: string | null; relayUrl: string },
+  http: Http,
+): Promise<"ok" | "refused" | "missing" | "signedOut" | "failed"> {
+  if (body.relayToken !== null && !isRelayToken(body.relayToken)) return "refused";
+  try {
+    const answer = await http(`${instance}/api/mobile/widget-push`, {
+      method: body.relayToken ? "POST" : "DELETE",
+      headers: { Authorization: `Bearer ${deviceToken}`, "Content-Type": "application/json", Accept: "application/json" },
+      ...(body.relayToken ? { body: JSON.stringify(body) } : {}),
+      signal: timeout(10_000),
+    });
+    if (answer.status === 404 || answer.status === 405) return "missing";
+    if (answer.status === 401) return "signedOut";
+    if (answer.status === 400 || answer.status === 403 || answer.status === 422) return "refused";
+    if (!answer.ok) return "failed";
+    const data = (await answer.json().catch(() => null)) as { ok?: unknown } | null;
+    return data?.ok === false ? "refused" : "ok";
+  } catch {
+    return "failed";
+  }
+}
+
+// POST {instance}/api/mobile/device { push } with a profile's device token:
+// another profile became active (push false) – the entry stays for the
+// widgets, but the instance sends no notifications to this phone any more.
+// "missing": an older instance that cannot keep an entry without push (the
+// app then leaves it as before). widgetPush: whether the instance still holds
+// the widgets' push registration (it drops one the relay refused).
+export async function setDevicePush(
+  instance: string,
+  deviceToken: string,
+  push: boolean,
+  http: Http,
+): Promise<{ result: "ok" | "missing" | "signedOut" | "failed"; widgetPush?: boolean }> {
+  try {
+    const answer = await http(`${instance}/api/mobile/device`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${deviceToken}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ push }),
+      signal: timeout(10_000),
+    });
+    if (answer.status === 404 || answer.status === 405) return { result: "missing" };
+    if (answer.status === 401) return { result: "signedOut" };
+    if (!answer.ok) return { result: "failed" };
+    const data = (await answer.json().catch(() => null)) as { ok?: unknown; widgetPush?: unknown } | null;
+    if (data?.ok === false) return { result: "failed" };
+    return { result: "ok", ...(typeof data?.widgetPush === "boolean" ? { widgetPush: data.widgetPush } : {}) };
+  } catch {
+    return { result: "failed" };
+  }
 }
 
 // ---- The payload ----

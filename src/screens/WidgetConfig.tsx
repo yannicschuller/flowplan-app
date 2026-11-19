@@ -1,17 +1,18 @@
 // Android: the settings of one configurable widget (opened when it is added
 // and from "Configure" on the home screen; react-native-android-widget's
-// configuration activity). The options come from the instance
-// (GET /api/mobile/widgets/options); the widget works with its defaults
-// even when nothing is chosen.
+// configuration activity). First the widget's profile (none: the active one)
+// and colours, then what it shows – the options come from that profile's
+// instance (GET /api/mobile/widgets/options, with that profile's device
+// token); the widget works with its defaults even when nothing is chosen.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { getLocales } from "expo-localization";
 import type { WidgetConfigurationScreenProps } from "react-native-android-widget";
 import { pickLocale, setLocale, t } from "../i18n";
-import { connection, readConfigs, saveWidgetConfig } from "../native/suite";
+import { connectionFor, readConfigs, saveWidgetConfig, widgetBinding } from "../native/suite";
 import { store } from "../store";
 import { widgetOptions } from "../widgets/api";
-import { CAPTURE_BUTTONS, kindOfWidget, MAX_STUDY_DECKS, normalizeConfig } from "../widgets/suite";
+import { CAPTURE_BUTTONS, kindOfWidget, MAX_STUDY_DECKS, normalizeConfig, widgetProfileId, WIDGET_COLORS, type WidgetColor } from "../widgets/suite";
 import { configFor } from "../widgets/widget-config";
 import { Button, styles, usePalette } from "../ui";
 
@@ -118,10 +119,14 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
   setLocale(pickLocale(getLocales().map((l) => l.languageTag)));
   const p = usePalette();
   const kind = kindOfWidget(widgetInfo.widgetName);
-  const target = connection();
-  const [config, setConfigState] = useState<Json>(() =>
-    kind ? (configFor(readConfigs(), store.profiles().active, widgetInfo.widgetId, kind) as unknown as Json) : {},
-  );
+  const profiles = store.profiles();
+  const [binding] = useState(() => widgetBinding(widgetInfo.widgetId));
+  // "": the active profile, whichever it is.
+  const [chosenProfile, setChosenProfile] = useState(binding.profile ?? "");
+  const [color, setColor] = useState<WidgetColor>(binding.color);
+  const profile = widgetProfileId(profiles, chosenProfile || null);
+  const target = connectionFor(profile);
+  const [config, setConfigState] = useState<Json>(() => (kind ? (configFor(readConfigs(), profile, widgetInfo.widgetId, kind) as unknown as Json) : {}));
   const [options, setOptions] = useState<Json | null>(null);
   const [database, setDatabase] = useState<Json | null>(null);
   const [busy, setBusy] = useState(false);
@@ -130,15 +135,31 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
   const pageId = str(config.pageId);
   const needsDatabase = (kind === "tasks" && config.source === "view") || (kind === "pinned" && config.mode === "page") || kind === "counter";
 
+  // Another profile: its settings for this widget, its instance's options.
   useEffect(() => {
-    if (!kind || !target) return;
+    if (!kind) return;
+    setConfigState(configFor(readConfigs(), profile, widgetInfo.widgetId, kind) as unknown as Json);
+    setOptions(null);
+    if (!target) return;
     void widgetOptions(target, kind === "time" ? "time" : kind).then((answer) => setOptions(answer.ok ? answer.value : {}));
-  }, [kind]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, profile]);
   useEffect(() => {
     setDatabase(null);
     if (!kind || !target || !pageId || !needsDatabase) return;
     void widgetOptions(target, kind, pageId).then((answer) => answer.ok && setDatabase((answer.value.database as Json) ?? null));
-  }, [kind, pageId, needsDatabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, pageId, needsDatabase, profile]);
+  const dashboardId = str(config.dashboardId);
+  // The records of the chosen database (deadline: ?kind=deadline&pageId=…).
+  const [records, setRecords] = useState<Json[]>([]);
+  const deadlineDatabase = kind === "deadline" && !config.taskKey ? pageId : "";
+  useEffect(() => {
+    setRecords([]);
+    if (!target || !deadlineDatabase) return;
+    void widgetOptions(target, "deadline", deadlineDatabase).then((answer) => answer.ok && setRecords(list(answer.value.records)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deadlineDatabase, profile]);
 
   const views = useMemo(() => [{ value: "", label: t("configAllRecords") }, ...named(database?.views)], [database]);
   const properties = useMemo(() => list(database?.properties), [database]);
@@ -150,7 +171,7 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
 
   const save = async () => {
     setBusy(true);
-    await saveWidgetConfig(widgetInfo.widgetName, widgetInfo.widgetId, normalizeConfig(kind, config));
+    await saveWidgetConfig(widgetInfo.widgetName, widgetInfo.widgetId, normalizeConfig(kind, config), { profile: chosenProfile || undefined, color });
     setBusy(false);
     setResult("ok");
   };
@@ -284,6 +305,100 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
         </>
       );
       break;
+    case "event": {
+      const calendars = list(o.calendars).map((c) => ({ value: str(c.id) || [str(c.pageId), str(c.viewId)].filter(Boolean).join(":"), label: str(c.name), detail: str(c.synced) || str(c.database) }));
+      const chosen = (Array.isArray(config.calendars) ? config.calendars : []).filter((c): c is string => typeof c === "string");
+      fields = (
+        <>
+          <Many
+            title={`${t("configCalendars")} (${chosen.length ? chosen.length : t("configAll")})`}
+            items={calendars}
+            values={chosen}
+            max={10}
+            onChange={(calendars) => set({ calendars })}
+          />
+          <Choice
+            title={t("configWithin")}
+            items={[
+              { value: "today", label: t("withinToday") },
+              { value: "48h", label: t("within48h") },
+              { value: "week", label: t("withinWeek") },
+            ]}
+            value={str(config.within)}
+            onChange={(v) => set({ within: v })}
+          />
+          <Toggle title={t("configShowJoin")} value={config.showJoin !== false} onChange={(showJoin) => set({ showJoin })} />
+        </>
+      );
+      break;
+    }
+    case "reading":
+      fields = (
+        <>
+          <Choice
+            title={t("configSource")}
+            items={[
+              { value: "recent", label: t("readingRecent") },
+              { value: "library", label: t("readingLibrary") },
+            ]}
+            value={str(config.source)}
+            onChange={(v) => set({ source: v })}
+          />
+          <Count title={t("configCount")} value={Number(config.max) || 3} min={1} max={6} onChange={(max) => set({ max })} />
+        </>
+      );
+      break;
+    case "metric":
+      fields = (
+        <>
+          <Choice title={t("configDashboard")} items={list(o.dashboards).map(pageItem)} value={dashboardId} onChange={(v) => set({ dashboardId: v, widgetId: undefined })} />
+          {dashboardId ? (
+            <Choice
+              title={t("configFigure")}
+              items={named(list(o.dashboards).find((d) => str(d.id) === dashboardId)?.widgets)}
+              value={str(config.widgetId)}
+              onChange={(v) => set({ widgetId: v })}
+            />
+          ) : null}
+        </>
+      );
+      break;
+    case "deadline": {
+      // A record of a database with a due date, or one of my open tasks.
+      const tasks = list(o.tasks);
+      const taskValue = (task: Json) => `${str(task.pageId)}|${str(task.rowId)}|${typeof task.index === "number" ? task.index : ""}|${str(task.taskKey)}`;
+      const pickTasks = !!config.taskKey || config.tasksPicked === true;
+      fields = (
+        <>
+          <Choice
+            title={t("configSource")}
+            items={[...list(o.databases).map(pageItem), ...(tasks.length ? [{ value: "tasks", label: t("widgetTasks") }] : [])]}
+            value={pickTasks ? "tasks" : pageId}
+            onChange={(v) => setConfigState(v === "tasks" ? { tasksPicked: true } : { pageId: v })}
+          />
+          {!pickTasks && pageId ? (
+            <Choice
+              title={t("configRecord")}
+              items={records.map((r) => ({ value: str(r.id), label: str(r.title), detail: str(r.due) }))}
+              value={str(config.rowId)}
+              onChange={(v) => set({ rowId: v })}
+            />
+          ) : null}
+          {pickTasks ? (
+            <Choice
+              title={t("captureTask")}
+              items={tasks.map((task) => ({ value: taskValue(task), label: str(task.text), detail: [str(task.page), str(task.due)].filter(Boolean).join(" · ") }))}
+              value={config.taskKey ? `${str(config.pageId)}|${str(config.rowId)}|${typeof config.index === "number" ? config.index : ""}|${str(config.taskKey)}` : ""}
+              onChange={(v) => {
+                const [taskPage, taskRow, index, ...key] = v.split("|");
+                setConfigState({ tasksPicked: true, pageId: taskPage, rowId: taskRow || undefined, index: index ? Number(index) : undefined, taskKey: key.join("|") });
+              }}
+            />
+          ) : null}
+        </>
+      );
+      break;
+    }
     case "study": {
       // "Karten fällig" (#352): none chosen counts all decks.
       const chosen = (Array.isArray(config.pageIds) ? config.pageIds : []).filter((id): id is string => typeof id === "string");
@@ -306,8 +421,28 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
         <Text style={[styles.title, { color: p.text, textAlign: "left" }]} accessibilityRole="header">
           {t("configTitle")}
         </Text>
+        {profiles.profiles.length > 1 ? (
+          <Choice
+            title={t("configProfile")}
+            items={[
+              { value: "", label: t("configActiveProfile") },
+              ...profiles.profiles.map((entry) => ({ value: entry.id, label: entry.name, detail: entry.id === profiles.active ? t("active") : undefined })),
+            ]}
+            value={chosenProfile}
+            onChange={setChosenProfile}
+          />
+        ) : null}
+        <Choice
+          title={t("configColor")}
+          items={WIDGET_COLORS.map((value) => ({
+            value,
+            label: t(({ accent: "colorAccent", profile: "colorProfile", system: "colorSystem", flowplan: "colorFlowplan" } as const)[value]),
+          }))}
+          value={color}
+          onChange={(v) => setColor(v as WidgetColor)}
+        />
         {!target ? (
-          <Text style={[styles.text, { color: p.muted }]}>{t("widgetSignIn")}</Text>
+          <Text style={[styles.text, { color: p.muted, marginTop: 22 }]}>{t("widgetSignIn")}</Text>
         ) : options === null ? (
           <Text style={[styles.text, { color: p.muted }]}>{t("configLoading")}</Text>
         ) : (

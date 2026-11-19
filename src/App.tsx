@@ -22,7 +22,7 @@ import { infoOfStatus, OFFLINE_SETTINGS_PATH, parseOfflineStatus, shouldOffer, t
 import { reportMotion, setMotionProfile } from "./native/motion";
 import { captureRequest, doLink, meetingLink, pathOfAppLink, type CaptureRequest } from "./navigation";
 import { pageScanRequest, scanRequest, type ScanRequest } from "./capture";
-import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile, switchProfile, type ProfileState } from "./profiles";
+import { activeProfile, addProfile, removeProfile, renameProfile, replaceProfile, setProfileColor, switchProfile, type ProfileColor, type ProfileState } from "./profiles";
 import { mayOpenSwitcher, profilesRequest, switcherChoice, SWITCHER_LINK, unsignedProfile } from "./profile-picker";
 import { checkAndroidUpdate } from "./android-update";
 import { store } from "./store";
@@ -45,10 +45,11 @@ import { haptic, onQuickAction, saveFile, setQuickActions, startAction, type Qui
 import { scheduleBackgroundRefresh } from "./native/background";
 import { askForPush, onNotificationOpened, onNotificationReceived, pushPermission, setUpNotifications } from "./native/notifications";
 import { cleanUpPushKeys, leavePush, onDeviceTokenChanged, pushFields, RELAY, relayRefusedBy } from "./native/push";
-import { relayMismatch } from "./push-relay";
+import { relayMismatch, widgetPushField } from "./push-relay";
 import { onLiveTokensChanged } from "./native/live-push";
-import { apply, leaveInstance, refresh, updateWidgets } from "./native/sync";
-import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetSession } from "./native/suite";
+import { apply, leaveInstance, quietInstance, refresh, retryPushOff, updateWidgets } from "./native/sync";
+import { clearSuiteAnswers, connection, forgetSuiteProfile, refreshSuite, syncWidgetPreviews, syncWidgetSession } from "./native/suite";
+import { leaveWidgetPush, syncWidgetPush } from "./native/widget-push";
 import { wipeOfflineCopy, wipeOrphanCopies } from "./offline/native";
 import { endAllActivities, listenToActivityButtons, nextPoll, refreshActivities, runAppAction } from "./native/activities";
 import { widgetAction } from "./widgets/api";
@@ -149,6 +150,15 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     // Signed in before the app kept track of it (#69).
     const id = store.profiles().active;
     if (id && store.deviceToken()) store.setEverSignedIn(id, true);
+    // Other profiles' instances that still have to hear "no pushes"; the
+    // widgets' push registrations (iOS 26); the pictures in Android 15's
+    // widget picker – after the start, nothing of it is urgent.
+    const later = setTimeout(() => {
+      void retryPushOff();
+      void syncWidgetPush();
+      void syncWidgetPreviews();
+    }, 4000);
+    return () => clearTimeout(later);
   }, []);
 
   const open = useCallback(
@@ -288,6 +298,8 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
         syncWidgetSession();
         syncButtonSession();
         if (store.deviceToken()) void refresh().then((result) => "signedOut" in result && setSignedIn(false));
+        void retryPushOff();
+        void syncWidgetPush();
       }
     });
     return () => subscription.remove();
@@ -353,7 +365,11 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     // Push through the relay ends with the session: relay tokens and key go
     // (a new sign-in makes new ones).
     const id = store.profiles().active;
-    if (id) void leavePush(id);
+    if (id) {
+      void leavePush(id);
+      // Its widgets' push registration ends with the device token.
+      leaveWidgetPush(id);
+    }
     store.setDeviceToken(null);
     syncButtonSession();
     setSignedIn(false);
@@ -387,6 +403,11 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
       appVersion: `${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`,
       ...push,
       ...(approvalKey ? { approvalKey } : {}),
+      // The active profile gets notifications (others keep their entry for
+      // the widgets, quietInstance); older instances ignore the field.
+      push: true,
+      // iOS 26: the widgets' push registration (widget-push.ts), when there is one.
+      ...widgetPushField(store.widgetPushRecord(profile.id), profile.server),
     });
   }, [server]);
 
@@ -414,8 +435,17 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           if (message.status === 200 && body?.deviceToken) {
             store.setDeviceToken(body.deviceToken);
             const id = store.profiles().active;
-            if (id) store.setEverSignedIn(id, true);
+            if (id) {
+              store.setEverSignedIn(id, true);
+              // Active again: it gets notifications with this registration.
+              store.setPushOffPending(id, false);
+              // The instance dropped the widgets' push registration (the
+              // relay refused it): a new one below.
+              if ((body as { widgetPush?: unknown }).widgetPush === false && store.widgetPushRecord(id)) store.setWidgetPushRecord(id, null);
+            }
             syncButtonSession();
+            // The widgets' push token for this sign-in (iOS 26).
+            void syncWidgetPush();
             // Without push from the instance, due tasks become reminders of
             // the phone itself (local-reminders.ts).
             setLocalRemindersWanted(body.push !== true);
@@ -545,11 +575,30 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     setProfiles(next);
   };
 
-  // Leaves the active profile's instance before another one becomes active:
-  // its entry for this phone goes (push and widgets follow the active profile
-  // only), nothing of it stays in widgets and badge. Read and cleared while
-  // it is still the active one; the sign-in in the web view stays, so coming
-  // back registers again.
+  // Another profile becomes active (switch, a new profile): what only the
+  // active profile has goes – push through the relay, Live Activities, the
+  // summary, badge and overview widget – but its device token stays: widgets
+  // set to this profile keep showing it, and its instance is told to send no
+  // notifications here any more (sync.ts → quietInstance; an older instance
+  // is left as before). Read and cleared while it is still the active one;
+  // the sign-in in the web view stays, so coming back registers again.
+  const deactivate = () => {
+    const current = activeProfile(store.profiles());
+    if (!current) return;
+    const token = store.deviceToken();
+    registered.current = null;
+    void leavePush(current.id);
+    store.leaveActive(current.id);
+    void apply(null);
+    void endAllActivities();
+    pendingPath.current = null;
+    if (token) void quietInstance(current.id, current.server, token);
+  };
+
+  // Leaves the active profile's instance for good (signing out and removing
+  // the profile, another address for it): its entry for this phone goes,
+  // nothing of it stays in widgets and badge. Read and cleared while it is
+  // still the active one.
   const leaveActive = () => {
     const current = activeProfile(store.profiles());
     if (!current) return;
@@ -565,10 +614,18 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     setSettings(false);
     setSetup(false);
     if (id === store.profiles().active) return;
-    leaveActive();
+    deactivate();
     saveProfiles(switchProfile(store.profiles(), id));
-    // The widgets belong to the new profile now (signed in there again
-    // after its registration).
+    // Signed in there already (its token kept for its widgets): badge,
+    // overview and timer follow at once; the page registers again.
+    setSignedIn(!!store.deviceToken());
+    syncButtonSession();
+    void refreshSuite({ force: true });
+  };
+
+  // The colour dot of a profile (Manage profiles); null: derived again.
+  const colorProfile = (id: string, color: ProfileColor | null) => {
+    saveProfiles(setProfileColor(store.profiles(), id, color));
     void refreshSuite({ force: true });
   };
 
@@ -622,8 +679,9 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
   const connect = (origin: string, name: string) => {
     const current = store.profiles();
     const { state } = addProfile(current, { server: origin, name });
-    leaveActive();
+    deactivate();
     saveProfiles(state);
+    setSignedIn(false);
     setSetup(false);
     void refreshSuite({ force: true });
   };
@@ -647,6 +705,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
     store.setEverSignedIn(id, false);
     store.forgetAppDevice(id);
     forgetApprovalKey(id);
+    leaveWidgetPush(id);
     void forgetSuiteProfile(id);
     // The offline copy of the instance's content goes with the profile, and
     // what was remembered of it (motion, the offer).
@@ -744,6 +803,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           onClose={() => setSettings(false)}
           onSwitch={switchTo}
           onRename={(id, name) => saveProfiles(renameProfile(store.profiles(), id, name))}
+          onColor={colorProfile}
           onAddProfile={() => {
             setSettings(false);
             setSetup(true);

@@ -12,7 +12,7 @@
 
 import { activeProfile, type ProfileState } from "../profiles";
 
-export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms", "study"] as const;
+export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms", "study", "event", "reading", "metric", "deadline"] as const;
 export type SuiteKind = (typeof SUITE_KINDS)[number];
 // Kinds the app asks for itself: Live Activities and system controls.
 export type ServerKind = SuiteKind | "focus" | "meeting" | "jobs" | "incident";
@@ -30,7 +30,16 @@ export const SUITE_WIDGETS: Record<SuiteKind, string> = {
   forms: "FlowplanForms",
   // "Karten fällig" (#352): all decks, or the chosen ones.
   study: "FlowplanStudy",
+  // Widgets 2026: next appointment, continue reading, a dashboard's key
+  // figure, a deadline's countdown.
+  event: "FlowplanNextEvent",
+  reading: "FlowplanReading",
+  metric: "FlowplanMetric",
+  deadline: "FlowplanDeadline",
 };
+// Kinds an instance from before them does not know: it refuses them (400),
+// and the widget says the instance needs an update.
+export const NEWER_KINDS: readonly SuiteKind[] = ["event", "reading", "metric", "deadline"];
 export const kindOfWidget = (name: string): SuiteKind | null =>
   (Object.entries(SUITE_WIDGETS).find(([, widget]) => widget === name)?.[0] as SuiteKind | undefined) ?? null;
 
@@ -59,6 +68,14 @@ export type SuiteConfig = {
   forms: { pageId?: string; max: number };
   // No decks chosen: all of them.
   study: { pageIds: string[] };
+  // Calendars as the options list them ("<pageId>:<viewId>" or "<pageId>";
+  // none: all, like the "today" widget); up to three appointments.
+  event: { calendars: string[]; within: "today" | "48h" | "week"; showJoin: boolean; max: number };
+  reading: { source: "recent" | "library"; max: number };
+  metric: { dashboardId?: string; widgetId?: string };
+  // A record of a database ({ pageId, rowId }), or a document task (its key
+  // as the tasks widget has it, with its page and position).
+  deadline: { pageId?: string; rowId?: string; taskKey?: string; index?: number };
 };
 
 export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
@@ -72,6 +89,10 @@ export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
   mentions: { show: "all", unreadOnly: true, max: 5 },
   forms: { max: 3 },
   study: { pageIds: [] },
+  event: { calendars: [], within: "48h", showJoin: true, max: 3 },
+  reading: { source: "recent", max: 4 },
+  metric: {},
+  deadline: {},
 };
 
 // The instance takes at most this many decks per widget.
@@ -79,6 +100,8 @@ export const MAX_STUDY_DECKS = 20;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHORT_ID = /^[^\u0000-\u001f]{1,100}$/;
+const TASK_KEY = /^[^\u0000-\u001f]{1,300}$/;
+const CALENDAR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[^\u0000-\u001f]{1,100})?$/i;
 const uuid = (value: unknown) => (typeof value === "string" && UUID.test(value) ? value.toLowerCase() : undefined);
 const shortId = (value: unknown) => (typeof value === "string" && SHORT_ID.test(value) ? value : undefined);
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -116,13 +139,32 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
       });
       break;
     }
-    case "calendar": {
-      const sources = (Array.isArray(r.sources) ? r.sources : [])
-        .map((s) => (s && typeof s === "object" ? (s as Record<string, unknown>) : {}))
-        .map((s) => compact({ pageId: uuid(s.pageId) as string, viewId: shortId(s.viewId) }))
-        .filter((s) => !!s.pageId)
-        .slice(0, 10);
-      out = { sources, range: oneOf(r.range, ["today", "3days", "week"] as const, "today"), tasks: bool(r.tasks, true), max: count(r.max, 1, 10, 10) };
+    case "calendar":
+      out = { sources: calendarSources(r.sources), range: oneOf(r.range, ["today", "3days", "week"] as const, "today"), tasks: bool(r.tasks, true), max: count(r.max, 1, 10, 10) };
+      break;
+    case "event":
+      out = {
+        calendars: [...new Set((Array.isArray(r.calendars) ? r.calendars : []).filter((c): c is string => typeof c === "string" && CALENDAR.test(c)))].slice(0, 10),
+        within: oneOf(r.within, ["today", "48h", "week"] as const, "48h"),
+        showJoin: bool(r.showJoin, true),
+        max: count(r.max, 1, 3, 3),
+      };
+      break;
+    case "reading":
+      out = { source: oneOf(r.source, ["recent", "library"] as const, "recent"), max: count(r.max, 1, 6, 4) };
+      break;
+    case "metric": {
+      const dashboardId = uuid(r.dashboardId);
+      out = compact({ dashboardId, widgetId: dashboardId ? shortId(r.widgetId) : undefined });
+      break;
+    }
+    case "deadline": {
+      const pageId = uuid(r.pageId),
+        rowId = uuid(r.rowId);
+      const taskKey = pageId && typeof r.taskKey === "string" && TASK_KEY.test(r.taskKey) ? r.taskKey : undefined;
+      const index = taskKey && typeof r.index === "number" && Number.isInteger(r.index) && r.index >= 0 && r.index < 100_000 ? r.index : undefined;
+      // A task of a page (or of a record's document), or a record.
+      out = taskKey ? compact({ pageId, rowId, taskKey, index }) : pageId && rowId ? { pageId, rowId } : {};
       break;
     }
     case "pinned": {
@@ -184,12 +226,84 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
   return out as SuiteConfig[K];
 }
 
-// What a widget still needs before it can show anything: the counter and
-// the form inbox have no sensible default page.
+// Up to ten calendars ({ pageId, viewId }) of the "today" and "next
+// appointment" widgets.
+function calendarSources(value: unknown) {
+  return (Array.isArray(value) ? value : [])
+    .map((s) => (s && typeof s === "object" ? (s as Record<string, unknown>) : {}))
+    .map((s) => compact({ pageId: uuid(s.pageId) as string, viewId: shortId(s.viewId) }))
+    .filter((s) => !!s.pageId)
+    .slice(0, 10);
+}
+
+// What a widget still needs before it can show anything: the counter, the
+// form inbox, the key figure and the deadline have no sensible default.
 export function needsSetup(kind: SuiteKind, config: SuiteConfig[SuiteKind]) {
   if (kind === "counter") return !(config as SuiteConfig["counter"]).pageId;
   if (kind === "forms") return !(config as SuiteConfig["forms"]).pageId;
+  if (kind === "metric") {
+    const c = config as SuiteConfig["metric"];
+    return !c.dashboardId || !c.widgetId;
+  }
+  if (kind === "deadline") {
+    const c = config as SuiteConfig["deadline"];
+    return !c.pageId || (!c.rowId && !c.taskKey);
+  }
   return false;
+}
+
+// ---- Settings of the app, not of the instance: profile and colour ----
+
+// Which colours a widget takes: the instance's workspace accent (from the
+// answer's theme; Flowplan's without one), the profile's colour dot, the
+// system's (Material You on Android, the system's tint on iOS) or
+// Flowplan's own.
+export const WIDGET_COLORS = ["accent", "profile", "system", "flowplan"] as const;
+export type WidgetColor = (typeof WIDGET_COLORS)[number];
+export const isWidgetColor = (value: unknown): value is WidgetColor => typeof value === "string" && (WIDGET_COLORS as readonly string[]).includes(value);
+
+// The workspace's look the instance sends with each answer (Flowplan's
+// lib/workspace-theme.ts, contrast-checked for light and dark). Older
+// instances send none.
+export type WidgetTheme = { workspaceId?: string; accent: string; accentDark: string; onAccent: string; onAccentDark: string };
+const HEX = /^#[0-9a-f]{6}$/i;
+export function parseTheme(value: unknown): WidgetTheme | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (![v.accent, v.accentDark, v.onAccent, v.onAccentDark].every((c) => typeof c === "string" && HEX.test(c))) return null;
+  const lower = (c: unknown) => (c as string).toLowerCase();
+  return {
+    ...(typeof v.workspaceId === "string" && v.workspaceId.length <= 100 ? { workspaceId: v.workspaceId } : {}),
+    accent: lower(v.accent),
+    accentDark: lower(v.accentDark),
+    onAccent: lower(v.onAccent),
+    onAccentDark: lower(v.onAccentDark),
+  };
+}
+
+export const FLOWPLAN_ACCENT = { light: "#4146e6", dark: "#8f93ff" } as const;
+export type Accent = { light: string; dark: string };
+
+// The accent a widget is drawn with; "system" is the platform's own
+// (Material You / the iOS tint), which the caller knows.
+export function widgetAccent(color: WidgetColor, input: { theme?: WidgetTheme | null; profile?: Accent | null }): Accent | "system" {
+  switch (color) {
+    case "system":
+      return "system";
+    case "flowplan":
+      return { ...FLOWPLAN_ACCENT };
+    case "profile":
+      return input.profile ? { light: input.profile.light, dark: input.profile.dark } : { ...FLOWPLAN_ACCENT };
+    default:
+      return input.theme ? { light: input.theme.accent, dark: input.theme.accentDark } : { ...FLOWPLAN_ACCENT };
+  }
+}
+
+// A widget's profile: the one chosen in its settings while it exists,
+// otherwise the active one (also when none was chosen).
+export function widgetProfileId(state: ProfileState, chosen: string | null | undefined) {
+  if (chosen && state.profiles.some((p) => p.id === chosen)) return chosen;
+  return state.active;
 }
 
 // The configuration as the instance's data endpoint takes it (app-only
@@ -232,6 +346,27 @@ export function configKey(kind: string, config: Record<string, unknown>) {
 export function widgetSessionFor(state: ProfileState, token: string | null, lang: string) {
   const profile = activeProfile(state);
   return profile ? { server: profile.server, token: token || null, profile: profile.id, lang } : null;
+}
+
+// Every profile for the widgets' "Profile" setting, with its own session
+// (each instance only ever gets its own token; the names stay on the
+// phone). Profiles never signed in here come without token: their widgets
+// ask to sign in.
+export type WidgetProfile = { id: string; name: string; color: string; colorDark: string; server: string; token: string | null; lang: string; active: boolean };
+export function widgetProfilesFor(state: ProfileState, tokenOf: (id: string) => string | null, colorOf: (id: string) => Accent, lang: string): WidgetProfile[] {
+  return state.profiles.map((profile) => {
+    const color = colorOf(profile.id);
+    return {
+      id: profile.id,
+      name: profile.name,
+      color: color.light,
+      colorDark: color.dark,
+      server: profile.server,
+      token: tokenOf(profile.id) || null,
+      lang,
+      active: profile.id === state.active,
+    };
+  });
 }
 
 // The module reloaded the widgets after handing the session over (iOS,

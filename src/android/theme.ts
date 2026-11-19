@@ -10,6 +10,29 @@ import type { Theme } from "../widgets/android";
 export type Themes = { light: Theme; dark: Theme };
 const HEX = /^#[0-9a-f]{6}$/i;
 
+// a over b by share (0–1), as "#rrggbb".
+export function blend(a: string, b: string, share: number) {
+  if (!HEX.test(a) || !HEX.test(b)) return b;
+  const part = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16);
+  return `#${[1, 3, 5].map((i) => Math.round(part(a, i) * share + part(b, i) * (1 - share)).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// A widget in a chosen accent (the workspace's, the profile's or
+// Flowplan's) on Flowplan's surfaces: titles, buttons and bars in the
+// accent, lines and buttons' fill a light wash of it. Red, amber and green
+// keep their meaning.
+export function accentThemes(accent: { light: string; dark: string }, base: Themes): Themes {
+  const make = (mode: "light" | "dark"): Theme => {
+    const theme = { ...base[mode] };
+    const color = accent[mode];
+    if (!HEX.test(color)) return theme;
+    theme.brand = color.toLowerCase();
+    theme.line = blend(color, theme.background, mode === "light" ? 0.12 : 0.22);
+    return theme;
+  };
+  return { light: make("light"), dark: make("dark") };
+}
+
 // Material 3's roles for widgets: a tinted surface, text and secondary text on
 // it, the primary colour for titles and actions, a container tone for lines,
 // buttons and bars.

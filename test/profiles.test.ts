@@ -152,12 +152,22 @@ test("the window and the sign-in keep to the active profile's instance", () => {
   assert.deepEqual(acceptSignIn(link, own, pending), { error: "foreign" });
 });
 
-test("App.tsx leaves the active instance before another one becomes active", () => {
+test("App.tsx steps back from the active instance before another one becomes active", () => {
   const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
-  // Token read and cleared while the old profile is still active, then the switch.
+  // A switch: push and what only the active profile has go while it is still
+  // active; the device token stays for its widgets and the instance is told
+  // "no pushes" (sync.ts → quietInstance) – not unregistered.
+  const deactivate = app.match(/const deactivate = \(\) => \{[\s\S]*?\n {2}\};/)?.[0] ?? "";
+  assert.match(deactivate, /const token = store\.deviceToken\(\);[\s\S]*?leavePush\(current\.id\);[\s\S]*?store\.leaveActive\(current\.id\);[\s\S]*?quietInstance\(current\.id, current\.server, token\)/);
+  assert.doesNotMatch(deactivate, /forgetInstance|leaveInstance|setDeviceToken/);
+  assert.match(app, /deactivate\(\);\s*saveProfiles\(switchProfile\(/);
+  assert.match(app, /deactivate\(\);\s*saveProfiles\(state\);/);
+  // Signing out and removing the profile still leave it for good.
   assert.match(app, /const leaveActive = \(\) => \{[\s\S]*?const token = store\.deviceToken\(\);[\s\S]*?store\.forgetInstance\(current\.id\);[\s\S]*?leaveInstance\(current\.server, token\)/);
-  assert.match(app, /leaveActive\(\);\s*saveProfiles\(switchProfile\(/);
-  assert.match(app, /leaveActive\(\);\s*saveProfiles\(state\);/);
+  assert.match(app, /const forget = async \(\) => \{[\s\S]*?leaveActive\(\);/);
+  const sync = readFileSync(new URL("../src/native/sync.ts", import.meta.url), "utf8");
+  // An instance without "push: false" (older) or a dead session: left as before.
+  assert.match(sync, /store\.forgetInstance\(profileId\);[\s\S]*?if \(result === "missing"\) await leaveInstance\(server, token\);/);
   const shell = readFileSync(new URL("../src/screens/Shell.tsx", import.meta.url), "utf8");
   assert.match(shell, /pending\.current\.clear\(\);\s*navigation\.current = navigationState\(\);\s*redeemWhenLoaded\.current = null;/);
   // The store has no single server any more, only the active profile's.

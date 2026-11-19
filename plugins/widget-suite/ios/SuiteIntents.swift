@@ -17,6 +17,10 @@ protocol FPSuiteConfiguration: WidgetConfigurationIntent {
   var settings: FPSettings { get }
   /// Nothing to show before a page is chosen.
   var needsSetup: Bool { get }
+  /// The profile the widget shows (nil: the active one) and its colours –
+  /// settings of the phone, every configuration has them.
+  var profile: FPProfileEntity? { get }
+  var color: FPColorChoice { get }
 }
 
 struct FPSettings: Sendable {
@@ -29,6 +33,59 @@ struct FPSettings: Sendable {
 extension FPSuiteConfiguration {
   var settings: FPSettings { FPSettings() }
   var needsSetup: Bool { false }
+  var profileId: String? { profile?.id }
+  /// The request with the widget's profile.
+  var profiledRequest: FPRequest {
+    let base = request
+    return FPRequest(kind: base.kind, config: base.config, profile: profileId)
+  }
+}
+
+// MARK: - Profile and colours (every widget)
+
+/// Which colours a widget takes: the workspace's accent from the instance
+/// (default; Flowplan's without one), the profile's colour dot, the system's
+/// tint, or Flowplan's own.
+@available(iOS 17.0, *)
+enum FPColorChoice: String, AppEnum {
+  case accent, profile, system, flowplan
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Colors"
+  static var caseDisplayRepresentations: [FPColorChoice: DisplayRepresentation] = [
+    .accent: "Workspace accent",
+    .profile: "Profile color",
+    .system: "System",
+    .flowplan: "Flowplan",
+  ]
+}
+
+/// A profile of the app: its name only (and colour) – the instance and its
+/// token stay in the keychain. None chosen: the active profile.
+@available(iOS 17.0, *)
+struct FPProfileEntity: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Profile"
+  static var defaultQuery = FPProfileQuery()
+  var id: String
+  var name: String
+  var active: Bool
+  var displayRepresentation: DisplayRepresentation {
+    active ? DisplayRepresentation(title: "\(name)", subtitle: "Active profile") : DisplayRepresentation(title: "\(name)")
+  }
+
+  init(_ info: FPProfileInfo) {
+    id = info.id
+    name = info.name
+    active = info.active
+  }
+
+  struct FPProfileQuery: EntityQuery {
+    func entities(for identifiers: [String]) async throws -> [FPProfileEntity] {
+      let all = FPProfiles.all()
+      return identifiers.compactMap { id in all.first { $0.id == id }.map(FPProfileEntity.init) }
+    }
+    func suggestedEntities() async throws -> [FPProfileEntity] {
+      FPProfiles.all().map(FPProfileEntity.init)
+    }
+  }
 }
 
 // MARK: - 1. Quick capture
@@ -55,6 +112,11 @@ struct FPCaptureConfiguration: FPSuiteConfiguration {
     let chosen = [("note", note), ("task", task), ("voice", voice), ("photo", photo)].filter(\.1).map(\.0)
     return FPSettings(buttons: chosen.isEmpty ? ["note"] : chosen)
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -110,6 +172,8 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
         \.$view
         \.$filter
         \.$count
+        \.$profile
+        \.$color
       }
     } otherwise: {
       When(\FPTasksConfiguration.$source, .equalTo, .page) {
@@ -118,12 +182,16 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
           \.$page
           \.$filter
           \.$count
+          \.$profile
+          \.$color
         }
       } otherwise: {
         Summary {
           \.$source
           \.$filter
           \.$count
+          \.$profile
+          \.$color
         }
       }
     }
@@ -142,6 +210,11 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
     return FPRequest(kind: Self.kind, config: config)
   }
   var settings: FPSettings { FPSettings(max: min(10, max(1, count))) }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -181,6 +254,11 @@ struct FPCalendarConfiguration: FPSuiteConfiguration {
     }
     return FPRequest(kind: Self.kind, config: ["sources": sources, "range": range.rawValue, "tasks": tasks, "max": 10])
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -222,10 +300,14 @@ struct FPPinnedConfiguration: FPSuiteConfiguration {
         \.$view
         \.$first
         \.$second
+        \.$profile
+        \.$color
       }
     } otherwise: {
       Summary {
         \.$mode
+        \.$profile
+        \.$color
       }
     }
   }
@@ -238,6 +320,11 @@ struct FPPinnedConfiguration: FPSuiteConfiguration {
     config["properties"] = [first, second].compactMap { $0 }.filter { $0.id.hasPrefix(page.id) }.map(\.fieldId).filter { seen.insert($0).inserted }
     return FPRequest(kind: Self.kind, config: config)
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -285,6 +372,8 @@ struct FPCounterConfiguration: FPSuiteConfiguration {
         \.$groupField
         \.$groupValue
         \.$history
+        \.$profile
+        \.$color
       }
     } otherwise: {
       Summary {
@@ -295,6 +384,8 @@ struct FPCounterConfiguration: FPSuiteConfiguration {
         \.$groupField
         \.$groupValue
         \.$history
+        \.$profile
+        \.$color
       }
     }
   }
@@ -315,6 +406,11 @@ struct FPCounterConfiguration: FPSuiteConfiguration {
     }
     return FPRequest(kind: Self.kind, config: config)
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -339,6 +435,11 @@ struct FPJournalConfiguration: FPSuiteConfiguration {
     return FPRequest(kind: Self.kind, config: config)
   }
 
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
   func perform() async throws -> some IntentResult { .result() }
 }
 
@@ -360,6 +461,11 @@ struct FPTimeConfiguration: FPSuiteConfiguration {
     guard parts.count == 3 else { return FPSettings() }
     return FPSettings(timer: ["pageId": parts[0], "rowId": parts[1], "fieldId": parts[2]])
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -390,6 +496,11 @@ struct FPMentionsConfiguration: FPSuiteConfiguration {
 
   var request: FPRequest { FPRequest(kind: Self.kind, config: ["show": show.rawValue, "unreadOnly": unreadOnly, "max": 5]) }
 
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
   func perform() async throws -> some IntentResult { .result() }
 }
 
@@ -406,6 +517,11 @@ struct FPFormsConfiguration: FPSuiteConfiguration {
 
   var needsSetup: Bool { form == nil }
   var request: FPRequest { FPRequest(kind: Self.kind, config: form.map { ["pageId": $0.id, "max": 3] } ?? [:]) }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -427,6 +543,138 @@ struct FPStudyConfiguration: FPSuiteConfiguration {
     let ids = Array(Set((decks ?? []).map(\.id))).sorted().prefix(20)
     return FPRequest(kind: Self.kind, config: ids.isEmpty ? [:] : ["pageIds": Array(ids)])
   }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
+// MARK: - 11. Next appointment
+
+@available(iOS 17.0, *)
+enum FPWithin: String, AppEnum {
+  case today
+  case twoDays = "48h"
+  case week
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Look ahead"
+  static var caseDisplayRepresentations: [FPWithin: DisplayRepresentation] = [
+    .today: "Today",
+    .twoDays: "Next 48 hours",
+    .week: "This week",
+  ]
+}
+
+@available(iOS 17.0, *)
+struct FPEventConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "Next appointment"
+  static var description = IntentDescription("Your next appointment with a countdown; join video calls.")
+  static let kind = "event"
+
+  @Parameter(title: "Calendars")
+  var calendars: [FPEventCalendar]?
+  @Parameter(title: "Look ahead", default: .twoDays)
+  var within: FPWithin
+  @Parameter(title: "“Join” for video calls", default: true)
+  var showJoin: Bool
+
+  var request: FPRequest {
+    let ids: [String] = Array(Set((calendars ?? []).map(\.id))).sorted().prefix(10).map { $0 }
+    var config: [String: Any] = ["within": within.rawValue, "showJoin": showJoin, "max": 3]
+    if !ids.isEmpty { config["calendars"] = ids }
+    return FPRequest(kind: Self.kind, config: config)
+  }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
+// MARK: - 12. Continue reading
+
+@available(iOS 17.0, *)
+enum FPReadingSource: String, AppEnum {
+  case recent, library
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Show"
+  static var caseDisplayRepresentations: [FPReadingSource: DisplayRepresentation] = [
+    .recent: "Recently opened",
+    .library: "Library books",
+  ]
+}
+
+@available(iOS 17.0, *)
+struct FPReadingConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "Continue reading"
+  static var description = IntentDescription("Pick up recent pages and library books where you left off.")
+  static let kind = "reading"
+
+  @Parameter(title: "Show", default: .recent)
+  var source: FPReadingSource
+  @Parameter(title: "Number of items", default: 4, inclusiveRange: (1, 6))
+  var count: Int
+
+  var request: FPRequest { FPRequest(kind: Self.kind, config: ["source": source.rawValue, "max": min(6, max(1, count))]) }
+  var settings: FPSettings { FPSettings(max: min(6, max(1, count))) }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
+// MARK: - 13. Dashboard key figure
+
+@available(iOS 17.0, *)
+struct FPMetricConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "Key figure"
+  static var description = IntentDescription("One number of a dashboard, with its trend.")
+  static let kind = "metric"
+
+  @Parameter(title: "Key figure")
+  var figure: FPFigureEntity?
+
+  var needsSetup: Bool { figure == nil }
+  var request: FPRequest {
+    guard let figure else { return FPRequest(kind: Self.kind, config: [:]) }
+    return FPRequest(kind: Self.kind, config: ["dashboardId": figure.dashboardId, "widgetId": figure.widgetId])
+  }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
+// MARK: - 14. Deadline countdown
+
+@available(iOS 17.0, *)
+struct FPDeadlineConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "Deadline"
+  static var description = IntentDescription("Counts down to one task or record.")
+  static let kind = "deadline"
+
+  @Parameter(title: "Task or record")
+  var item: FPDeadlineEntity?
+
+  var needsSetup: Bool { item == nil }
+  var request: FPRequest {
+    guard let item else { return FPRequest(kind: Self.kind, config: [:]) }
+    return FPRequest(kind: Self.kind, config: item.config)
+  }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
 
   func perform() async throws -> some IntentResult { .result() }
 }
@@ -456,15 +704,18 @@ struct FPCompleteTaskIntent: AppIntent {
   @Parameter(title: "Position", default: -1) var index: Int
   @Parameter(title: "Key", default: "") var key: String
   @Parameter(title: "Text", default: "") var text: String
+  // The widget's profile ("": the active one).
+  @Parameter(title: "Profile", default: "") var profile: String
 
   init() {}
-  init(source: String, pageId: String, rowId: String, index: Int, key: String, text: String) {
+  init(source: String, pageId: String, rowId: String, index: Int, key: String, text: String, profile: String?) {
     self.source = source
     self.pageId = pageId
     self.rowId = rowId
     self.index = index
     self.key = key
     self.text = text
+    self.profile = profile ?? ""
   }
 
   func perform() async throws -> some IntentResult {
@@ -477,7 +728,7 @@ struct FPCompleteTaskIntent: AppIntent {
     if !key.isEmpty { fields["key"] = key }
     if !text.isEmpty { fields["text"] = text }
     let item: String = FPActions.taskID(source: source, pageId: pageId, rowId: rowId, index: index)
-    await FPWidgets.run("task.complete", fields, item: item, kind: FPWidgetKind.tasks)
+    await FPWidgets.run("task.complete", fields, item: item, kind: FPWidgetKind.tasks, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }
@@ -490,19 +741,21 @@ struct FPCheckHabitIntent: AppIntent {
   @Parameter(title: "Habits", default: "") var pageId: String
   @Parameter(title: "Habit", default: "") var fieldId: String
   @Parameter(title: "Done", default: true) var done: Bool
+  @Parameter(title: "Profile", default: "") var profile: String
 
   init() {}
-  init(pageId: String, fieldId: String, done: Bool) {
+  init(pageId: String, fieldId: String, done: Bool, profile: String?) {
     self.pageId = pageId
     self.fieldId = fieldId
     self.done = done
+    self.profile = profile ?? ""
   }
 
   func perform() async throws -> some IntentResult {
     FPLog.intent("FPCheckHabitIntent")
     let fields: [String: Any] = ["pageId": pageId, "fieldId": fieldId, "done": done, "today": FPAPI.today()]
     let item: String = FPActions.habitID(pageId: pageId, fieldId: fieldId)
-    await FPWidgets.run("habit.check", fields, item: item, kind: FPWidgetKind.journal)
+    await FPWidgets.run("habit.check", fields, item: item, kind: FPWidgetKind.journal, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }
@@ -514,19 +767,22 @@ struct FPMarkReadIntent: AppIntent {
 
   // "": all of them.
   @Parameter(title: "Notification", default: "") var notificationId: String
+  @Parameter(title: "Profile", default: "") var profile: String
 
   init() {}
-  init(notificationId: String?) {
+  init(notificationId: String?, profile: String?) {
     self.notificationId = notificationId ?? ""
+    self.profile = profile ?? ""
   }
 
   func perform() async throws -> some IntentResult {
     FPLog.intent("FPMarkReadIntent")
+    let chosen: String? = profile.isEmpty ? nil : profile
     if notificationId.isEmpty {
-      await FPWidgets.run("mention.readAll", [:], item: FPActions.readID(nil), kind: FPWidgetKind.mentions)
+      await FPWidgets.run("mention.readAll", [:], item: FPActions.readID(nil), kind: FPWidgetKind.mentions, profile: chosen)
     } else {
       let fields: [String: Any] = ["notificationId": notificationId, "read": true]
-      await FPWidgets.run("mention.read", fields, item: FPActions.readID(notificationId), kind: FPWidgetKind.mentions)
+      await FPWidgets.run("mention.read", fields, item: FPActions.readID(notificationId), kind: FPWidgetKind.mentions, profile: chosen)
     }
     return .result()
   }
@@ -540,18 +796,20 @@ struct FPStartTimerIntent: AppIntent {
   @Parameter(title: "Page", default: "") var pageId: String
   @Parameter(title: "Record", default: "") var rowId: String
   @Parameter(title: "Property", default: "") var fieldId: String
+  @Parameter(title: "Profile", default: "") var profile: String
 
   init() {}
-  init(pageId: String, rowId: String, fieldId: String) {
+  init(pageId: String, rowId: String, fieldId: String, profile: String?) {
     self.pageId = pageId
     self.rowId = rowId
     self.fieldId = fieldId
+    self.profile = profile ?? ""
   }
 
   func perform() async throws -> some IntentResult {
     FPLog.intent("FPStartTimerIntent")
     let fields: [String: Any] = ["pageId": pageId, "rowId": rowId, "fieldId": fieldId]
-    await FPWidgets.run("timer.start", fields, item: FPActions.timerStartID, kind: FPWidgetKind.time)
+    await FPWidgets.run("timer.start", fields, item: FPActions.timerStartID, kind: FPWidgetKind.time, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }
@@ -561,9 +819,16 @@ struct FPStopTimerIntent: AppIntent {
   static var title: LocalizedStringResource = "Stop timer"
   static var isDiscoverable = false
 
+  @Parameter(title: "Profile", default: "") var profile: String
+
+  init() {}
+  init(profile: String?) {
+    self.profile = profile ?? ""
+  }
+
   func perform() async throws -> some IntentResult {
     FPLog.intent("FPStopTimerIntent")
-    await FPWidgets.run("timer.stop", [:], item: FPActions.timerStopID, kind: FPWidgetKind.time)
+    await FPWidgets.run("timer.stop", [:], item: FPActions.timerStopID, kind: FPWidgetKind.time, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }

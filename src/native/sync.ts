@@ -16,7 +16,10 @@ import { renderAdminLive, renderAdminStatus, renderAdminStorage, renderInbox, re
 import { setQuickActions } from "./actions";
 import { syncShortcuts } from "../android/shortcuts";
 import type * as IosWidgets from "../widgets/ios";
-import { refreshSuite, timeZone } from "./suite";
+import { clearSuiteAnswers, refreshSuite, timeZone } from "./suite";
+import { http } from "./push";
+import { leaveWidgetPush, syncWidgetPush } from "./widget-push";
+import { setDevicePush } from "../push-relay";
 import { syncSpotlight } from "./spotlight";
 import { syncLocalReminders } from "./local-reminders";
 import { endLiveActivity, watchLiveActivity, type PushTokenActivity } from "./live-push";
@@ -84,6 +87,52 @@ export async function leaveInstance(server: string, token: string | null) {
       signal: timeoutSignal(8000),
     });
   } catch {}
+}
+
+// Another profile became active: this one's instance keeps the phone for its
+// widgets but sends it no notifications any more (POST /api/mobile/device
+// { push: false }). An instance too old for that – or one whose session
+// ended – is left as before: entry, token and answers go, its widgets ask
+// to sign in. Not reachable now: told again later (retryPushOff).
+export async function quietInstance(profileId: string, server: string, token: string): Promise<"kept" | "left" | "pending"> {
+  const { result, widgetPush } = await setDevicePush(server, token, false, http);
+  if (store.profiles().active === profileId) return "kept";
+  if (result === "ok") {
+    store.setPushOffPending(profileId, false);
+    // The instance dropped the widgets' push registration (the relay
+    // refused it): a new one.
+    if (widgetPush === false && store.widgetPushRecord(profileId)) {
+      store.setWidgetPushRecord(profileId, null);
+      void syncWidgetPush();
+    }
+    return "kept";
+  }
+  if (result === "failed") {
+    store.setPushOffPending(profileId, true);
+    return "pending";
+  }
+  store.setPushOffPending(profileId, false);
+  leaveWidgetPush(profileId);
+  store.forgetInstance(profileId);
+  await clearSuiteAnswers(profileId);
+  if (result === "missing") await leaveInstance(server, token);
+  void refreshSuite({ force: true });
+  return "left";
+}
+
+// Profiles that are not active and whose instance has not yet heard that
+// the phone wants no pushes from it.
+export async function retryPushOff() {
+  const state = store.profiles();
+  for (const profile of state.profiles) {
+    if (profile.id === state.active || !store.pushOffPending(profile.id)) continue;
+    const token = store.deviceTokenOf(profile.id);
+    if (!token) {
+      store.setPushOffPending(profile.id, false);
+      continue;
+    }
+    await quietInstance(profile.id, profile.server, token);
+  }
 }
 
 // Fetches and shows; offline the last summary stays.

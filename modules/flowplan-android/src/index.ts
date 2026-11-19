@@ -1,6 +1,7 @@
 // Android pieces of the Flowplan app (Kotlin in android/): "Share" from other
 // apps, the app shortcuts on the launcher icon, the Material You palette for
-// the widgets, the "Quick capture" Quick Settings tile and the progress of the
+// the widgets (with their corner radii and generated previews in the widget
+// picker), the "Quick capture" Quick Settings tile and the progress of the
 // predictive back gesture, and the strip of the left edge kept from the
 // system's back gesture. Everything is a no-op elsewhere.
 import { Platform } from "react-native";
@@ -23,6 +24,9 @@ type NativeModule = {
   setShortcuts(items: Shortcut[], profile: string | null): boolean;
   reportShortcutUsed(id: string): void;
   materialColors(): MaterialPalette | null;
+  widgetRadii?(): { background: number; inner: number } | null;
+  widgetPreviewsSupported?(): boolean;
+  setWidgetPreview?(widgetName: string, base64Png: string, description: string): Promise<boolean>;
   canAddTile(): boolean;
   requestAddTile(label: string): boolean;
   setPredictiveBack?(enabled: boolean): boolean;
@@ -62,6 +66,20 @@ export const setShortcuts = (items: Shortcut[], profile: string | null) => quiet
 export const reportShortcutUsed = (id: string) => quiet(() => native?.reportShortcutUsed(id), undefined);
 
 export const materialColors = (): MaterialPalette | null => quiet(() => native?.materialColors() ?? null, null);
+
+// The launcher's corner radii for widgets (Android 12+, Material 3), in dp.
+export const widgetRadii = (): { background: number; inner: number } | null => quiet(() => native?.widgetRadii?.() ?? null, null);
+
+// Generated previews in the widget picker (Android 15+): a picture of the
+// widget with sample content. false: not supported, or rate-limited.
+export const widgetPreviewsSupported = () => quiet(() => native?.widgetPreviewsSupported?.() ?? false, false);
+export async function setWidgetPreview(widgetName: string, base64Png: string, description: string): Promise<boolean> {
+  try {
+    return (await native?.setWidgetPreview?.(widgetName, base64Png, description)) ?? false;
+  } catch {
+    return false;
+  }
+}
 
 export const canAddTile = () => quiet(() => native?.canAddTile() ?? false, false);
 export const requestAddTile = (label: string) => quiet(() => native?.requestAddTile(label) ?? false, false);

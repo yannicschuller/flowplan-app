@@ -12,9 +12,11 @@ import WidgetKit
 /// - the swipe from the left edge for "back" (the web view's own gesture
 ///   walks its history, which is not what back means in Flowplan): a chevron
 ///   follows the finger, and the app asks the page what back is.
-/// - the session of the configurable widgets (WidgetShared.swift): the
+/// - the sessions of the configurable widgets (WidgetShared.swift): the
 ///   widget extension reads instance, device token, profile and language
-///   from the App Group's keychain and asks the instance itself;
+///   from the App Group's keychain – the active profile's and each
+///   profile's own – and asks the instances itself; WidgetKit's push token
+///   for the widgets (iOS 26);
 /// - links that App Shortcuts and Siri hand to the app ("Voice memo",
 ///   "Start focus"), and donations of those shortcuts;
 /// - the certificate an HTTPS instance presents, for the dialog when iOS
@@ -49,6 +51,36 @@ public class FlowplanNativeModule: Module {
     // Answers "written", "recovered", "cleared", "unchanged" or "failed".
     Function("setWidgetSession") { (session: [String: Any]?) -> String in
       Self.handOver(session)
+    }
+
+    // Every profile with its own session, for widgets set to a profile
+    // (their "Profile" setting lists the names; each instance only ever gets
+    // its own token). "written", "unchanged" or "failed".
+    Function("setWidgetProfiles") { (profiles: [[String: Any]]) -> String in
+      FPProfiles.save(profiles)
+    }
+
+    // iOS 26: WidgetKit's push token for the app's widgets, as hex – from
+    // WidgetCenter, or as the extension's push handler last got it. nil
+    // before iOS 26 or before WidgetKit made one (no widget on a screen).
+    AsyncFunction("widgetPushToken") { () async -> String? in
+      if #available(iOS 26.0, *) {
+        if let info = await WidgetCenter.shared.currentPushInfo {
+          let hex: String = info.token.map { String(format: "%02x", $0) }.joined()
+          return hex
+        }
+      }
+      return FPWidgetPush.token
+    }
+
+    // The instances' accents as the widgets' answers last said (profile →
+    // "#rrggbb"): the default of a profile's colour dot.
+    Function("widgetAccents") { () -> [String: String] in
+      var out: [String: String] = [:]
+      for profile in FPProfiles.all() {
+        if let accent = FPShared.defaults?.string(forKey: FPStore.accentKey(profile.id)) { out[profile.id] = accent }
+      }
+      return out
     }
 
     // After a change in the page or the app: widgets and controls ask again.
@@ -221,9 +253,15 @@ extension FlowplanNativeModule {
       reloadWidgets()
       return "recovered"
     }
+    // Signed out: that profile's answers go. Another profile became active:
+    // the previous one's stay – widgets set to it go on showing it with its
+    // own session (FPProfiles).
     if let previous = previous {
-      let otherProfile: Bool = previous.profile != next.profile || previous.server != next.server
-      if otherProfile || next.token == nil {
+      let sameProfile: Bool = previous.profile == next.profile && previous.server == next.server
+      if sameProfile && next.token == nil {
+        FPStore.clear(profile: previous.profile)
+      }
+      if previous.server != next.server && previous.profile == next.profile {
         FPStore.clear(profile: previous.profile)
       }
     }

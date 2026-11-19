@@ -18,8 +18,8 @@ struct FPOption: Sendable {
 enum FPOptions {
   private static let cache = FPOptionCache()
 
-  static func pages(_ kind: String, _ list: String, pageId: String? = nil) async -> [FPOption] {
-    guard let answer = await cache.answer(kind: kind, pageId: pageId) else { return [] }
+  static func pages(_ kind: String, _ list: String, pageId: String? = nil, profile: String? = nil) async -> [FPOption] {
+    guard let answer = await cache.answer(kind: kind, pageId: pageId, profile: profile) else { return [] }
     return answer[list].array.compactMap(page)
   }
 
@@ -44,8 +44,8 @@ enum FPOptions {
   }
 
   /// The database of an options answer (with pageId): views and properties.
-  static func database(_ kind: String, pageId: String) async -> FPJSON? {
-    guard let answer = await cache.answer(kind: kind, pageId: pageId) else { return nil }
+  static func database(_ kind: String, pageId: String, profile: String? = nil) async -> FPJSON? {
+    guard let answer = await cache.answer(kind: kind, pageId: pageId, profile: profile) else { return nil }
     let database: FPJSON = answer["database"]
     if database.isNull { return nil }
     if database["locked"].bool { return nil }
@@ -53,8 +53,8 @@ enum FPOptions {
     return database
   }
 
-  static func answer(_ kind: String) async -> FPJSON? {
-    await cache.answer(kind: kind, pageId: nil)
+  static func answer(_ kind: String, pageId: String? = nil, profile: String? = nil) async -> FPJSON? {
+    await cache.answer(kind: kind, pageId: pageId, profile: profile)
   }
 }
 
@@ -62,10 +62,10 @@ enum FPOptions {
 actor FPOptionCache {
   private var entries: [String: (at: Date, json: FPJSON)] = [:]
 
-  func answer(kind: String, pageId: String?) async -> FPJSON? {
-    let key = "\(kind)|\(pageId ?? "")"
+  func answer(kind: String, pageId: String?, profile: String?) async -> FPJSON? {
+    let key = "\(profile ?? "")|\(kind)|\(pageId ?? "")"
     if let entry = entries[key], Date().timeIntervalSince(entry.at) < 60 { return entry.json }
-    guard let json = try? await FPAPI.options(kind: kind, pageId: pageId) else { return entries[key]?.json }
+    guard let json = try? await FPAPI.options(kind: kind, pageId: pageId, profile: profile) else { return entries[key]?.json }
     entries[key] = (Date(), json)
     return json
   }
@@ -90,11 +90,14 @@ struct FPCaptureTarget: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPCaptureTargetQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPCaptureConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPCaptureTarget] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("capture", "targets")).map(FPCaptureTarget.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("capture", "targets", profile: widget?.profile.id)).map(FPCaptureTarget.init)
     }
     func suggestedEntities() async throws -> [FPCaptureTarget] {
-      await FPOptions.pages("capture", "targets").map(FPCaptureTarget.init)
+      await FPOptions.pages("capture", "targets", profile: widget?.profile.id).map(FPCaptureTarget.init)
     }
   }
 }
@@ -110,11 +113,14 @@ struct FPTaskDatabase: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPTaskDatabaseQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPTasksConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPTaskDatabase] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "databases")).map(FPTaskDatabase.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "databases", profile: widget?.profile.id)).map(FPTaskDatabase.init)
     }
     func suggestedEntities() async throws -> [FPTaskDatabase] {
-      await FPOptions.pages("tasks", "databases").map(FPTaskDatabase.init)
+      await FPOptions.pages("tasks", "databases", profile: widget?.profile.id).map(FPTaskDatabase.init)
     }
   }
 }
@@ -130,11 +136,14 @@ struct FPTodoPage: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPTodoPageQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPTasksConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPTodoPage] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "pages")).map(FPTodoPage.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("tasks", "pages", profile: widget?.profile.id)).map(FPTodoPage.init)
     }
     func suggestedEntities() async throws -> [FPTodoPage] {
-      await FPOptions.pages("tasks", "pages").map(FPTodoPage.init)
+      await FPOptions.pages("tasks", "pages", profile: widget?.profile.id).map(FPTodoPage.init)
     }
   }
 }
@@ -150,11 +159,14 @@ struct FPPinnedPage: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPPinnedPageQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPPinnedConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPPinnedPage] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("pinned", "pages")).map(FPPinnedPage.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("pinned", "pages", profile: widget?.profile.id)).map(FPPinnedPage.init)
     }
     func suggestedEntities() async throws -> [FPPinnedPage] {
-      await FPOptions.pages("pinned", "pages").map(FPPinnedPage.init)
+      await FPOptions.pages("pinned", "pages", profile: widget?.profile.id).map(FPPinnedPage.init)
     }
   }
 }
@@ -170,11 +182,14 @@ struct FPCounterDatabase: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPCounterDatabaseQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPCounterConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPCounterDatabase] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("counter", "databases")).map(FPCounterDatabase.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("counter", "databases", profile: widget?.profile.id)).map(FPCounterDatabase.init)
     }
     func suggestedEntities() async throws -> [FPCounterDatabase] {
-      await FPOptions.pages("counter", "databases").map(FPCounterDatabase.init)
+      await FPOptions.pages("counter", "databases", profile: widget?.profile.id).map(FPCounterDatabase.init)
     }
   }
 }
@@ -190,11 +205,14 @@ struct FPJournalPage: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPJournalPageQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPJournalConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPJournalPage] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("journal", "journals")).map(FPJournalPage.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("journal", "journals", profile: widget?.profile.id)).map(FPJournalPage.init)
     }
     func suggestedEntities() async throws -> [FPJournalPage] {
-      await FPOptions.pages("journal", "journals").map(FPJournalPage.init)
+      await FPOptions.pages("journal", "journals", profile: widget?.profile.id).map(FPJournalPage.init)
     }
   }
 }
@@ -209,8 +227,10 @@ struct FPHabitDatabase: AppEntity {
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
   struct FPHabitDatabaseQuery: EntityQuery {
+    @IntentParameterDependency<FPJournalConfiguration>(\.$profile) var widget
+
     private func all() async -> [FPHabitDatabase] {
-      guard let answer = await FPOptions.answer("journal") else { return [] }
+      guard let answer = await FPOptions.answer("journal", profile: widget?.profile.id) else { return [] }
       return answer["habits"].array.compactMap { item in
         guard let id = item["id"].string else { return nil }
         let habits = item["habits"].array.map { $0["name"].text }.filter { !$0.isEmpty }.joined(separator: ", ")
@@ -238,11 +258,14 @@ struct FPFormPage: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPFormPageQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPFormsConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPFormPage] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("forms", "forms")).map(FPFormPage.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("forms", "forms", profile: widget?.profile.id)).map(FPFormPage.init)
     }
     func suggestedEntities() async throws -> [FPFormPage] {
-      await FPOptions.pages("forms", "forms").map(FPFormPage.init)
+      await FPOptions.pages("forms", "forms", profile: widget?.profile.id).map(FPFormPage.init)
     }
   }
 }
@@ -258,11 +281,14 @@ struct FPDeck: AppEntity {
   init(_ option: FPOption) { id = option.id; name = option.name; detail = option.detail }
 
   struct FPDeckQuery: EntityQuery {
+    // Options of the widget's profile (none chosen: the active one).
+    @IntentParameterDependency<FPStudyConfiguration>(\.$profile) var widget
+
     func entities(for identifiers: [String]) async throws -> [FPDeck] {
-      await FPOptions.resolve(identifiers, FPOptions.pages("study", "decks")).map(FPDeck.init)
+      await FPOptions.resolve(identifiers, FPOptions.pages("study", "decks", profile: widget?.profile.id)).map(FPDeck.init)
     }
     func suggestedEntities() async throws -> [FPDeck] {
-      await FPOptions.pages("study", "decks").map(FPDeck.init)
+      await FPOptions.pages("study", "decks", profile: widget?.profile.id).map(FPDeck.init)
     }
   }
 }
@@ -280,8 +306,8 @@ struct FPViewEntity: AppEntity {
   var pageId: String { FPCompositeID.split(id).first ?? "" }
   var viewId: String { FPCompositeID.split(id).dropFirst().joined(separator: "|") }
 
-  static func views(kind: String, pageId: String) async -> [FPViewEntity] {
-    guard let database = await FPOptions.database(kind, pageId: pageId) else { return [] }
+  static func views(kind: String, pageId: String, profile: String? = nil) async -> [FPViewEntity] {
+    guard let database = await FPOptions.database(kind, pageId: pageId, profile: profile) else { return [] }
     return database["views"].array.compactMap { view in
       guard let id = view["id"].string else { return nil }
       return FPViewEntity(id: FPCompositeID.make(pageId, id), name: view["name"].text)
@@ -293,22 +319,27 @@ struct FPViewEntity: AppEntity {
     @IntentParameterDependency<FPTasksConfiguration>(\.$database) var tasks
     @IntentParameterDependency<FPPinnedConfiguration>(\.$page) var pinned
     @IntentParameterDependency<FPCounterConfiguration>(\.$database) var counter
+    @IntentParameterDependency<FPTasksConfiguration>(\.$profile) var tasksProfile
+    @IntentParameterDependency<FPPinnedConfiguration>(\.$profile) var pinnedProfile
+    @IntentParameterDependency<FPCounterConfiguration>(\.$profile) var counterProfile
+
+    private var profile: String? { tasksProfile?.profile.id ?? pinnedProfile?.profile.id ?? counterProfile?.profile.id }
 
     func entities(for identifiers: [String]) async throws -> [FPViewEntity] {
       var out: [FPViewEntity] = []
       for id in identifiers {
         let parts = FPCompositeID.split(id)
         guard parts.count >= 2 else { continue }
-        let known = await FPViewEntity.views(kind: "counter", pageId: parts[0]).first { $0.id == id }
+        let known = await FPViewEntity.views(kind: "counter", pageId: parts[0], profile: profile).first { $0.id == id }
         out.append(known ?? FPViewEntity(id: id, name: L("View")))
       }
       return out
     }
 
     func suggestedEntities() async throws -> [FPViewEntity] {
-      if let id = tasks?.database.id { return await FPViewEntity.views(kind: "tasks", pageId: id) }
-      if let id = pinned?.page.id { return await FPViewEntity.views(kind: "pinned", pageId: id) }
-      if let id = counter?.database.id { return await FPViewEntity.views(kind: "counter", pageId: id) }
+      if let id = tasks?.database.id { return await FPViewEntity.views(kind: "tasks", pageId: id, profile: profile) }
+      if let id = pinned?.page.id { return await FPViewEntity.views(kind: "pinned", pageId: id, profile: profile) }
+      if let id = counter?.database.id { return await FPViewEntity.views(kind: "counter", pageId: id, profile: profile) }
       return []
     }
   }
@@ -325,8 +356,8 @@ struct FPFieldEntity: AppEntity {
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
   var fieldId: String { FPCompositeID.split(id).dropFirst().joined(separator: "|") }
 
-  static func fields(kind: String, pageId: String, numbersOnly: Bool = false) async -> [FPFieldEntity] {
-    guard let database = await FPOptions.database(kind, pageId: pageId) else { return [] }
+  static func fields(kind: String, pageId: String, numbersOnly: Bool = false, profile: String? = nil) async -> [FPFieldEntity] {
+    guard let database = await FPOptions.database(kind, pageId: pageId, profile: profile) else { return [] }
     return database["properties"].array.compactMap { field in
       guard let id = field["id"].string else { return nil }
       let type = field["type"].text
@@ -338,21 +369,25 @@ struct FPFieldEntity: AppEntity {
   struct FPFieldEntityQuery: EntityQuery {
     @IntentParameterDependency<FPPinnedConfiguration>(\.$page) var pinned
     @IntentParameterDependency<FPCounterConfiguration>(\.$database) var counter
+    @IntentParameterDependency<FPPinnedConfiguration>(\.$profile) var pinnedProfile
+    @IntentParameterDependency<FPCounterConfiguration>(\.$profile) var counterProfile
+
+    private var profile: String? { pinnedProfile?.profile.id ?? counterProfile?.profile.id }
 
     func entities(for identifiers: [String]) async throws -> [FPFieldEntity] {
       var out: [FPFieldEntity] = []
       for id in identifiers {
         let parts = FPCompositeID.split(id)
         guard parts.count >= 2 else { continue }
-        let known = await FPFieldEntity.fields(kind: "counter", pageId: parts[0]).first { $0.id == id }
+        let known = await FPFieldEntity.fields(kind: "counter", pageId: parts[0], profile: profile).first { $0.id == id }
         out.append(known ?? FPFieldEntity(id: id, name: L("Property"), type: ""))
       }
       return out
     }
 
     func suggestedEntities() async throws -> [FPFieldEntity] {
-      if let id = pinned?.page.id { return await FPFieldEntity.fields(kind: "pinned", pageId: id) }
-      if let id = counter?.database.id { return await FPFieldEntity.fields(kind: "counter", pageId: id) }
+      if let id = pinned?.page.id { return await FPFieldEntity.fields(kind: "pinned", pageId: id, profile: profile) }
+      if let id = counter?.database.id { return await FPFieldEntity.fields(kind: "counter", pageId: id, profile: profile) }
       return []
     }
   }
@@ -362,10 +397,11 @@ struct FPFieldEntity: AppEntity {
 @available(iOS 17.0, *)
 struct FPGroupValues: DynamicOptionsProvider {
   @IntentParameterDependency<FPCounterConfiguration>(\.$database, \.$groupField) var counter
+  @IntentParameterDependency<FPCounterConfiguration>(\.$profile) var counterProfile
 
   func results() async throws -> [String] {
     guard let pageId = counter?.database.id, let field = counter?.groupField,
-          let database = await FPOptions.database("counter", pageId: pageId) else { return [] }
+          let database = await FPOptions.database("counter", pageId: pageId, profile: counterProfile?.profile.id) else { return [] }
     let fieldId: String = field.fieldId
     let properties: [FPJSON] = database["properties"].array
     guard let property = properties.first(where: { (item: FPJSON) -> Bool in item["id"].text == fieldId }) else { return [] }
@@ -394,8 +430,10 @@ struct FPCalendarEntity: AppEntity {
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
   struct FPCalendarEntityQuery: EntityQuery {
+    @IntentParameterDependency<FPCalendarConfiguration>(\.$profile) var widget
+
     private func all() async -> [FPCalendarEntity] {
-      guard let answer = await FPOptions.answer("calendar") else { return [] }
+      guard let answer = await FPOptions.answer("calendar", profile: widget?.profile.id) else { return [] }
       return answer["calendars"].array.compactMap { item in
         guard let page = item["pageId"].string else { return nil }
         let view = item["viewId"].text
@@ -425,8 +463,10 @@ struct FPTimerEntity: AppEntity {
   var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
 
   struct FPTimerEntityQuery: EntityQuery {
+    @IntentParameterDependency<FPTimeConfiguration>(\.$profile) var widget
+
     private func all() async -> [FPTimerEntity] {
-      guard let answer = await FPOptions.answer("time") else { return [] }
+      guard let answer = await FPOptions.answer("time", profile: widget?.profile.id) else { return [] }
       return answer["recent"].array.compactMap { item in
         guard let page = item["pageId"].string, let row = item["rowId"].string, let field = item["fieldId"].string else { return nil }
         return FPTimerEntity(id: FPCompositeID.make(page, row, field), name: item["title"].text, detail: item["database"].text)
@@ -437,6 +477,136 @@ struct FPTimerEntity: AppEntity {
       return identifiers.map { id in known.first { $0.id == id } ?? FPTimerEntity(id: id, name: L("Timer"), detail: "") }
     }
     func suggestedEntities() async throws -> [FPTimerEntity] {
+      await all()
+    }
+  }
+}
+
+// MARK: - Next appointment, key figure, deadline
+
+/// A calendar of the next appointment widget ("<page id>:<view id>" as the
+/// instance lists it).
+@available(iOS 17.0, *)
+struct FPEventCalendar: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Calendar"
+  static var defaultQuery = FPEventCalendarQuery()
+  var id: String
+  var name: String
+  var detail: String
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
+
+  struct FPEventCalendarQuery: EntityQuery {
+    @IntentParameterDependency<FPEventConfiguration>(\.$profile) var widget
+
+    private func all() async -> [FPEventCalendar] {
+      guard let answer = await FPOptions.answer("event", profile: widget?.profile.id) else { return [] }
+      return answer["calendars"].array.compactMap { item in
+        guard let id = item["id"].string else { return nil }
+        let synced: String? = item["synced"].string
+        return FPEventCalendar(id: id, name: item["name"].text, detail: synced ?? item["database"].text)
+      }
+    }
+    func entities(for identifiers: [String]) async throws -> [FPEventCalendar] {
+      let known = await all()
+      return identifiers.map { id in known.first { $0.id == id } ?? FPEventCalendar(id: id, name: L("Calendar"), detail: "") }
+    }
+    func suggestedEntities() async throws -> [FPEventCalendar] {
+      await all()
+    }
+  }
+}
+
+/// A number tile of a dashboard ("<dashboard id>|<tile id>").
+@available(iOS 17.0, *)
+struct FPFigureEntity: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Key figure"
+  static var defaultQuery = FPFigureQuery()
+  var id: String
+  var name: String
+  var detail: String
+  var dashboardId: String { FPCompositeID.split(id).first ?? "" }
+  var widgetId: String { FPCompositeID.split(id).dropFirst().joined(separator: "|") }
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
+
+  struct FPFigureQuery: EntityQuery {
+    @IntentParameterDependency<FPMetricConfiguration>(\.$profile) var widget
+
+    private func all() async -> [FPFigureEntity] {
+      guard let answer = await FPOptions.answer("metric", profile: widget?.profile.id) else { return [] }
+      var out: [FPFigureEntity] = []
+      for dashboard in answer["dashboards"].array {
+        guard let dashboardId = dashboard["id"].string, let option = FPOptions.page(dashboard) else { continue }
+        for tile in dashboard["widgets"].array {
+          guard let tileId = tile["id"].string else { continue }
+          out.append(FPFigureEntity(id: FPCompositeID.make(dashboardId, tileId), name: tile["name"].text, detail: option.name))
+        }
+      }
+      return out
+    }
+    func entities(for identifiers: [String]) async throws -> [FPFigureEntity] {
+      let known = await all()
+      return identifiers.map { id in known.first { $0.id == id } ?? FPFigureEntity(id: id, name: L("Key figure"), detail: "") }
+    }
+    func suggestedEntities() async throws -> [FPFigureEntity] {
+      await all()
+    }
+  }
+}
+
+/// What the deadline counts down to: a record of a database with a due date
+/// ("r|<database>|<record>") or one of the person's open tasks with a due
+/// date ("t|<page>|<record or "">|<position>|<key>").
+@available(iOS 17.0, *)
+struct FPDeadlineEntity: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Task or record"
+  static var defaultQuery = FPDeadlineQuery()
+  var id: String
+  var name: String
+  var detail: String
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)", subtitle: "\(detail)") }
+
+  /// The settings as the instance takes them.
+  var config: [String: Any] {
+    let parts = FPCompositeID.split(id)
+    if parts.first == "r", parts.count >= 3 { return ["pageId": parts[1], "rowId": parts[2]] }
+    guard parts.first == "t", parts.count >= 5 else { return [:] }
+    var out: [String: Any] = ["pageId": parts[1], "taskKey": parts[4...].joined(separator: "|")]
+    if !parts[2].isEmpty { out["rowId"] = parts[2] }
+    if let index = Int(parts[3]) { out["index"] = index }
+    return out
+  }
+
+  struct FPDeadlineQuery: EntityQuery {
+    @IntentParameterDependency<FPDeadlineConfiguration>(\.$profile) var widget
+
+    // My open tasks with a due date, then the records with one of every
+    // database that has a due date.
+    private func all() async -> [FPDeadlineEntity] {
+      let profile: String? = widget?.profile.id
+      guard let answer = await FPOptions.answer("deadline", profile: profile) else { return [] }
+      var out: [FPDeadlineEntity] = answer["tasks"].array.compactMap { task in
+        guard let pageId = task["pageId"].string, let key = task["taskKey"].string else { return nil }
+        let index: String = task["index"].int.map(String.init) ?? ""
+        let due: String = FPFormat.due(task["due"].string).label
+        let detail: String = [task["page"].text, due].filter { !$0.isEmpty }.joined(separator: " · ")
+        return FPDeadlineEntity(id: FPCompositeID.make("t", pageId, task["rowId"].text, index, key), name: task["text"].text, detail: detail)
+      }
+      for database in answer["databases"].array.prefix(8) {
+        guard let pageId = database["id"].string, let option = FPOptions.page(database),
+              let records = await FPOptions.answer("deadline", pageId: pageId, profile: profile) else { continue }
+        for record in records["records"].array where !record["done"].bool {
+          guard let rowId = record["id"].string else { continue }
+          let due: String = FPFormat.due(record["due"].string).label
+          out.append(FPDeadlineEntity(id: FPCompositeID.make("r", pageId, rowId), name: record["title"].text, detail: [option.name, due].filter { !$0.isEmpty }.joined(separator: " · ")))
+        }
+      }
+      return out
+    }
+    func entities(for identifiers: [String]) async throws -> [FPDeadlineEntity] {
+      // Stored ones stay as they are (the settings are in the id).
+      identifiers.map { FPDeadlineEntity(id: $0, name: L("Deadline"), detail: "") }
+    }
+    func suggestedEntities() async throws -> [FPDeadlineEntity] {
       await all()
     }
   }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { configKey, DEFAULTS, kindOfWidget, needsSetup, normalizeConfig, serverConfig, SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
 import { widgetAction, widgetData, widgetOptions, type WidgetRequest } from "../src/widgets/api";
-import { captureLink, formatHours, pageLink, sampleResult, suiteView } from "../src/widgets/present";
+import { captureLink, formatHours, pageLink, sampleConfig, sampleResult, suiteView } from "../src/widgets/present";
 import { strings } from "../src/i18n";
 
 const PAGE = "3f2b8c1e-7d4a-4b6e-9a1c-2e5f6a7b8c9d";
@@ -22,11 +22,13 @@ test("every kind has a widget and a working default", () => {
     assert.deepEqual(normalizeConfig(kind, undefined), DEFAULTS[kind]);
   }
   assert.equal(kindOfWidget("FlowplanTasks"), null);
-  // Only the counter and the form inbox need a page before they show something.
+  // Only the counter, the form inbox, the key figure and the deadline need
+  // something chosen before they show anything.
   assert.deepEqual(
     SUITE_KINDS.filter((kind) => needsSetup(kind, normalizeConfig(kind, {}))),
-    ["counter", "forms"],
+    ["counter", "forms", "metric", "deadline"],
   );
+  for (const kind of SUITE_KINDS) assert.ok(!needsSetup(kind, sampleConfig(kind)), kind);
 });
 
 test("settings are checked: unknown values fall back, ids must be ids", () => {
@@ -137,7 +139,7 @@ const options = { locale: "en" as const, today, signedIn: true, now: Date.parse(
 test("every kind maps its answer to a view without null, also the samples", () => {
   for (const kind of SUITE_KINDS)
     for (const locale of ["de", "en", "fr", "zh"] as const) {
-      const config = normalizeConfig(kind, kind === "counter" || kind === "forms" ? { pageId: PAGE } : {});
+      const config = sampleConfig(kind);
       const view = suiteView(kind, config, sampleResult(kind, locale, today, options.now), { ...options, locale });
       assert.notEqual(view.state, "closed", `${kind} ${locale}`);
       assertNoNull(view);

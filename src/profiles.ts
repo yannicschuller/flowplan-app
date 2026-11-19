@@ -11,10 +11,74 @@
 // keychain / Keystore, the tests a Map.
 import { originOf } from "./server";
 
-export type Profile = { id: string; name: string; server: string };
+// color: the dot the person chose for the profile (PROFILE_COLORS); none:
+// derived from the instance's accent when known (profileColor).
+export type Profile = { id: string; name: string; server: string; color?: ProfileColor };
 export type ProfileState = { profiles: Profile[]; active: string | null };
 
 export const MAX_PROFILES = 20;
+
+// A small palette for the profiles' colour dots (profile list, switcher,
+// widgets with the colour "Profile"), a light and a dark tone each. The
+// first is Flowplan's own accent.
+export const PROFILE_COLORS = {
+  indigo: { light: "#4146e6", dark: "#8f93ff" },
+  blue: { light: "#1f6feb", dark: "#6ea8fe" },
+  teal: { light: "#0f7f85", dark: "#4fd1c5" },
+  green: { light: "#2f855a", dark: "#68d391" },
+  amber: { light: "#a86b12", dark: "#f6c25b" },
+  orange: { light: "#c05621", dark: "#f6ad55" },
+  red: { light: "#c53030", dark: "#fc8181" },
+  pink: { light: "#b83280", dark: "#f78fc9" },
+  violet: { light: "#7b3fe4", dark: "#b794f4" },
+  slate: { light: "#4a5568", dark: "#a0aec0" },
+} as const;
+export type ProfileColor = keyof typeof PROFILE_COLORS;
+export const PROFILE_COLOR_NAMES = Object.keys(PROFILE_COLORS) as ProfileColor[];
+export const isProfileColor = (value: unknown): value is ProfileColor => typeof value === "string" && Object.prototype.hasOwnProperty.call(PROFILE_COLORS, value);
+
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+// The palette's colour closest to an instance's accent ("#RRGGBB").
+export function nearestColor(accent: unknown): ProfileColor | null {
+  if (typeof accent !== "string" || !/^#[0-9a-f]{6}$/i.test(accent)) return null;
+  const [r, g, b] = rgb(accent);
+  let best: ProfileColor | null = null,
+    distance = Infinity;
+  for (const name of PROFILE_COLOR_NAMES) {
+    const [r2, g2, b2] = rgb(PROFILE_COLORS[name].light);
+    // Weighted for the eye ("redmean").
+    const mean = (r + r2) / 2;
+    const d = (2 + mean / 256) * (r - r2) ** 2 + 4 * (g - g2) ** 2 + (2 + (255 - mean) / 256) * (b - b2) ** 2;
+    if (d < distance) {
+      distance = d;
+      best = name;
+    }
+  }
+  return best;
+}
+
+// The colour of a profile's dot: the chosen one; otherwise the one nearest
+// its instance's accent (once the widgets have seen it), otherwise one by
+// position, so that neighbours differ.
+export function profileColor(state: ProfileState, id: string, accent?: string | null): ProfileColor {
+  const index = Math.max(0, state.profiles.findIndex((p) => p.id === id));
+  const profile = state.profiles[index];
+  if (profile?.color) return profile.color;
+  return nearestColor(accent) || PROFILE_COLOR_NAMES[index % PROFILE_COLOR_NAMES.length];
+}
+
+// null: back to the derived colour.
+export function setProfileColor(state: ProfileState, id: string, color: ProfileColor | null): ProfileState {
+  if (!state.profiles.some((p) => p.id === id)) throw new ProfileError("unknown");
+  return {
+    ...state,
+    profiles: state.profiles.map((p) => {
+      if (p.id !== id) return p;
+      const { color: _old, ...rest } = p;
+      return color && isProfileColor(color) ? { ...rest, color } : rest;
+    }),
+  };
+}
 const MAX_NAME = 60;
 const ID = /^[a-z0-9]{1,32}$/;
 
@@ -31,9 +95,16 @@ export class ProfileError extends Error {
 // The keys that belong to one profile; everything else (installation id, app
 // lock, push asked) is the app's.
 // push / livePush: the profile's registration with the push relay and its
-// Live Activities' (push-relay.ts).
-export const PROFILE_KEYS = ["deviceToken", "summary", "adminSummary", "push", "livePush"] as const;
+// Live Activities' (push-relay.ts); widgetPush: its widgets' (iOS 26,
+// widget-push.ts). deviceToken and widgetPush stay while another profile is
+// active – that profile's widgets keep working (#widgets 2026); what only
+// the active profile has (ACTIVE_ONLY_KEYS) goes with every switch.
+// pushOff: the instance still has to hear that this phone, now on another
+// profile, wants no pushes from it (App.tsx → deactivate; sent again until
+// it answered).
+export const PROFILE_KEYS = ["deviceToken", "summary", "adminSummary", "push", "livePush", "widgetPush", "pushOff"] as const;
 export type ProfileKey = (typeof PROFILE_KEYS)[number];
+export const ACTIVE_ONLY_KEYS: readonly ProfileKey[] = ["summary", "adminSummary", "push", "livePush"];
 export function profileKey(id: string, key: ProfileKey) {
   if (!ID.test(id)) throw new ProfileError("invalid");
   return `flowplan.profile.${id}.${key}`;
@@ -42,7 +113,9 @@ export function profileKey(id: string, key: ProfileKey) {
 // every switch), gone only with the profile: the person's "Animations" as
 // the page reported it (motion.ts), whether offline use was offered here
 // (offline-offer.ts) and, on Android, what the page last said about its copy.
-export const LASTING_KEYS = ["motion", "offlineOffer", "offlineInfo"] as const;
+// accent: the instance's accent as its widgets last saw it (the default of
+// the profile's colour dot, profileColor).
+export const LASTING_KEYS = ["motion", "offlineOffer", "offlineInfo", "accent"] as const;
 export type LastingKey = (typeof LASTING_KEYS)[number];
 export function lastingKey(id: string, key: LastingKey) {
   if (!ID.test(id)) throw new ProfileError("invalid");
@@ -87,7 +160,7 @@ export function parseProfiles(raw: string | null): ProfileState | null {
     const server = originOf(entry.server);
     if (!server || server !== entry.server) continue;
     if (typeof entry.id !== "string" || !ID.test(entry.id) || profiles.some((p) => p.id === entry.id || p.server === server)) continue;
-    profiles.push({ id: entry.id, name: cleanName(entry.name, server), server });
+    profiles.push({ id: entry.id, name: cleanName(entry.name, server), server, ...(isProfileColor(entry.color) ? { color: entry.color } : {}) });
     if (profiles.length >= MAX_PROFILES) break;
   }
   const active = profiles.find((p) => p.id === data.active) ?? profiles[0] ?? null;
@@ -95,7 +168,7 @@ export function parseProfiles(raw: string | null): ProfileState | null {
 }
 
 export const serializeProfiles = (state: ProfileState) =>
-  JSON.stringify({ profiles: state.profiles.map(({ id, name, server }) => ({ id, name, server })), active: state.active });
+  JSON.stringify({ profiles: state.profiles.map(({ id, name, server, color }) => ({ id, name, server, ...(color ? { color } : {}) })), active: state.active });
 
 type Read = (key: string) => string | null;
 type Write = (key: string, value: string | null) => void;

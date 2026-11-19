@@ -9,7 +9,7 @@ import { appLink, safePath } from "../navigation";
 import { dueLabel, widgetProps } from "../summary";
 import { formatWhen } from "../admin";
 import type { WidgetResult } from "./api";
-import { CAPTURE_BUTTONS, DEFAULTS, type CaptureButton, type SuiteConfig, type SuiteKind } from "./suite";
+import { CAPTURE_BUTTONS, DEFAULTS, needsSetup, NEWER_KINDS, parseTheme, type CaptureButton, type SuiteConfig, type SuiteKind, type WidgetTheme } from "./suite";
 
 // The paths of an answer are paths on the instance; anything else opens
 // the start page.
@@ -19,8 +19,27 @@ export const pageLink = (path: unknown) => appLink(safePath(typeof path === "str
 export const captureLink = (mode: CaptureButton, targetId?: string) =>
   `flowplan://capture?mode=${mode}${targetId ? `&target=${encodeURIComponent(targetId)}` : ""}`;
 
-// Why a widget shows no content.
-export type Closed = "signedOut" | "setup" | "gone" | "offline" | "locked" | "encrypted" | "forbidden";
+// A video call's address from the instance ("Join"): only https, no
+// credentials – the instance only names known meeting hosts.
+export function joinLink(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2000) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && url.hostname.includes(".") ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// The workspace's look of an answer (theme), where the instance sends one.
+export function themeOf(result: WidgetResult | null | undefined): WidgetTheme | null {
+  if (!result || !result.ok) return null;
+  return parseTheme((result as { theme?: unknown }).theme) ?? parseTheme(result.data?.theme);
+}
+
+// Why a widget shows no content. outdated: the instance does not know this
+// kind of widget yet (an older Flowplan).
+export type Closed = "signedOut" | "setup" | "gone" | "offline" | "locked" | "encrypted" | "forbidden" | "outdated";
 
 type Base = { kind: SuiteKind; title: string; url: string };
 export type ClosedView = Base & { state: "closed"; reason: Closed; message: string };
@@ -94,7 +113,16 @@ export type SuiteView =
       notice?: string;
     })
   | (Base & { state: "forms"; headline: string; empty: string; items: { title: string; when: string; isNew: boolean; url: string }[] })
-  | (Base & { state: "study"; count: string; label: string; detail: string; decks: { title: string; due: string; url: string }[] });
+  | (Base & { state: "study"; count: string; label: string; detail: string; decks: { title: string; due: string; url: string }[] })
+  | (Base & {
+      state: "event";
+      empty: string;
+      joinLabel: string;
+      items: { title: string; when: string; countdown: string; allDay: boolean; now: boolean; start: number; end: number; location: string; calendar: string; join?: string; url: string }[];
+    })
+  | (Base & { state: "reading"; empty: string; items: { title: string; detail: string; progress?: number; kind: string; url: string }[] })
+  | (Base & { state: "metric"; value: string; unit: string; label: string; series: number[]; delta: string; trend: "up" | "down" | "flat" | "" })
+  | (Base & { state: "deadline"; due: string; countdown: string; overdue: boolean; done: boolean; share?: number });
 
 const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   capture: "suiteCapture",
@@ -107,6 +135,10 @@ const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   mentions: "suiteMentions",
   forms: "suiteForms",
   study: "widgetStudy",
+  event: "suiteEvent",
+  reading: "suiteReading",
+  metric: "suiteMetric",
+  deadline: "suiteDeadline",
 };
 export const kindTitle = (kind: SuiteKind, locale: Locale) => t(TITLES[kind], {}, locale);
 
@@ -119,6 +151,7 @@ export function closedView(kind: SuiteKind, reason: Closed, locale: Locale, titl
     offline: "widgetOffline",
     locked: "widgetLocked",
     encrypted: "widgetEncrypted",
+    outdated: "widgetOutdated",
   };
   return {
     kind,
@@ -145,6 +178,33 @@ function clockOf(iso: string, locale: Locale) {
   const at = Date.parse(iso);
   return Number.isFinite(at) ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(at)) : "";
 }
+// "25 min", "3 h", "2 d": a short duration, rounded the way a countdown
+// reads (no plural forms needed).
+export function formatDuration(ms: number, locale: Locale) {
+  const minutes = Math.max(1, Math.round(Math.abs(ms) / 60_000));
+  if (minutes < 60) return t("durationMinutes", { count: minutes }, locale);
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return t("durationHours", { count: hours }, locale);
+  return t("durationDays", { count: Math.round(hours / 24) }, locale);
+}
+
+// When an appointment is: "14:00–15:00", "Tomorrow 09:30", "Fri 09:30",
+// "All day" – relative to now.
+function eventWhen(start: number, end: number, allDay: boolean, now: number, locale: Locale) {
+  const day = (at: number) => {
+    const d = new Date(at);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const today = day(now);
+  const tomorrow = day(now + 86_400_000);
+  const startDay = day(start);
+  const prefix = startDay === today ? "" : startDay === tomorrow ? t("tomorrow", {}, locale) : new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(start));
+  if (allDay) return prefix ? `${prefix} · ${t("allDay", {}, locale)}` : t("allDay", {}, locale);
+  const clock = (at: number) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+  const range = end > start && day(end) === startDay ? `${clock(start)}–${clock(end)}` : clock(start);
+  return prefix ? `${prefix} ${range}` : range;
+}
+
 function weekdayOf(day: string, locale: Locale) {
   const at = Date.parse(`${day}T12:00:00Z`);
   return Number.isFinite(at) ? new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(new Date(at)) : day;
@@ -161,10 +221,25 @@ export function suiteView<K extends SuiteKind>(
   const now = options.now ?? Date.now();
   const marks = marking(options.marks, now);
   if (!options.signedIn) return closedView(kind, "signedOut", locale);
-  if ((kind === "counter" && !(config as SuiteConfig["counter"]).pageId) || (kind === "forms" && !(config as SuiteConfig["forms"]).pageId))
+  if (needsSetup(kind, config as SuiteConfig[SuiteKind]))
     return closedView(kind, "setup", locale);
   if (!result) return closedView(kind, "offline", locale);
-  if (!result.ok) return closedView(kind, result.status === 404 ? "gone" : result.status === 403 ? "forbidden" : result.status === 423 ? "locked" : "offline", locale);
+  if (!result.ok)
+    return closedView(
+      kind,
+      // An instance from before this kind refuses it (400; 404 where it has no
+      // such widget at all).
+      NEWER_KINDS.includes(kind) && (result.status === 400 || result.status === 501)
+        ? "outdated"
+        : result.status === 404
+          ? "gone"
+          : result.status === 403
+            ? "forbidden"
+            : result.status === 423
+              ? "locked"
+              : "offline",
+      locale,
+    );
   const d = result.data;
   const title = str(d.title) || kindTitle(kind, locale);
   const url = pageLink(d.url);
@@ -422,6 +497,132 @@ export function suiteView<K extends SuiteKind>(
         decks,
       };
     }
+    case "event": {
+      // "Nächster Termin": the next one to three appointments, the first
+      // with its countdown and "Join" for a video call.
+      // Timed ones in UTC (ISO), all-day ones as dates – those from the
+      // start of their first to the end of their last day, on the phone.
+      const showJoin = (config as SuiteConfig["event"]).showJoin !== false;
+      const items = list(d.items)
+        .map((item) => {
+          const allDay = item.allDay === true;
+          const day = (value: unknown, end: boolean) => {
+            const text = str(value);
+            return /^\d{4}-\d{2}-\d{2}$/.test(text) ? Date.parse(`${text}T${end ? "23:59:59" : "00:00:00"}`) : Date.parse(text);
+          };
+          const start = allDay ? day(item.start, false) : Date.parse(str(item.start));
+          const end = allDay ? day(item.end || item.start, true) : Date.parse(str(item.end));
+          return { item, allDay, start, end: Number.isFinite(end) ? end : start };
+        })
+        .filter(({ start, end }) => Number.isFinite(start) && end >= now - 60_000)
+        .slice(0, (config as SuiteConfig["event"]).max || 3)
+        .map(({ item, allDay, start, end }) => {
+          const running = !allDay && start <= now && now < end;
+          const join = showJoin ? joinLink(item.joinUrl) : null;
+          return {
+            title: str(item.title),
+            when: eventWhen(start, end, allDay, now, locale),
+            countdown: running ? t("eventNow", {}, locale) : allDay ? "" : t("countdownIn", { time: formatDuration(start - now, locale) }, locale),
+            allDay,
+            now: running,
+            start,
+            end,
+            location: str(item.location),
+            calendar: str(item.calendarName ?? item.calendar),
+            ...(join ? { join } : {}),
+            url: pageLink(item.url),
+          };
+        });
+      return {
+        kind,
+        state: "event",
+        title: str(d.title) || kindTitle(kind, locale),
+        url: items[0]?.url ?? appLink("/#home"),
+        empty: t("eventEmpty", {}, locale),
+        joinLabel: t("eventJoin", {}, locale),
+        items,
+      };
+    }
+    case "reading":
+      return {
+        kind,
+        state: "reading",
+        title,
+        url: appLink("/#home"),
+        empty: t("readingEmpty", {}, locale),
+        items: list(d.items)
+          .slice(0, (config as SuiteConfig["reading"]).max)
+          .map((item) => {
+            const closed = item.locked === true ? t("widgetLockedShort", {}, locale) : item.encrypted === true ? t("widgetEncryptedShort", {}, locale) : "";
+            const raw = typeof item.progress === "number" && Number.isFinite(item.progress) ? Math.min(1, Math.max(0, item.progress)) : undefined;
+            const progress = closed ? undefined : raw;
+            const opened = typeof item.lastOpened === "number" ? item.lastOpened : Date.parse(str(item.lastOpened));
+            // A book: the page read last, and how far.
+            const where = closed ? "" : str(item.detail);
+            return {
+              title: closed || str(item.title),
+              detail:
+                progress !== undefined
+                  ? [where, t("readingProgress", { percent: Math.round(progress * 100) }, locale)].filter(Boolean).join(" · ")
+                  : where || (!closed && Number.isFinite(opened) ? formatWhen(opened, now, locale) : ""),
+              ...(progress !== undefined ? { progress } : {}),
+              kind: str(item.kind, "document"),
+              url: pageLink(item.url),
+            };
+          }),
+      };
+    case "metric": {
+      // The number tile's source is not readable for the person (or behind
+      // a PIN): no number.
+      if (d.available === false) return closedView(kind, "forbidden", locale, title, str(d.url, "/"));
+      const series = (Array.isArray(d.series) ? d.series : []).filter((v): v is number => typeof v === "number" && Number.isFinite(v)).slice(-30);
+      const delta = typeof d.delta === "number" && Number.isFinite(d.delta) ? d.delta : null;
+      const value = str(d.formatted) || (typeof d.value === "number" ? new Intl.NumberFormat(locale).format(d.value) : "–");
+      return {
+        kind,
+        state: "metric",
+        title,
+        url,
+        value,
+        unit: str(d.unit),
+        label: str(d.label),
+        series,
+        delta: delta === null ? "" : `${delta > 0 ? "+" : delta < 0 ? "−" : "±"}${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Math.abs(delta))}`,
+        trend: delta === null ? "" : delta > 0 ? "up" : delta < 0 ? "down" : "flat",
+      };
+    }
+    case "deadline": {
+      const due = Date.parse(str(d.due));
+      const done = d.done === true;
+      const dateOnly = d.allDay === true || /^\d{4}-\d{2}-\d{2}$/.test(str(d.due));
+      // A day without a time is due at its end.
+      const at = Number.isFinite(due) ? (dateOnly ? Date.parse(`${str(d.due).slice(0, 10)}T23:59:59`) : due) : NaN;
+      const overdue = !done && (d.overdue === true || (Number.isFinite(at) && at < now));
+      const label = Number.isFinite(at)
+        ? dateOnly
+          ? dueLabel(str(d.due).slice(0, 10), today, locale)
+          : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(at))
+        : "";
+      const created = Date.parse(str(d.created ?? d.createdAt));
+      return {
+        kind,
+        state: "deadline",
+        title,
+        url,
+        due: label ? t("deadlineDue", { date: label }, locale) : "",
+        countdown: done
+          ? t("deadlineDone", {}, locale)
+          : !Number.isFinite(at)
+            ? ""
+            : overdue
+              ? t("countdownOverdue", { time: formatDuration(now - at, locale) }, locale)
+              : t("countdownLeft", { time: formatDuration(at - now, locale) }, locale),
+        overdue,
+        done,
+        // How much of the time is gone, where the instance says when it began.
+        ...(Number.isFinite(created) && Number.isFinite(at) && at > created ? { share: Math.min(1, Math.max(0, (now - created) / (at - created))) } : {}),
+      };
+    }
   }
   return closedView(kind, "offline", locale);
 }
@@ -513,6 +714,56 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
         { id: "3", title: "Mia Sommer", createdAt: now - 30 * 3_600_000, new: false, url: "/" },
       ],
     },
+    event: {
+      title: L("Nächster Termin", "Next appointment", "Prochain rendez-vous", "下一个日程"),
+      items: [
+        {
+          id: "1",
+          title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议"),
+          start: new Date(now + 25 * 60_000).toISOString(),
+          end: new Date(now + 85 * 60_000).toISOString(),
+          allDay: false,
+          location: "Zoom",
+          joinUrl: "https://zoom.us/j/0000000000",
+          calendarName: L("Vertrieb", "Sales", "Ventes", "销售"),
+          url: "/",
+        },
+        {
+          id: "2",
+          title: L("Retro", "Retro", "Rétro", "回顾会"),
+          start: new Date(now + 4 * 3_600_000).toISOString(),
+          end: new Date(now + 5 * 3_600_000).toISOString(),
+          allDay: false,
+          calendarName: L("Team", "Team", "Équipe", "团队"),
+          url: "/",
+        },
+      ],
+    },
+    reading: {
+      title: L("Weiterlesen", "Continue reading", "Reprendre la lecture", "继续阅读"),
+      items: [
+        { id: "1", title: L("Handbuch für neue Kolleginnen", "Handbook for new colleagues", "Guide d’accueil", "新同事手册"), icon: "", kind: "book", progress: 0.4, lastOpened: now - 3_600_000, url: "/" },
+        { id: "2", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划"), icon: "", kind: "document", lastOpened: now - 5 * 3_600_000, url: "/" },
+        { id: "3", title: "Roadmap", icon: "", kind: "database", lastOpened: now - 26 * 3_600_000, url: "/" },
+      ],
+    },
+    metric: {
+      title: L("Umsatz", "Revenue", "Chiffre d’affaires", "营收"),
+      label: L("Diesen Monat", "This month", "Ce mois-ci", "本月"),
+      value: 48200,
+      unit: "€",
+      formatted: "48.200 €",
+      series: [31, 33, 32, 35, 36, 38, 37, 40, 41, 43, 44, 46, 47, 48.2],
+      delta: 3.4,
+      url: "/",
+    },
+    deadline: {
+      title: L("Angebot an Müller", "Offer to Miller", "Offre à Martin", "给王磊的报价"),
+      due: new Date(now + 2 * 86_400_000 + 3 * 3_600_000).toISOString(),
+      done: false,
+      overdue: false,
+      url: "/",
+    },
     study: {
       title: L("Karten fällig", "Cards due", "Cartes à réviser", "待复习卡片"),
       due: 12,
@@ -527,4 +778,17 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
     },
   };
   return { id: kind, kind, ok: true, data: data[kind] };
+}
+
+// Settings for the sample content: widgets that need a page first get a
+// made-up one, so the pickers show what they look like set up.
+export function sampleConfig<K extends SuiteKind>(kind: K): SuiteConfig[K] {
+  const id = "00000000-0000-4000-8000-000000000000";
+  const extra: Partial<Record<SuiteKind, object>> = {
+    counter: { pageId: id },
+    forms: { pageId: id },
+    metric: { dashboardId: id, widgetId: "sample" },
+    deadline: { pageId: id, rowId: id },
+  };
+  return { ...DEFAULTS[kind], ...(extra[kind] ?? {}) } as SuiteConfig[K];
 }

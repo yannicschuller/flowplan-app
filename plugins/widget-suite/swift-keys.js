@@ -59,6 +59,8 @@ const KEY_CONTEXT = [
   /\.displayName\($/,
   /\bLabel\($/,
   /LocalizedStringKey\($/,
+  /: LocalizedStringKey = $/,
+  /\bsubtitle: $/,
   /ControlWidgetToggle\($/,
   /\n\s+\.\w+: $/,
   /requestValueDialog: $/,

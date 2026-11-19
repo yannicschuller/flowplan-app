@@ -11,13 +11,18 @@
 //   FlowplanSuiteWidgets next to expo-widgets' widgets;
 // - plugins/widget-suite/app/*.swift and WidgetShared.swift → the app;
 // - AppShortcuts.strings (Siri phrases) in German, English, French and
-//   Simplified Chinese.
+//   Simplified Chinese;
+// - push for the extension (aps-environment in its entitlements, option
+//   apsEnvironment): WidgetKit's push updates of iOS 26 need it in the
+//   widget extension itself. Its App ID (app.flowplan.mobile.widgets) needs
+//   the Push Notifications capability for that – fastlane's iOS setup adds it.
 //
 // Listed before expo-widgets in app.config.ts: mods run last-added first,
 // so this runs after expo-widgets has (re)written the extension's folder.
 // Localizable.strings comes from app.config.ts (locales), which
 // expo-widgets also hands to the extension.
 const { IOSConfig, withDangerousMod, withXcodeProject } = require("expo/config-plugins");
+const plist = require("@expo/plist").default;
 const fs = require("node:fs");
 const path = require("node:path");
 const { phrases, LANGS, lproj } = require("./widget-suite/strings");
@@ -43,7 +48,16 @@ const shortcutStrings = (lang) =>
     .map(([key, value]) => `"${escape(key)}" = "${escape(lang === "en" ? key : value[lang])}";`)
     .join("\n") + "\n";
 
-const withSuiteFiles = (config) =>
+// The extension's entitlements (written by expo-widgets: the App Group)
+// with push, or without it (personal builds: no push).
+function entitlementsWithPush(xml, apsEnvironment) {
+  const entitlements = plist.parse(xml);
+  if (apsEnvironment === "development" || apsEnvironment === "production") entitlements["aps-environment"] = apsEnvironment;
+  else delete entitlements["aps-environment"];
+  return plist.build(entitlements);
+}
+
+const withSuiteFiles = (config, options) =>
   withDangerousMod(config, [
     "ios",
     (config) => {
@@ -51,6 +65,9 @@ const withSuiteFiles = (config) =>
       const project = config.modRequest.projectName;
       const extension = path.join(root, TARGET);
       if (!fs.existsSync(path.join(extension, "index.swift"))) throw new Error("with-widget-suite: expo-widgets' extension is missing (list this plugin before expo-widgets)");
+      const entitlements = path.join(extension, `${TARGET}.entitlements`);
+      if (!fs.existsSync(entitlements)) throw new Error("with-widget-suite: the extension's entitlements are missing");
+      fs.writeFileSync(entitlements, entitlementsWithPush(fs.readFileSync(entitlements, "utf8"), options.apsEnvironment));
       for (const file of extensionFiles()) fs.copyFileSync(source("ios", file), path.join(extension, file));
       // The suite joins the extension's widget bundle.
       const index = path.join(extension, "index.swift");
@@ -103,4 +120,5 @@ const withSuiteProject = (config) =>
     return config;
   });
 
-module.exports = (config) => withSuiteProject(withSuiteFiles(config));
+module.exports = (config, options = {}) => withSuiteProject(withSuiteFiles(config, options));
+module.exports.entitlementsWithPush = entitlementsWithPush;

@@ -11,7 +11,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { locale, t } from "../i18n";
 import { formatWhen } from "../admin";
-import { activeProfile, type ProfileState } from "../profiles";
+import { activeProfile, type ProfileColor, type ProfileState } from "../profiles";
 import { shortServer } from "../server";
 import { store } from "../store";
 import { Button, SheetBody, styles, usePalette } from "../ui";
@@ -19,7 +19,9 @@ import { askForPush, pushPermission, type PushState } from "../native/notificati
 import { ProfileList } from "./Profiles";
 import { CertificatePin } from "./CertificatePin";
 import { activityChoices, setActivityChoices } from "../native/activities";
-import { lastWidgetActionError } from "../native/suite";
+import { addWidget, lastWidgetActionError } from "../native/suite";
+import { kindTitle } from "../widgets/present";
+import { SUITE_KINDS } from "../widgets/suite";
 import type { ActionError } from "../widgets/actions";
 import { canAddTile, requestAddTile } from "../../modules/flowplan-android/src";
 import { copyLine, infoOfMarker, type CopyInfo } from "../offline-offer";
@@ -35,6 +37,7 @@ export function Settings({
   onClose,
   onSwitch,
   onRename,
+  onColor,
   onAddProfile,
   onForget,
   onPushChanged,
@@ -50,6 +53,7 @@ export function Settings({
   onClose: () => void;
   onSwitch: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onColor: (id: string, color: ProfileColor | null) => void;
   onAddProfile: () => void;
   onForget: () => void;
   onPushChanged: () => void;
@@ -136,7 +140,7 @@ export function Settings({
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, maxWidth: 640, width: "100%", alignSelf: "center" }}>
           <Text style={heading}>{t("profiles")}</Text>
-          <ProfileList profiles={profiles.profiles} active={profiles.active} onSwitch={onSwitch} onRename={onRename} />
+          <ProfileList profiles={profiles.profiles} active={profiles.active} onSwitch={onSwitch} onRename={onRename} onColor={onColor} />
           <Text style={[styles.small, { color: p.muted, marginTop: 8, marginHorizontal: 4 }]}>{t("profilesText")}</Text>
           <Button title={t("addProfile")} kind="secondary" onPress={onAddProfile} style={{ marginTop: 12 }} />
           {/* The active profile's pinned certificate, if any (certs/pins.ts). */}
@@ -181,6 +185,28 @@ export function Settings({
                   when: formatWhen(widgetError.at, Date.now(), locale()),
                 })}
               </Text>
+            ) : null}
+            {Platform.OS === "android" ? (
+              <>
+                <Text style={[styles.small, { color: p.muted, marginTop: 12 }]}>{t("widgetsAddText")}</Text>
+                <View style={settingsStyles.chips}>
+                  {SUITE_KINDS.map((kind) => (
+                    <Text
+                      key={kind}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t("widgetsAdd")}: ${kindTitle(kind, locale())}`}
+                      onPress={() =>
+                        void addWidget(kind).then((asked) => {
+                          if (!asked) Alert.alert(t("widgetsAdd"), t("widgetsAddUnsupported"));
+                        })
+                      }
+                      style={[settingsStyles.chip, { color: p.brand, borderColor: p.line }]}
+                    >
+                      {`+ ${kindTitle(kind, locale())}`}
+                    </Text>
+                  ))}
+                </View>
+              </>
             ) : null}
             {canAddTile() ? (
               <>
@@ -239,4 +265,6 @@ const settingsStyles = StyleSheet.create({
   heading: { fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 22, marginBottom: 8, marginLeft: 4 },
   section: { borderRadius: 14, padding: 16, borderWidth: StyleSheet.hairlineWidth },
   switchRow: { flexDirection: "row", alignItems: "center" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  chip: { fontSize: 14, fontWeight: "600", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
 });

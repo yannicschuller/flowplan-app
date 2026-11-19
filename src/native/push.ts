@@ -89,7 +89,7 @@ export async function devicePushToken(): Promise<{ platform: "ios" | "android"; 
 
 // Whether an instance sends through the relay, asked at most once an hour.
 const support = new Map<string, { value: "yes" | "no"; at: number }>();
-async function supportOf(origin: string) {
+export async function supportOf(origin: string) {
   const known = support.get(origin);
   if (known && Date.now() - known.at < 60 * 60 * 1000) return known.value;
   const value = await instanceSupport(origin, http);

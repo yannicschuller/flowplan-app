@@ -13,7 +13,11 @@ import WidgetKit
 // - The session (instance, device token, profile, language) lives in the
 //   keychain under the App Group's access group, readable after the first
 //   unlock: widgets refresh while the phone is locked. Without a token the
-//   widgets ask to sign in; their settings stay.
+//   widgets ask to sign in; their settings stay. Besides the active
+//   profile's ("session", which the share extension and Siri use too) every
+//   profile has its own ("session.<id>"): a widget set to a profile asks that
+//   profile's instance with that profile's token only. The profiles' names
+//   and colours (for the "Profile" setting) are in the App Group's defaults.
 // - The answers of POST /api/mobile/widgets/data are kept per profile in the
 //   App Group's UserDefaults (as JSON text: the answers contain null, which
 //   a property list cannot hold), with the settings each widget asked for.
@@ -44,7 +48,7 @@ enum FPKeychain {
   private static let service = "app.flowplan.widgets"
   private static let account = "session"
 
-  private static func query() -> [String: Any]? {
+  private static func query(_ account: String = account) -> [String: Any]? {
     guard let group = FPShared.appGroup else { return nil }
     return [
       kSecClass as String: kSecClassGenericPassword,
@@ -54,8 +58,23 @@ enum FPKeychain {
     ]
   }
 
+  /// The session a widget uses: its profile's own, or the active one (no
+  /// profile chosen, or the chosen one is the active one).
+  static func session(for profile: String?) -> FPSession? {
+    let active: FPSession? = load()
+    guard let profile, !profile.isEmpty, profile != active?.profile else { return active }
+    guard FPProfiles.all().contains(where: { $0.id == profile }) else { return active }
+    return load(account: profileAccount(profile))
+  }
+
+  static func profileAccount(_ profile: String) -> String { account + "." + profile }
+
   static func load() -> FPSession? {
-    guard var query = query() else {
+    load(account: account)
+  }
+
+  static func load(account: String) -> FPSession? {
+    guard var query = query(account) else {
       os_log("No App Group in Info.plist: no widget session", log: FPLog.widgets, type: .error)
       return nil
     }
@@ -77,7 +96,12 @@ enum FPKeychain {
   /// refused (logged with its status).
   @discardableResult
   static func save(_ session: FPSession?) -> Bool {
-    guard let query = query() else {
+    save(session, account: account)
+  }
+
+  @discardableResult
+  static func save(_ session: FPSession?, account: String) -> Bool {
+    guard let query = query(account) else {
       os_log("No App Group in Info.plist: widget session not saved", log: FPLog.widgets, type: .error)
       return false
     }
@@ -101,6 +125,92 @@ enum FPKeychain {
     }
     return true
   }
+}
+
+/// A profile for the widgets' "Profile" setting: name and colour dot only
+/// (its instance and token are in its keychain session).
+struct FPProfileInfo: Equatable, Sendable {
+  let id: String
+  let name: String
+  // "#rrggbb", light and dark.
+  let color: String
+  let colorDark: String
+  let active: Bool
+}
+
+enum FPProfiles {
+  private static let key = "flowplan.suite.profiles"
+
+  static func all() -> [FPProfileInfo] {
+    guard let list = FPShared.defaults?.array(forKey: key) as? [[String: Any]] else { return [] }
+    return list.compactMap { entry in
+      guard let id = entry["id"] as? String, let name = entry["name"] as? String else { return nil }
+      return FPProfileInfo(id: id, name: name, color: (entry["color"] as? String) ?? "#4146e6", colorDark: (entry["colorDark"] as? String) ?? "#8f93ff", active: (entry["active"] as? Bool) ?? false)
+    }
+  }
+
+  static func info(_ id: String?) -> FPProfileInfo? {
+    let list = all()
+    guard let id, !id.isEmpty else { return list.first { $0.active } }
+    return list.first { $0.id == id } ?? list.first { $0.active }
+  }
+
+  /// The app hands over every profile with its session; profiles that are
+  /// gone take their session and answers along. "written" when anything
+  /// changed, "unchanged", "failed" when the keychain refused.
+  static func save(_ entries: [[String: Any]]) -> String {
+    guard let defaults = FPShared.defaults else { return "failed" }
+    var infos: [FPProfileInfo] = []
+    var changed = false
+    var failed = false
+    for entry in entries.prefix(20) {
+      guard let id = entry["id"] as? String, id.range(of: "^[a-z0-9]{1,32}$", options: .regularExpression) != nil,
+            let server = entry["server"] as? String else { continue }
+      let info = FPProfileInfo(
+        id: id,
+        name: (entry["name"] as? String) ?? "",
+        color: (entry["color"] as? String) ?? "#4146e6",
+        colorDark: (entry["colorDark"] as? String) ?? "#8f93ff",
+        active: (entry["active"] as? Bool) ?? false
+      )
+      infos.append(info)
+      let session = FPSession(server: server, token: entry["token"] as? String, profile: id, lang: (entry["lang"] as? String) ?? "en")
+      let account = FPKeychain.profileAccount(id)
+      let previous: FPSession? = FPKeychain.load(account: account)
+      if previous != session {
+        if !FPKeychain.save(session, account: account) { failed = true }
+        if session.token != nil { FPStore.signedIn(session) }
+        changed = true
+      }
+    }
+    let before = all()
+    for gone in before where !infos.contains(where: { $0.id == gone.id }) {
+      FPKeychain.save(nil, account: FPKeychain.profileAccount(gone.id))
+      FPStore.clear(profile: gone.id)
+      changed = true
+    }
+    if before != infos {
+      let list: [[String: Any]] = infos.map { ["id": $0.id, "name": $0.name, "color": $0.color, "colorDark": $0.colorDark, "active": $0.active] }
+      defaults.set(list, forKey: key)
+      changed = true
+    }
+    if failed { return "failed" }
+    return changed ? "written" : "unchanged"
+  }
+}
+
+/// WidgetKit's push token for the app's widgets (iOS 26), as the extension's
+/// push handler last got it (the app also asks WidgetCenter itself).
+enum FPWidgetPush {
+  private static let key = "flowplan.suite.widgetPushToken"
+
+  static func save(_ token: Data) {
+    let hex: String = token.map { String(format: "%02x", $0) }.joined()
+    if FPShared.defaults?.string(forKey: key) != hex {
+      FPShared.defaults?.set(hex, forKey: key)
+    }
+  }
+  static var token: String? { FPShared.defaults?.string(forKey: key) }
 }
 
 /// A JSON value as JSONSerialization reads it; null and missing are nil.
@@ -147,10 +257,18 @@ enum FPError: Error {
   case network
 }
 
-/// What one widget asks for: its kind and settings as the instance takes them.
+/// What one widget asks for: its kind and settings as the instance takes them,
+/// and its profile (nil: the active one) – which instance, with which token.
 struct FPRequest: @unchecked Sendable {
   let kind: String
   let config: [String: Any]
+  var profile: String? = nil
+
+  init(kind: String, config: [String: Any], profile: String? = nil) {
+    self.kind = kind
+    self.config = config
+    self.profile = profile
+  }
 
   /// Widgets with the same settings share one answer.
   var key: String {
@@ -165,6 +283,8 @@ struct FPResult: @unchecked Sendable {
   let error: String
   let data: FPJSON
   let at: Date
+  // The workspace's look (accent, accentDark …), where the instance sends it.
+  var theme: FPJSON = FPJSON(nil)
 }
 
 enum FPAPI {
@@ -216,8 +336,8 @@ enum FPAPI {
     return json
   }
 
-  static func options(kind: String, pageId: String? = nil) async throws -> FPJSON {
-    guard let session = FPKeychain.load() else { throw FPError.noSession }
+  static func options(kind: String, pageId: String? = nil, profile: String? = nil) async throws -> FPJSON {
+    guard let session = FPKeychain.session(for: profile) else { throw FPError.noSession }
     var query = [URLQueryItem(name: "kind", value: kind)]
     if let pageId { query.append(URLQueryItem(name: "pageId", value: pageId)) }
     return try await call("/api/mobile/widgets/options", query: query, session: session)
@@ -227,8 +347,8 @@ enum FPAPI {
   /// Idempotency-Key per tap; without an answer the request goes once more
   /// with the same key, so the tap counts once even if the first arrived.
   @discardableResult
-  static func action(_ name: String, _ fields: [String: Any] = [:], timeout: TimeInterval = 10, key: String = UUID().uuidString) async throws -> FPJSON {
-    guard let session = FPKeychain.load() else { throw FPError.noSession }
+  static func action(_ name: String, _ fields: [String: Any] = [:], timeout: TimeInterval = 10, key: String = UUID().uuidString, profile: String? = nil) async throws -> FPJSON {
+    guard let session = FPKeychain.session(for: profile) else { throw FPError.noSession }
     var body = fields
     body["action"] = name
     do {
@@ -248,7 +368,7 @@ enum FPAPI {
     let now = Date()
     for widget in answer["widgets"].array {
       guard let id = widget["id"].string else { continue }
-      results[id] = FPResult(ok: widget["ok"].bool, status: widget["status"].int ?? 200, error: widget["error"].text, data: widget["data"], at: now)
+      results[id] = FPResult(ok: widget["ok"].bool, status: widget["status"].int ?? 200, error: widget["error"].text, data: widget["data"], at: now, theme: widget["theme"])
     }
     return results
   }
@@ -264,37 +384,46 @@ enum FPStore {
   // had just replaced kept the new one "signed out" – that flag is ignored
   // and removed now.
   private static func refusedKey(_ profile: String) -> String { "flowplan.suite.refused.\(profile)" }
+  // The instance's accent as its answers last said (the app's default for
+  // the profile's colour dot).
+  static func accentKey(_ profile: String) -> String { "flowplan.suite.accent.\(profile)" }
   private static func legacySignedOutKey(_ profile: String) -> String { "flowplan.suite.signedOut.\(profile)" }
   // Settings a widget has not asked for in three days are no longer shown.
   private static let keep: TimeInterval = 3 * 86_400
   private static let lock = NSLock()
 
-  /// Remembers that a widget with these settings is on a screen.
-  static func register(_ request: FPRequest) {
+  /// Remembers that a widget with these settings is on a screen (for its
+  /// profile: profile is the one it resolved to).
+  static func register(_ request: FPRequest, profile: String) {
     lock.lock()
     defer { lock.unlock() }
     guard let defaults = FPShared.defaults else { return }
     var registry = defaults.dictionary(forKey: registryKey) as? [String: [String: Any]] ?? [:]
     let now = Date().timeIntervalSince1970
-    if let seen = registry[request.key]?["seen"] as? Double, now - seen < 3600 { return }
+    let entryKey: String = profile + "#" + request.key
+    if let seen = registry[entryKey]?["seen"] as? Double, now - seen < 3600 { return }
     let config = (try? JSONSerialization.data(withJSONObject: request.config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-    registry[request.key] = ["kind": request.kind, "config": config, "seen": now]
+    registry[entryKey] = ["kind": request.kind, "config": config, "seen": now, "profile": profile]
     registry = registry.filter { now - (($0.value["seen"] as? Double) ?? 0) < keep }
     defaults.set(registry, forKey: registryKey)
   }
 
-  /// The settings of every widget on a screen, most recently seen first.
-  static func registered() -> [FPRequest] {
+  /// The settings of every widget on a screen showing this profile, most
+  /// recently seen first (entries from before profiles count for the
+  /// active one).
+  static func registered(profile: String) -> [FPRequest] {
     guard let registry = FPShared.defaults?.dictionary(forKey: registryKey) as? [String: [String: Any]] else { return [] }
     let now = Date().timeIntervalSince1970
+    let active: String? = FPKeychain.load()?.profile
     return registry.values
       .filter { now - (($0["seen"] as? Double) ?? 0) < keep }
+      .filter { (($0["profile"] as? String) ?? active) == profile }
       .sorted { (($0["seen"] as? Double) ?? 0) > (($1["seen"] as? Double) ?? 0) }
       .compactMap { entry in
         guard let kind = entry["kind"] as? String,
               let text = entry["config"] as? String,
               let config = FPJSON(data: text.data(using: .utf8)).raw as? [String: Any] else { return nil }
-        return FPRequest(kind: kind, config: config)
+        return FPRequest(kind: kind, config: config, profile: profile)
       }
   }
 
@@ -303,7 +432,7 @@ enum FPStore {
           let all = FPJSON(data: text.data(using: .utf8)).raw as? [String: Any],
           let entry = all[key] as? [String: Any] else { return nil }
     let json = FPJSON(entry)
-    return FPResult(ok: json["ok"].bool, status: json["status"].int ?? 0, error: json["error"].text, data: json["data"], at: Date(timeIntervalSince1970: json["at"].double ?? 0))
+    return FPResult(ok: json["ok"].bool, status: json["status"].int ?? 0, error: json["error"].text, data: json["data"], at: Date(timeIntervalSince1970: json["at"].double ?? 0), theme: json["theme"])
   }
 
   static func save(_ results: [String: FPResult], profile: String) {
@@ -311,13 +440,16 @@ enum FPStore {
     defer { lock.unlock() }
     guard let defaults = FPShared.defaults else { return }
     var all = (defaults.string(forKey: cacheKey(profile)).flatMap { FPJSON(data: $0.data(using: .utf8)).raw as? [String: Any] }) ?? [:]
-    let live = Set(registered().map(\.key))
+    let live = Set(registered(profile: profile).map(\.key))
     all = all.filter { live.contains($0.key) }
     for (key, result) in results {
       // A failed answer keeps the last good one (the widget shows it).
       if !result.ok, let previous = all[key] as? [String: Any], FPJSON(previous)["ok"].bool,
          result.status != 403, result.status != 404 { continue }
-      all[key] = ["ok": result.ok, "status": result.status, "error": result.error, "data": result.data.raw ?? NSNull(), "at": result.at.timeIntervalSince1970]
+      all[key] = ["ok": result.ok, "status": result.status, "error": result.error, "data": result.data.raw ?? NSNull(), "theme": result.theme.raw ?? NSNull(), "at": result.at.timeIntervalSince1970]
+      if let accent = result.theme["accent"].string, accent.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) != nil {
+        defaults.set(accent.lowercased(), forKey: accentKey(profile))
+      }
     }
     if let data = try? JSONSerialization.data(withJSONObject: all), let text = String(data: data, encoding: .utf8) {
       defaults.set(text, forKey: cacheKey(profile))
@@ -352,8 +484,9 @@ enum FPStore {
     guard let token = session.token else { return }
     FPShared.defaults?.set(fingerprint(token), forKey: refusedKey(session.profile))
     FPShared.defaults?.removeObject(forKey: legacySignedOutKey(session.profile))
-    let current: FPSession? = FPKeychain.load()
-    if current?.token == token {
+    let active: FPSession? = FPKeychain.load()
+    let own: FPSession? = FPKeychain.load(account: FPKeychain.profileAccount(session.profile))
+    if active?.token == token || own?.token == token {
       clear(profile: session.profile)
     }
     os_log("Widget session refused (401) for profile %{public}@", log: FPLog.widgets, type: .error, session.profile)
@@ -379,37 +512,32 @@ enum FPLoad: @unchecked Sendable {
 
 actor FPRefresher {
   static let shared = FPRefresher()
-  private var running: Task<Void, Never>?
-  // The token the running request uses: a reload after the app wrote a new
-  // session does not wait for a request with the old one.
-  private var runningToken: String?
+  // The request running per token (one per profile): a reload after the app
+  // wrote a new session does not wait for a request with the old one.
+  private var running: [String: Task<Void, Never>] = [:]
 
   func load(_ request: FPRequest, maxAge: TimeInterval) async -> FPLoad {
-    guard let session = FPKeychain.load() else {
+    guard let session = FPKeychain.session(for: request.profile) else {
       os_log("No widget session in the keychain: signed out", log: FPLog.widgets, type: .default)
       return .signedOut
     }
-    if FPStore.signedOut(session) { return .signedOut }
-    FPStore.register(request)
+    guard let token = session.token, !FPStore.signedOut(session) else { return .signedOut }
+    FPStore.register(request, profile: session.profile)
     let key = request.key
     if let cached = FPStore.cached(key, profile: session.profile), isFresh(cached, maxAge: maxAge) {
       return .answer(cached, stale: false)
     }
-    // Several widgets ask at once (after a reload): one request for all.
-    let sameToken: Bool = runningToken == session.token
-    if let running = running, sameToken {
-      await running.value
+    // Several widgets of a profile ask at once (after a reload): one request
+    // for all of them.
+    if let task = running[token] {
+      await task.value
     } else {
       let task = Task { await Self.fetchAll(first: request, session: session) }
-      running = task
-      runningToken = session.token
+      running[token] = task
       await task.value
-      if runningToken == session.token {
-        running = nil
-        runningToken = nil
-      }
+      running[token] = nil
     }
-    guard let current = FPKeychain.load(), !FPStore.signedOut(current) else { return .signedOut }
+    guard let current = FPKeychain.session(for: request.profile), current.profile == session.profile, !FPStore.signedOut(current) else { return .signedOut }
     if let cached = FPStore.cached(key, profile: session.profile) {
       return .answer(cached, stale: !isFresh(cached, maxAge: maxAge))
     }
@@ -423,7 +551,7 @@ actor FPRefresher {
   private static func fetchAll(first: FPRequest, session: FPSession) async {
     let started = Date()
     var seen = Set<String>()
-    let requests = ([first] + FPStore.registered()).filter { seen.insert($0.key).inserted }
+    let requests = ([first] + FPStore.registered(profile: session.profile)).filter { seen.insert($0.key).inserted }
     // Above 16 widgets on screens: the rest follows in a second request.
     for start in stride(from: 0, to: min(requests.count, FPShared.maxPerRequest * 2), by: FPShared.maxPerRequest) {
       let batch = Array(requests[start..<min(requests.count, start + FPShared.maxPerRequest)])
@@ -623,14 +751,14 @@ enum FPWidgets {
   /// widgets reload before the request), then the action runs with a short
   /// timeout; a refusal brings it back with a hint. Everything shown is
   /// asked again afterwards.
-  static func run(_ name: String, _ fields: [String: Any], item: String, kind: String) async {
-    let hasSession: Bool = FPKeychain.load()?.token != nil
+  static func run(_ name: String, _ fields: [String: Any], item: String, kind: String, profile: String? = nil) async {
+    let hasSession: Bool = FPKeychain.session(for: profile)?.token != nil
     let sessionLabel: String = hasSession ? "yes" : "no"
     os_log("Widget action %{public}@ starts (session: %{public}@)", log: FPLog.widgets, type: .default, name, sessionLabel)
     FPActions.begin(item)
     WidgetCenter.shared.reloadTimelines(ofKind: kind)
     do {
-      try await FPAPI.action(name, fields, timeout: 8)
+      try await FPAPI.action(name, fields, timeout: 8, profile: profile)
       FPActions.succeeded(item, action: name)
     } catch {
       FPActions.failed(item, action: name, error: error)
