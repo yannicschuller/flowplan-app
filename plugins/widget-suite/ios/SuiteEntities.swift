@@ -603,8 +603,10 @@ struct FPDeadlineEntity: AppEntity {
       return out
     }
     func entities(for identifiers: [String]) async throws -> [FPDeadlineEntity] {
-      // Stored ones stay as they are (the settings are in the id).
-      identifiers.map { FPDeadlineEntity(id: $0, name: L("Deadline"), detail: "") }
+      // One that is no longer listed (done, offline) stays: its settings are
+      // in the id.
+      let known = await all()
+      return identifiers.map { id in known.first { $0.id == id } ?? FPDeadlineEntity(id: id, name: L("Deadline"), detail: "") }
     }
     func suggestedEntities() async throws -> [FPDeadlineEntity] {
       await all()
