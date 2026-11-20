@@ -1,3 +1,4 @@
 New in this version:
-• Android: scan documents – type "/" in a page and choose "Scan document". The scanner finds the edges, captures several pages and lets you crop them; Flowplan recognises the text on the device and adds a searchable PDF. Without Google Play services you can add a PDF or photo as a file instead.
+• Android: scanning, sharing to Flowplan and quick capture upload files more reliably.
+• If an upload fails, the app shows the exact cause under "Details".
 • Minor improvements and bug fixes

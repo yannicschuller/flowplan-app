@@ -1,3 +1,4 @@
 Nouveautés de cette version :
-• Android : numériser des documents – saisissez « / » dans une page et choisissez « Numériser un document ». Le scanner détecte les bords, capture plusieurs pages et vous permet de les recadrer ; Flowplan reconnaît le texte sur l’appareil et ajoute un PDF consultable. Sans les services Google Play, vous pouvez ajouter un PDF ou une photo en tant que fichier.
+• Android : la numérisation, le partage vers Flowplan et la saisie rapide envoient les fichiers de manière plus fiable.
+• Si un envoi échoue, l’app affiche la cause exacte sous « Détails ».
 • Améliorations mineures et corrections de bugs

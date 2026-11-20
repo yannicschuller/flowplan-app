@@ -1,3 +1,4 @@
 Neu in dieser Version:
-• Android: Dokumente scannen – in einer Seite „/“ und „Dokument scannen“ wählen. Der Scanner findet die Ränder, nimmt mehrere Seiten auf und lässt dich zuschneiden; Flowplan erkennt den Text auf dem Gerät und fügt ein durchsuchbares PDF ein. Ohne Google Play-Dienste kannst du stattdessen ein PDF oder Foto als Datei hinzufügen.
+• Android: Scannen, Teilen in Flowplan und Schnellerfassung laden Dateien jetzt zuverlässiger hoch.
+• Scheitert ein Upload, zeigt die App unter „Details“ die genaue Ursache.
 • Kleinere Verbesserungen und Fehlerbehebungen
