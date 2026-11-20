@@ -30,7 +30,8 @@ import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addEdgeSwipeListener, setEdgeSwipe, type PencilAction } from "../../modules/flowplan-native/src";
 import { addBackProgressListener, setLeftEdgeExclusion, setPredictiveBack } from "../../modules/flowplan-android/src";
-import { scannerAvailable } from "../../modules/flowplan-capture/src";
+import { scannerAvailable, scannerModule } from "../../modules/flowplan-capture/src";
+import { scanEntryShown, scanMode } from "../capture";
 import { inkRecognitionAvailable, recognizeInk } from "../../modules/flowplan-ink/src";
 import { deviceAiAvailability, deviceAiCancel, deviceAiGenerate, deviceAiLinked, deviceAiStream, DeviceAiError } from "../../modules/flowplan-ai/src";
 import { afterAnswer, backAction, edgeExclusion, edgeSwipeBack, pageEdgeOf, parseBackProgress, previewsBack, type EdgeSwipeMode } from "../back";
@@ -925,7 +926,9 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             server,
             platform: Platform.OS === "ios" ? "ios" : "android",
             version,
-            scanner: scannerAvailable(),
+            // "Scan document" in the page: also on Android without Google
+            // Play services, where it explains and offers a file instead.
+            scanner: scanEntryShown(scanMode(Platform.OS, scannerModule(), scannerAvailable())),
             windows: features.windows,
             inkRecognition,
             ai: deviceAi,

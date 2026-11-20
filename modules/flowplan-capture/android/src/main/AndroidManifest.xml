@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- ML Kit's text recognition (Latin) from Google Play services: the model is fetched when
+         the app is installed from Google Play, otherwise on the first scan (DocumentScan.kt reads
+         the pages without text until it is there). -->
+    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr" />
+  </application>
+</manifest>

@@ -1,7 +1,10 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["FlowplanCaptureModule"],
     "appDelegateSubscribers": ["FlowplanCaptureAppDelegate"]
+  },
+  "android": {
+    "modules": ["app.flowplan.capture.FlowplanCaptureModule"]
   }
 }

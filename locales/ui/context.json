@@ -6,5 +6,6 @@
   "suiteCapture": "Configurable widgets, capture, Live Activities",
   "voiceFile": "The file name stays ASCII, like the other languages' names.",
   "updateAllowText": "Android's own names in the settings: \"Install unknown apps\" (de: \"Unbekannte Apps installieren\", fr: \"Installer des applis inconnues\", zh: \"安装未知应用\") and its switch \"Allow from this source\" (de: \"Aus dieser Quelle zulassen\", fr: \"Autoriser cette source\", zh: \"允许来自此来源的应用\").",
-  "updateProgress": "Progress of the update download in megabytes (fr: Mo)."
+  "updateProgress": "Progress of the update download in megabytes (fr: Mo).",
+  "scanNeedsPlayServices": "Android without Google Play services (ML Kit's document scanner runs there). Google's own name of the service: de \"Google Play-Dienste\", fr \"services Google Play\", zh \"Google Play 服务\". The file is a PDF or a photo the person picks instead."
 }

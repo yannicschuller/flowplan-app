@@ -303,6 +303,8 @@
   "scanStart": "扫描",
   "scanBusy": "正在识别文字…",
   "scanUnavailable": "此设备无法扫描文稿。",
+  "scanNeedsPlayServices": "扫描文稿需要 Google Play 服务——你可以改为将 PDF 或照片作为文件添加。",
+  "scanPickFile": "选择文件",
   "spotlightPage": "页面",
   "spotlightDatabase": "数据库",
   "spotlightBoard": "白板",

@@ -303,6 +303,8 @@
   "scanStart": "Scannen",
   "scanBusy": "Text wird erkannt …",
   "scanUnavailable": "Dieses Gerät kann keine Dokumente scannen.",
+  "scanNeedsPlayServices": "Zum Scannen braucht Flowplan die Google Play-Dienste – du kannst stattdessen ein PDF oder Foto als Datei hinzufügen.",
+  "scanPickFile": "Datei auswählen",
   "spotlightPage": "Seite",
   "spotlightDatabase": "Datenbank",
   "spotlightBoard": "Whiteboard",

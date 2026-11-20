@@ -91,6 +91,25 @@ export function saveScan(
   return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, 120_000);
 }
 
+// Android without Google Play services: a PDF or photo picked instead of a
+// scan, at the same place (the end of the page, or a new record), without
+// recognised text – the instance reads PDFs itself.
+export function saveImport(
+  connection: CaptureConnection,
+  input: { targetId: string; rowId?: string; file: { uri: string; name: string; type: string } },
+  fetcher: Fetch = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
+) {
+  const form = new FormData();
+  form.append("targetId", input.targetId);
+  if (input.rowId) form.append("rowId", input.rowId);
+  form.append("place", "append");
+  const title = input.file.name.replace(/\.[a-z0-9]+$/i, "").trim();
+  if (title) form.append("title", title.slice(0, 300));
+  form.append("file", { uri: input.file.uri, name: input.file.name, type: input.file.type || "application/octet-stream" } as unknown as Blob);
+  return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, 120_000);
+}
+
 // Choosing a target: the inbox first, then the rest; protected pages are
 // left out (nothing can be added there).
 export function targetChoices(targets: CaptureTargets) {
@@ -132,6 +151,28 @@ export function pageScanRequest(message: { pageId?: unknown; rowId?: unknown }):
   return { target: pageId.toLowerCase(), ...(rowId ? { rowId } : {}), start: true };
 }
 
+// What "Scan document" does on this device (the page's entry through the
+// bridge, flowplan://scan, screens/Scan.tsx): "scan" opens the scanner;
+// "explain" – Android without Google Play services, which run ML Kit's
+// scanner – says so in one sentence and offers to add a file instead;
+// "none" offers nothing (an iPhone without VisionKit's scanner).
+export type ScanMode = "scan" | "explain" | "none";
+export function scanMode(platform: string, hasModule: boolean, available: boolean): ScanMode {
+  if (!hasModule) return "none";
+  if (available) return "scan";
+  return platform === "android" ? "explain" : "none";
+}
+// The page gets window.FlowplanApp.scanDocument (and so its "Scan document")
+// wherever the entry does something.
+export const scanEntryShown = (mode: ScanMode) => mode !== "none";
+
+// The scanner refused to start although Play services are there (Android:
+// ML Kit's scanner module cannot be loaded on this device): explained like
+// missing Play services.
+export function scannerRefused(error: unknown, platform: string) {
+  return platform === "android" && !!error && typeof error === "object" && (error as { code?: unknown }).code === "ERR_SCANNER_UNAVAILABLE";
+}
+
 // "Scan 2026-10-24 16.30" in the person's language.
 export function scanTitle(locale: Locale, date = new Date()) {
   const time = `${String(date.getHours()).padStart(2, "0")}.${String(date.getMinutes()).padStart(2, "0")}`;
@@ -140,7 +181,8 @@ export function scanTitle(locale: Locale, date = new Date()) {
 
 // Vision's languages, the person's first. Chinese goes with English only:
 // Vision pairs Chinese with English, and a request it refuses recognises
-// nothing (modules/flowplan-capture/ios/DocumentScanner.swift).
+// nothing (modules/flowplan-capture/ios/DocumentScanner.swift). Android's
+// ML Kit (Latin script) needs none.
 export function scanLanguages(locale: Locale) {
   const all = { de: "de-DE", en: "en-US", fr: "fr-FR" } as const;
   if (locale === "zh") return ["zh-Hans", all.en];

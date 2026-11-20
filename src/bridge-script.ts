@@ -5,8 +5,9 @@
 //   Live Activity), hands it files for the share sheet, asks for a haptic
 //   tap or the app settings, lists its keyboard shortcuts and – on an iPad
 //   or the inner display of iPhone Duo – opens a page in a new window
-//   (openWindow is there only while the window can open one); on iPhone and
-//   iPad it opens the document scanner for the page (screens/Scan.tsx),
+//   (openWindow is there only while the window can open one); on iPhone,
+//   iPad and Android it opens the document scanner for the page
+//   (screens/Scan.tsx; Android without Play services offers a file instead),
 //   opens an address of the instance in the browser (a configuration
 //   profile installs only from Safari) and has the app record a voice
 //   note (src/voice-bridge.ts; lib/native-app.ts in Flowplan); where the

@@ -1,7 +1,7 @@
 {
   "name": "flowplan-capture",
   "version": "1.0.0",
-  "description": "Document scanner and Spotlight of the Flowplan app (iOS)",
+  "description": "Document scanner (iOS, Android) and Spotlight (iOS) of the Flowplan app",
   "private": true,
   "main": "src/index.ts",
   "license": "AGPL-3.0-only",

@@ -303,6 +303,8 @@
   "scanStart": "Numériser",
   "scanBusy": "Reconnaissance du texte …",
   "scanUnavailable": "Cet appareil ne peut pas numériser de documents.",
+  "scanNeedsPlayServices": "La numérisation nécessite les services Google Play – vous pouvez ajouter un PDF ou une photo en tant que fichier à la place.",
+  "scanPickFile": "Choisir un fichier",
   "spotlightPage": "Page",
   "spotlightDatabase": "Base de données",
   "spotlightBoard": "Tableau blanc",

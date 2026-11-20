@@ -1,16 +1,31 @@
-// The document scanner (iPhone, iPad): from the page's "Scan document"
+// The document scanner (iPhone, iPad, Android): from the page's "Scan document"
 // (its page is the target, the camera opens at once) or from a link
 // (flowplan://scan, Shortcuts) with the choice where to: the inbox, a page
 // or a database. The camera finds the pages, Vision reads the text; the PDF
 // goes to the instance with that text (lib/mobile-capture.ts), at the end of
 // a page or as a new record. A scan with its target given (the page's)
 // shows no sheet of its own: the camera opens over the page, whose editor
-// then shows the new PDF; only a failure is reported.
+// then shows the new PDF; only a failure is reported. On Android ML Kit
+// (Google Play services) scans and reads; without Play services the entry
+// says so and offers to add a PDF or photo as a file instead (scanMode).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { File } from "expo-file-system";
-import { scanDocument, scannerAvailable } from "../../modules/flowplan-capture/src";
-import { captureTargets, matchesTarget, saveScan, scanLanguages, scanTitle, targetChoices, type CaptureTarget, type ScanRequest } from "../capture";
+import { pickDocument, scanDocument, scannerAvailable, scannerModule } from "../../modules/flowplan-capture/src";
+import {
+  captureTargets,
+  matchesTarget,
+  saveImport,
+  saveScan,
+  scanLanguages,
+  scanMode,
+  scannerRefused,
+  scanTitle,
+  targetChoices,
+  type CaptureResult,
+  type CaptureTarget,
+  type ScanRequest,
+} from "../capture";
 import { locale, t } from "../i18n";
 import { haptic } from "../native/actions";
 import { connection } from "../native/suite";
@@ -19,6 +34,9 @@ import { modalAnimation } from "../motion";
 import { useMotion } from "../native/motion";
 
 type Choice = CaptureTarget & { inbox?: boolean };
+type Saved = CaptureResult<{ url: string }>;
+
+const mode = () => scanMode(Platform.OS, scannerModule(), scannerAvailable());
 
 export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null; onClose: () => void; onOpen: (path: string) => void }) {
   const p = usePalette();
@@ -29,6 +47,8 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
   const [busy, setBusy] = useState<"" | "scanning" | "saving">("");
   const [message, setMessage] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
+  // Android without Google Play services: a file instead of a scan.
+  const [explain, setExplain] = useState(false);
   const started = useRef<ScanRequest | null>(null);
   const direct = !!request?.start && !!request.target;
   // Without a sheet, messages come as an alert.
@@ -43,7 +63,9 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
     setBusy("");
     setChoices(null);
     setTarget(request.target ? { id: request.target, name: "", kind: "" } : null);
-    if (!scannerAvailable()) return setMessage(t("scanUnavailable"));
+    const now = mode();
+    setExplain(now === "explain");
+    if (now === "none") return setMessage(t("scanUnavailable"));
     const target_ = connection();
     if (!target_) return setMessage(t("widgetSignIn"));
     if (request.target) return;
@@ -69,6 +91,8 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
       result = await scanDocument(title, scanLanguages(lang));
     } catch (error) {
       setBusy("");
+      // Android: ML Kit's scanner cannot be loaded here – a file instead.
+      if (scannerRefused(error, Platform.OS)) return offerFile(into);
       report(t("captureFailed", { error: (error as Error).message || "" }));
       if (direct) onClose();
       return;
@@ -82,11 +106,59 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
     setBusy("saving");
     setMessage(t("uploading"));
     const answer = await saveScan(target_, { targetId: into.id, rowId: request?.rowId, title, text: result.text, file: { uri: result.uri, name: result.name } });
+    finish(answer, result.uri, into);
+  };
+
+  // Android without Google Play services: a PDF or photo from the file
+  // picker, to the same place.
+  const importFile = async (into: Choice) => {
+    const target_ = connection();
+    if (!target_ || busy) {
+      if (direct) onClose();
+      return;
+    }
+    setMessage("");
+    setSaved(null);
+    let file;
+    try {
+      file = await pickDocument();
+    } catch (error) {
+      report(t("captureFailed", { error: (error as Error).message || "" }));
+      if (direct) onClose();
+      return;
+    }
+    if (!file) {
+      if (direct) onClose();
+      return;
+    }
+    setBusy("saving");
+    setMessage(t("uploading"));
+    const answer = await saveImport(target_, { targetId: into.id, rowId: request?.rowId, file });
+    finish(answer, file.uri, into);
+  };
+
+  // The sentence and the file instead: from the page as an alert, in the
+  // sheet in place of "Scan".
+  const offerFile = (into: Choice) => {
+    setExplain(true);
+    if (!direct) return;
+    Alert.alert(
+      t("scanHeading"),
+      t("scanNeedsPlayServices"),
+      [
+        { text: t("cancel"), style: "cancel", onPress: onClose },
+        { text: t("scanPickFile"), onPress: () => void importFile(into) },
+      ],
+      { cancelable: true, onDismiss: onClose },
+    );
+  };
+
+  const finish = (answer: Saved, uri: string, into: Choice) => {
     setBusy("");
     // Saved: no copy stays on the phone.
     if (answer.ok)
       try {
-        new File(result.uri).delete();
+        new File(uri).delete();
       } catch {}
     if (!answer.ok) {
       haptic("error");
@@ -104,10 +176,12 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
   useEffect(() => {
     if (!request || !direct || started.current === request || !target) return;
     started.current = request;
-    if (!scannerAvailable() || !connection()) {
-      report(scannerAvailable() ? t("widgetSignIn") : t("scanUnavailable"));
+    const now = mode();
+    if (now === "none" || !connection()) {
+      report(now === "none" ? t("scanUnavailable") : t("widgetSignIn"));
       return onClose();
     }
+    if (now === "explain") return offerFile(target);
     void scan(target);
   }, [request, target]);
 
@@ -123,7 +197,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
             </Text>
             <Button title={t("done")} kind="secondary" onPress={onClose} disabled={busy === "saving"} />
           </View>
-          <Text style={[styles.small, { color: p.muted }]}>{t("scanText")}</Text>
+          <Text style={[styles.small, { color: p.muted }]}>{explain ? t("scanNeedsPlayServices") : t("scanText")}</Text>
           {choices && choices.length ? (
             <>
               <Text style={[styles.label, { color: p.muted }]}>{t("scanWhere")}</Text>
@@ -166,10 +240,10 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
           ) : null}
           {!direct ? (
             <Button
-              title={t("scanStart")}
+              title={explain ? t("scanPickFile") : t("scanStart")}
               busy={!!busy}
-              disabled={!target || !scannerAvailable()}
-              onPress={() => target && void scan(target)}
+              disabled={!target || (!explain && mode() !== "scan")}
+              onPress={() => target && void (explain ? importFile(target) : scan(target))}
               style={{ marginTop: 20 }}
             />
           ) : null}

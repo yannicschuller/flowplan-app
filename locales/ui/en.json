@@ -303,6 +303,8 @@
   "scanStart": "Scan",
   "scanBusy": "Recognising text …",
   "scanUnavailable": "This device cannot scan documents.",
+  "scanNeedsPlayServices": "Scanning documents needs Google Play services – you can add a PDF or photo as a file instead.",
+  "scanPickFile": "Choose file",
   "spotlightPage": "Page",
   "spotlightDatabase": "Database",
   "spotlightBoard": "Whiteboard",
