@@ -1,9 +1,3 @@
-Neu in dieser Version – die Widgets, neu gemacht:
-• Vier neue Widgets: Nächster Termin (mit Countdown und „Beitreten“ bei Videokonferenzen), Weiterlesen (zuletzt geöffnete Seiten und Bücher der Bibliothek), Kennzahl aus einem Dashboard (mit Verlauf) und Frist-Countdown
-• Mehrere Instanzen: Jedes Widget kann ein eigenes Profil zeigen – z. B. Aufgaben von Arbeit und Privat nebeneinander
-• Farben: Widgets übernehmen die Akzentfarbe deines Arbeitsbereichs – oder wahlweise eine Profilfarbe, die Systemfarben oder Flowplans Farben
-• Jedes Profil bekommt einen Farbpunkt, damit du deine Instanzen auf einen Blick unterscheidest
-• Sofort aktuell: Mit iOS 26 aktualisiert deine Instanz die Widgets direkt nach einer Änderung (braucht Flowplan 0.10.2 oder neuer)
-• Passend zu iOS 26: getönte und klare Darstellung, Widgets in CarPlay und auf dem Mac, bessere Vorschläge im Smart Stack
-• Überarbeitete Abstände, Schriften und größere Tippflächen in allen Widgets
+Neu in dieser Version:
+• Android: Dokumente scannen – in einer Seite „/“ und „Dokument scannen“ wählen. Der Scanner findet die Ränder, nimmt mehrere Seiten auf und lässt dich zuschneiden; Flowplan erkennt den Text auf dem Gerät und fügt ein durchsuchbares PDF ein. Ohne Google Play-Dienste kannst du stattdessen ein PDF oder Foto als Datei hinzufügen.
 • Kleinere Verbesserungen und Fehlerbehebungen

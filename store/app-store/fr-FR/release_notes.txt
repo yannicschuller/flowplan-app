@@ -1,9 +1,3 @@
-Nouveautés de cette version – les widgets, repensés :
-• Quatre nouveaux widgets : Prochain rendez-vous (avec compte à rebours et « Rejoindre » pour les visioconférences), Reprendre la lecture (pages récentes et livres de la bibliothèque), Indicateur d’un tableau de bord (avec son historique) et Compte à rebours d’échéance
-• Plusieurs instances : chaque widget peut afficher son propre profil – par exemple les tâches pro et perso côte à côte
-• Couleurs : les widgets reprennent la couleur d’accent de votre espace de travail – ou, au choix, une couleur de profil, les couleurs du système ou celles de Flowplan
-• Chaque profil reçoit une pastille de couleur pour distinguer vos instances d’un coup d’œil
-• Toujours à jour : avec iOS 26, votre instance actualise les widgets juste après une modification (nécessite Flowplan 0.10.2 ou ultérieur)
-• Conçu pour iOS 26 : apparences teintée et transparente, widgets dans CarPlay et sur le Mac, meilleures suggestions dans la pile intelligente
-• Espacements, typographie et zones tactiles revus dans tous les widgets
-• Améliorations et corrections mineures
+Nouveautés de cette version :
+• Android : numériser des documents – saisissez « / » dans une page et choisissez « Numériser un document ». Le scanner détecte les bords, capture plusieurs pages et vous permet de les recadrer ; Flowplan reconnaît le texte sur l’appareil et ajoute un PDF consultable. Sans les services Google Play, vous pouvez ajouter un PDF ou une photo en tant que fichier.
+• Améliorations mineures et corrections de bugs

@@ -1,9 +1,3 @@
-New in this version – the widgets, redone:
-• Four new widgets: Next appointment (with a countdown and "Join" for video calls), Continue reading (recent pages and library books), Key figure from a dashboard (with its history) and Deadline countdown
-• Several instances: each widget can show its own profile – e.g. work and personal tasks side by side
-• Colours: widgets take your workspace's accent colour – or, if you prefer, a profile colour, the system colours or Flowplan's colours
-• Every profile gets a colour dot, so you tell your instances apart at a glance
-• Always up to date: on iOS 26 your instance refreshes widgets right after a change (needs Flowplan 0.10.2 or later)
-• Made for iOS 26: tinted and clear looks, widgets in CarPlay and on the Mac, better suggestions in the Smart Stack
-• Reworked spacing, type and larger tap targets in all widgets
-• Smaller improvements and fixes
+New in this version:
+• Android: scan documents – type "/" in a page and choose "Scan document". The scanner finds the edges, captures several pages and lets you crop them; Flowplan recognises the text on the device and adds a searchable PDF. Without Google Play services you can add a PDF or photo as a file instead.
+• Minor improvements and bug fixes
