@@ -292,6 +292,7 @@
   "captureDueToday": "Heute fällig",
   "captureSaved": "Gesichert in {target}",
   "captureFailed": "Nicht gesichert. {error}",
+  "errorDetails": "Details: {detail}",
   "captureNoTarget": "Kein Ziel zum Erfassen. Lege in Flowplan eine Datenbank an.",
   "captureTranscribed": "Text erkannt und gesichert",
   "scanTitle": "Scan {date}",

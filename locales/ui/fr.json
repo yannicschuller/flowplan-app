@@ -292,6 +292,7 @@
   "captureDueToday": "Pour aujourd’hui",
   "captureSaved": "Enregistré dans {target}",
   "captureFailed": "Non enregistré. {error}",
+  "errorDetails": "Détails : {detail}",
   "captureNoTarget": "Aucune destination. Créez une base de données dans Flowplan.",
   "captureTranscribed": "Texte reconnu et enregistré",
   "scanTitle": "Numérisation {date}",

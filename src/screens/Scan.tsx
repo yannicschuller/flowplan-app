@@ -32,6 +32,7 @@ import { connection } from "../native/suite";
 import { Button, SheetBody, styles, usePalette } from "../ui";
 import { modalAnimation } from "../motion";
 import { useMotion } from "../native/motion";
+import { detailOf } from "../upload";
 
 type Choice = CaptureTarget & { inbox?: boolean };
 type Saved = CaptureResult<{ url: string }>;
@@ -46,19 +47,26 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<"" | "scanning" | "saving">("");
   const [message, setMessage] = useState("");
+  // What actually went wrong, under a failure (src/upload.ts).
+  const [detail, setDetail] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
   // Android without Google Play services: a file instead of a scan.
   const [explain, setExplain] = useState(false);
   const started = useRef<ScanRequest | null>(null);
   const direct = !!request?.start && !!request.target;
-  // Without a sheet, messages come as an alert.
-  const report = (text: string) => (direct ? Alert.alert(t("scanHeading"), text) : setMessage(text));
+  // Without a sheet, messages come as an alert; a failure's detail under it.
+  const report = (text: string, why = "") => {
+    if (direct) return Alert.alert(t("scanHeading"), why ? `${text}\n\n${t("errorDetails", { detail: why })}` : text);
+    setMessage(text);
+    setDetail(why);
+  };
 
   // A fresh start for every request; the targets only when there is a choice.
   useEffect(() => {
     if (!request) return;
     setQuery("");
     setMessage("");
+    setDetail("");
     setSaved(null);
     setBusy("");
     setChoices(null);
@@ -70,7 +78,10 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
     if (!target_) return setMessage(t("widgetSignIn"));
     if (request.target) return;
     void captureTargets(target_).then((result) => {
-      if (!result.ok) return setMessage("signedOut" in result ? t("widgetSignIn") : result.error || t("widgetOffline"));
+      if (!result.ok) {
+        setMessage("signedOut" in result ? t("widgetSignIn") : result.error || t("widgetOffline"));
+        return setDetail(detailOf(result));
+      }
       const list = targetChoices(result.value);
       setChoices(list);
       setTarget(list[0] ?? null);
@@ -82,6 +93,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
     const target_ = connection();
     if (!target_ || busy) return;
     setMessage("");
+    setDetail("");
     setSaved(null);
     setBusy("scanning");
     const lang = locale();
@@ -118,6 +130,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
       return;
     }
     setMessage("");
+    setDetail("");
     setSaved(null);
     let file;
     try {
@@ -162,7 +175,7 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
       } catch {}
     if (!answer.ok) {
       haptic("error");
-      report(t("captureFailed", { error: "signedOut" in answer ? t("widgetSignIn") : answer.error || t("widgetOffline") }));
+      report(t("captureFailed", { error: "signedOut" in answer ? t("widgetSignIn") : answer.error || t("widgetOffline") }), detailOf(answer));
       if (direct) onClose();
       return;
     }
@@ -254,6 +267,11 @@ export function Scan({ request, onClose, onOpen }: { request: ScanRequest | null
           ) : message ? (
             <Text style={[styles.text, { color: p.muted, marginTop: 20 }]} accessibilityLiveRegion="polite">
               {message}
+            </Text>
+          ) : null}
+          {!busy && message && detail ? (
+            <Text style={[styles.small, { color: p.muted, marginTop: 6 }]} selectable>
+              {t("errorDetails", { detail })}
             </Text>
           ) : null}
           {saved ? (

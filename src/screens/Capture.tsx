@@ -19,6 +19,7 @@ import { onStopRecording, setRecording } from "../native/activities";
 import { Button, SheetBody, styles, usePalette } from "../ui";
 import { modalAnimation } from "../motion";
 import { useMotion } from "../native/motion";
+import { detailOf } from "../upload";
 
 type Target = { id: string; name: string };
 
@@ -33,6 +34,8 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
   const [recordingSince, setRecordingSince] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // What actually went wrong, under a failure (src/upload.ts).
+  const [detail, setDetail] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
   const started = useRef(false);
   const mode = request?.mode ?? "note";
@@ -43,6 +46,7 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
     setTitle("");
     setText("");
     setMessage("");
+    setDetail("");
     setSaved(null);
     setDueToday(request.mode === "task");
     started.current = false;
@@ -66,6 +70,7 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
     const target_ = connection();
     if (!target_ || !target || !(title.trim() || text.trim())) return;
     setBusy(true);
+    setDetail("");
     const lines = (title.trim() || text.trim()).split("\n");
     const result = await widgetAction<{ url?: string }>(target_, mode === "task" ? "capture.task" : "capture.note", {
       targetId: target.id,
@@ -77,7 +82,10 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
     if (result.ok) {
       donateShortcut("note");
       finish(result.value.url, target.name);
-    } else setMessage(t("captureFailed", { error: "error" in result ? result.error : t("widgetSignIn") }));
+    } else {
+      setMessage(t("captureFailed", { error: "error" in result ? result.error || t("widgetOffline") : t("widgetSignIn") }));
+      setDetail(detailOf(result));
+    }
   };
 
   const upload = async (type: "photo" | "voice", file: { uri: string; name: string; type: string }) => {
@@ -85,10 +93,14 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
     if (!target_ || !target) return;
     setBusy(true);
     setMessage(t("uploading"));
+    setDetail("");
     const result = await uploadCapture(target_, { targetId: target.id, type, title: title.trim() || undefined, file });
     setBusy(false);
     if (result.ok) finish(result.value.url, target.name);
-    else setMessage(t("captureFailed", { error: "error" in result ? result.error : t("widgetSignIn") }));
+    else {
+      setMessage(t("captureFailed", { error: "error" in result ? result.error || t("widgetOffline") : t("widgetSignIn") }));
+      setDetail(detailOf(result));
+    }
   };
 
   // ---- Voice memo ----
@@ -210,6 +222,11 @@ export function Capture({ request, onClose, onOpen }: { request: CaptureRequest 
           {message ? (
             <Text style={[styles.text, { color: p.muted, marginTop: 20 }]} accessibilityLiveRegion="polite">
               {message}
+            </Text>
+          ) : null}
+          {message && detail && !busy ? (
+            <Text style={[styles.small, { color: p.muted, marginTop: 6 }]} selectable>
+              {t("errorDetails", { detail })}
             </Text>
           ) : null}
           {saved ? (

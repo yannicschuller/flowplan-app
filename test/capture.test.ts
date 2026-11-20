@@ -18,6 +18,7 @@ import {
   type SpotlightData,
 } from "../src/capture";
 import { bridgeScript, parsePageMessage } from "../src/bridge-script";
+import type { NativeUploadRequest } from "../src/upload";
 import { pathOfAppLink } from "../src/navigation";
 import { strings as appStrings } from "../src/i18n";
 
@@ -61,7 +62,42 @@ test("scan titles and recognition languages follow the person's language", () =>
   assert.deepEqual(scanLanguages("zh"), ["zh-Hans", "en-US"]);
 });
 
-test("a scan is sent as multipart with its text, appended to the page", async () => {
+test("Android: a scan goes with the native uploader, its text as a field, 120 s to answer", async () => {
+  const sent: NativeUploadRequest[] = [];
+  const result = await saveScan(
+    { server: "https://flowplan.example.com", token: "fpd_x", lang: "de" },
+    { targetId: PAGE, rowId: ROW, title: "Scan", text: "Rechnung 42", file: { uri: "file:///cache/FlowplanScans/Scan.pdf", name: "Scan.pdf" } },
+    async () => {
+      throw new Error("fetch must not be used");
+    },
+    "scan-key-1",
+    async (request) => {
+      sent.push(request);
+      return { status: 200, body: JSON.stringify({ ok: true, pageId: PAGE, url: `/#page=${PAGE}`, title: "Scan" }) };
+    },
+  );
+  assert.ok(result.ok);
+  assert.equal(sent[0].url, "https://flowplan.example.com/api/mobile/capture/save?lang=de");
+  assert.deepEqual(sent[0].file, { uri: "file:///cache/FlowplanScans/Scan.pdf", name: "Scan.pdf", type: "application/pdf" });
+  assert.deepEqual(sent[0].fields, { targetId: PAGE, rowId: ROW, place: "append", scan: "1", title: "Scan", recognized: "Rechnung 42" });
+  assert.deepEqual(sent[0].headers, { Authorization: "Bearer fpd_x", Accept: "application/json", "Idempotency-Key": "scan-key-1" });
+  assert.ok(sent[0].signal);
+  // The timeout stays the capture's 120 s: an upload that takes 2 s is not cut off.
+  const slow = await saveScan(
+    { server: "https://a.example", token: "t", lang: "en" },
+    { targetId: PAGE, title: "S", text: "", file: { uri: "file:///x.pdf", name: "x.pdf" } },
+    undefined,
+    "k",
+    (request) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve({ status: 200, body: JSON.stringify({ pageId: PAGE, url: "/", title: "S" }) }), 50);
+        request.signal?.addEventListener("abort", () => (clearTimeout(timer), reject(new Error("aborted"))));
+      }),
+  );
+  assert.ok(slow.ok);
+});
+
+test("a scan is sent as multipart with its text, appended to the page (FormData without a native uploader)", async () => {
   let seen: { url: string; headers: Record<string, string>; body: FormData } | null = null;
   const result = await saveScan(
     { server: "https://flowplan.example.com", token: "fpd_x", lang: "de" },

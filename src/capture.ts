@@ -3,15 +3,18 @@
 // installation's device token like the widgets; the share extension asks it
 // itself (plugins/capture). And what the app makes of the answers: finished
 // Spotlight entries, the scanner's links, titles and languages. Pure apart
-// from fetch, so the tests run it with a fake one.
+// from fetch and the native uploader (src/upload.ts, Android's scan and file
+// uploads), so the tests run it with fake ones.
 import { safePath } from "./navigation";
 import { dueLabel, localDay } from "./summary";
 import { t, type Locale } from "./i18n";
 import type { SpotlightEntry } from "../modules/flowplan-capture/src";
 import { IDEMPOTENCY_HEADER, newIdempotencyKey, retryable } from "./idempotency";
+import { errorDetail, platformUploader, statusDetail, uploadFile, type NativeUploader } from "./upload";
 
 export type CaptureConnection = { server: string; token: string; lang: string };
-export type CaptureResult<T> = { ok: true; value: T } | { ok: false; signedOut: true } | { ok: false; status: number; error: string };
+// `detail`: what actually went wrong (src/upload.ts), shown under "Details".
+export type CaptureResult<T> = { ok: true; value: T } | { ok: false; signedOut: true } | { ok: false; status: number; error: string; detail?: string };
 
 type Fetch = (url: string, init: { method?: string; headers: Record<string, string>; body?: string | FormData; signal?: AbortSignal }) => Promise<{
   status: number;
@@ -27,6 +30,9 @@ const timeout = (ms: number) => {
   }
 };
 
+const captureUrl = (connection: CaptureConnection, action: string) =>
+  `${connection.server}/api/mobile/capture/${action}?lang=${encodeURIComponent(connection.lang)}`;
+
 // With an Idempotency-Key (saving), a request without an answer goes once
 // more with the same key: the instance saves it once.
 async function call<T>(
@@ -39,21 +45,23 @@ async function call<T>(
   const { idempotencyKey, ...request } = init;
   const headers: Record<string, string> = { Authorization: `Bearer ${connection.token}`, Accept: "application/json" };
   if (idempotencyKey) headers[IDEMPOTENCY_HEADER] = idempotencyKey;
-  let result: CaptureResult<T> = { ok: false, status: 0, error: "" };
+  let result: CaptureResult<T> = { ok: false, status: 0, error: "", detail: "" };
   for (let attempt = 0; attempt < (idempotencyKey ? 2 : 1); attempt++) {
     let body: Record<string, unknown> | null = null;
+    const signal = timeout(ms);
     try {
-      const response = await fetcher(`${connection.server}/api/mobile/capture/${action}?lang=${encodeURIComponent(connection.lang)}`, {
-        ...request,
-        headers,
-        signal: timeout(ms),
-      });
+      const response = await fetcher(captureUrl(connection, action), { ...request, headers, signal });
       if (response.status === 401) return { ok: false, signedOut: true };
       body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       if (response.ok && body) return { ok: true, value: body as T };
-      result = { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
-    } catch {
-      result = { ok: false, status: 0, error: "" };
+      result = {
+        ok: false,
+        status: response.status || 0,
+        error: typeof body?.error === "string" ? body.error : "",
+        detail: response.ok ? `HTTP ${response.status}: no JSON answer` : statusDetail(response.status || 0, body),
+      };
+    } catch (error) {
+      result = { ok: false, status: 0, error: "", detail: errorDetail(error, connection.server, signal?.aborted ? ms : undefined) };
     }
     if (!retryable("status" in result ? result.status : 401, body) || attempt > 0) break;
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -70,6 +78,31 @@ export function captureTargets(connection: CaptureConnection, fetcher: Fetch = d
   return call<CaptureTargets>(connection, "targets", {}, fetcher);
 }
 
+type Saved = { pageId: string; rowId?: string; url: string; title: string };
+const SAVE_TIMEOUT = 120_000;
+
+// The file with its fields to capture/save: with the platform's uploader
+// where there is one (Android, src/upload.ts), else React Native's FormData,
+// which takes { uri, name, type } for a file.
+function save(
+  connection: CaptureConnection,
+  fields: Record<string, string>,
+  file: { uri: string; name: string; type: string },
+  fetcher: Fetch,
+  idempotencyKey: string,
+  uploader: NativeUploader | null,
+): Promise<CaptureResult<Saved>> {
+  if (uploader)
+    return uploadFile<Saved>(
+      { url: captureUrl(connection, "save"), server: connection.server, token: connection.token, file, fields, idempotencyKey, timeoutMs: SAVE_TIMEOUT },
+      uploader,
+    );
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  form.append("file", file as unknown as Blob);
+  return call<Saved>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, SAVE_TIMEOUT);
+}
+
 // A scan into a page: at its end (a document, or a record's document with
 // rowId), a new record in a database; the recognised text goes along as
 // the PDF's search text.
@@ -78,17 +111,15 @@ export function saveScan(
   input: { targetId: string; rowId?: string; title: string; text: string; file: { uri: string; name: string } },
   fetcher: Fetch = defaultFetch,
   idempotencyKey: string = newIdempotencyKey(),
+  uploader: NativeUploader | null = platformUploader(connection.server),
 ) {
-  const form = new FormData();
-  form.append("targetId", input.targetId);
-  if (input.rowId) form.append("rowId", input.rowId);
-  form.append("place", "append");
-  form.append("scan", "1");
-  form.append("title", input.title.slice(0, 300));
-  if (input.text.trim()) form.append("recognized", input.text.slice(0, 100_000));
-  // React Native's FormData takes { uri, name, type } for a file.
-  form.append("file", { uri: input.file.uri, name: input.file.name, type: "application/pdf" } as unknown as Blob);
-  return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, 120_000);
+  const fields: Record<string, string> = { targetId: input.targetId };
+  if (input.rowId) fields.rowId = input.rowId;
+  fields.place = "append";
+  fields.scan = "1";
+  fields.title = input.title.slice(0, 300);
+  if (input.text.trim()) fields.recognized = input.text.slice(0, 100_000);
+  return save(connection, fields, { uri: input.file.uri, name: input.file.name, type: "application/pdf" }, fetcher, idempotencyKey, uploader);
 }
 
 // Android without Google Play services: a PDF or photo picked instead of a
@@ -99,15 +130,15 @@ export function saveImport(
   input: { targetId: string; rowId?: string; file: { uri: string; name: string; type: string } },
   fetcher: Fetch = defaultFetch,
   idempotencyKey: string = newIdempotencyKey(),
+  uploader: NativeUploader | null = platformUploader(connection.server),
 ) {
-  const form = new FormData();
-  form.append("targetId", input.targetId);
-  if (input.rowId) form.append("rowId", input.rowId);
-  form.append("place", "append");
+  const fields: Record<string, string> = { targetId: input.targetId };
+  if (input.rowId) fields.rowId = input.rowId;
+  fields.place = "append";
   const title = input.file.name.replace(/\.[a-z0-9]+$/i, "").trim();
-  if (title) form.append("title", title.slice(0, 300));
-  form.append("file", { uri: input.file.uri, name: input.file.name, type: input.file.type || "application/octet-stream" } as unknown as Blob);
-  return call<{ pageId: string; rowId?: string; url: string; title: string }>(connection, "save", { method: "POST", body: form, idempotencyKey }, fetcher, 120_000);
+  if (title) fields.title = title.slice(0, 300);
+  const file = { uri: input.file.uri, name: input.file.name, type: input.file.type || "application/octet-stream" };
+  return save(connection, fields, file, fetcher, idempotencyKey, uploader);
 }
 
 // Choosing a target: the inbox first, then the rest; protected pages are

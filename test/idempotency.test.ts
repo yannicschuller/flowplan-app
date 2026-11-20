@@ -60,7 +60,7 @@ test("a widget tap sends one key and retries once with it when there was no answ
 
 test("refusals are not retried; a still running first attempt is", async () => {
   const limited = fakeFetch([{ status: 429, body: { error: "Too many requests." } }]);
-  assert.deepEqual(await widgetAction(connection, "timer.stop", {}, limited.fetcher), { ok: false, status: 429, error: "Too many requests." });
+  assert.deepEqual(await widgetAction(connection, "timer.stop", {}, limited.fetcher), { ok: false, status: 429, error: "Too many requests.", detail: "HTTP 429" });
   assert.equal(limited.calls.length, 1);
   const busy = fakeFetch([{ status: 409, body: { error: "still", code: "idempotency_in_progress" } }, { status: 200, body: { ok: true } }]);
   assert.ok((await widgetAction(connection, "timer.stop", {}, busy.fetcher)).ok);

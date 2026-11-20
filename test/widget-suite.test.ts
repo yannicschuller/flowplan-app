@@ -120,7 +120,7 @@ test("401 means signed out; errors carry the instance's sentence", async () => {
     signedOut: true,
   });
   const limited = fakeFetch(() => ({ status: 429, body: { error: "Zu viele Anfragen." } }));
-  assert.deepEqual(await widgetAction(connection, "timer.stop", {}, limited.fetcher), { ok: false, status: 429, error: "Zu viele Anfragen." });
+  assert.deepEqual(await widgetAction(connection, "timer.stop", {}, limited.fetcher), { ok: false, status: 429, error: "Zu viele Anfragen.", detail: "HTTP 429" });
 });
 
 test("actions post the action with its fields; options ask for the kind", async () => {

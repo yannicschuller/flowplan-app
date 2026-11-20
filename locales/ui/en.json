@@ -292,6 +292,7 @@
   "captureDueToday": "Due today",
   "captureSaved": "Saved to {target}",
   "captureFailed": "Not saved. {error}",
+  "errorDetails": "Details: {detail}",
   "captureNoTarget": "Nowhere to capture to. Create a database in Flowplan.",
   "captureTranscribed": "Text recognised and saved",
   "scanTitle": "Scan {date}",

@@ -4,6 +4,7 @@
 // Flowplan to sign in", their settings stay).
 import { configKey, MAX_WIDGETS_PER_REQUEST, type ServerKind } from "./suite";
 import { IDEMPOTENCY_HEADER, newIdempotencyKey, retryable } from "../idempotency";
+import { errorDetail, platformUploader, statusDetail, uploadFile, type NativeUploader, type UploadFile } from "../upload";
 
 export type WidgetRequest = { id: string; kind: ServerKind; config: Record<string, unknown> };
 export type WidgetResult =
@@ -11,7 +12,8 @@ export type WidgetResult =
   | { id: string; kind: string; ok: false; status: number; error: string };
 export type Connection = { server: string; token: string; lang: string };
 
-export type ApiResult<T> = { ok: true; value: T } | { ok: false; signedOut: true } | { ok: false; status: number; error: string };
+// `detail`: what actually went wrong (src/upload.ts), shown under "Details".
+export type ApiResult<T> = { ok: true; value: T } | { ok: false; signedOut: true } | { ok: false; status: number; error: string; detail?: string };
 
 type Fetch = (url: string, init: { method?: string; headers: Record<string, string>; body?: string | FormData; signal?: AbortSignal }) => Promise<{
   status: number;
@@ -27,6 +29,32 @@ const timeout = (ms: number) => {
   }
 };
 
+const TIMEOUT = 20_000;
+const apiUrl = (connection: Connection, path: string) =>
+  `${connection.server}${path}${path.includes("?") ? "&" : "?"}lang=${encodeURIComponent(connection.lang)}`;
+
+// One file with form fields to the widget action: with the platform's
+// uploader where there is one (Android, src/upload.ts; one file per request),
+// else React Native's FormData, which takes { uri, name, type } for a file.
+export function postFile<T>(
+  connection: Connection,
+  fields: Record<string, string>,
+  file: UploadFile,
+  fetcher: Fetch,
+  idempotencyKey: string,
+  uploader: NativeUploader | null,
+): Promise<ApiResult<T>> {
+  if (uploader)
+    return uploadFile<T>(
+      { url: apiUrl(connection, "/api/mobile/widgets/action"), server: connection.server, token: connection.token, file, fields, idempotencyKey, timeoutMs: TIMEOUT },
+      uploader,
+    );
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  form.append("file", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+  return call<T>(connection, "/api/mobile/widgets/action", { method: "POST", body: form, idempotencyKey }, fetcher);
+}
+
 // `idempotencyKey`: the action's key (src/idempotency.ts). With one, a
 // request without an answer (or one the instance still works on) goes once
 // more with the same key – applied at most once.
@@ -40,19 +68,24 @@ export async function call<T>(
   const headers: Record<string, string> = { Authorization: `Bearer ${connection.token}`, Accept: "application/json" };
   if (typeof request.body === "string") headers["Content-Type"] = "application/json";
   if (idempotencyKey) headers[IDEMPOTENCY_HEADER] = idempotencyKey;
-  const separator = path.includes("?") ? "&" : "?";
-  const url = `${connection.server}${path}${separator}lang=${encodeURIComponent(connection.lang)}`;
-  let result: ApiResult<T> = { ok: false, status: 0, error: "" };
+  const url = apiUrl(connection, path);
+  let result: ApiResult<T> = { ok: false, status: 0, error: "", detail: "" };
   for (let attempt = 0; attempt < (idempotencyKey ? 2 : 1); attempt++) {
     let body: Record<string, unknown> | null = null;
+    const signal = timeout(TIMEOUT);
     try {
-      const response = await fetcher(url, { ...request, headers, signal: timeout(20_000) });
+      const response = await fetcher(url, { ...request, headers, signal });
       if (response.status === 401) return { ok: false, signedOut: true };
       body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       if (response.ok && body) return { ok: true, value: body as T };
-      result = { ok: false, status: response.status || 0, error: typeof body?.error === "string" ? body.error : "" };
-    } catch {
-      result = { ok: false, status: 0, error: "" };
+      result = {
+        ok: false,
+        status: response.status || 0,
+        error: typeof body?.error === "string" ? body.error : "",
+        detail: response.ok ? `HTTP ${response.status}: no JSON answer` : statusDetail(response.status || 0, body),
+      };
+    } catch (error) {
+      result = { ok: false, status: 0, error: "", detail: errorDetail(error, connection.server, signal?.aborted ? TIMEOUT : undefined) };
     }
     if (!retryable("status" in result ? result.status : 401, body) || attempt > 0) break;
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -158,14 +191,9 @@ export function uploadCapture(
   input: { targetId: string; type: "photo" | "voice"; title?: string; file: { uri: string; name: string; type: string } },
   fetcher: Fetch = defaultFetch,
   idempotencyKey: string = newIdempotencyKey(),
+  uploader: NativeUploader | null = platformUploader(connection.server),
 ) {
-  const form = new FormData();
-  form.append("action", "capture.upload");
-  form.append("targetId", input.targetId);
-  form.append("type", input.type);
-  form.append("transcribe", input.type === "voice" ? "1" : "0");
-  if (input.title) form.append("title", input.title);
-  // React Native's FormData takes { uri, name, type } for a file.
-  form.append("file", input.file as unknown as Blob);
-  return call<{ url?: string; transcribed?: boolean | null; text?: string }>(connection, "/api/mobile/widgets/action", { method: "POST", body: form, idempotencyKey }, fetcher);
+  const fields: Record<string, string> = { action: "capture.upload", targetId: input.targetId, type: input.type, transcribe: input.type === "voice" ? "1" : "0" };
+  if (input.title) fields.title = input.title;
+  return postFile<{ url?: string; transcribed?: boolean | null; text?: string }>(connection, fields, input.file, fetcher, idempotencyKey, uploader);
 }

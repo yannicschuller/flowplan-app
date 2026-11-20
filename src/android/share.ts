@@ -5,8 +5,9 @@
 // database – or a page or database they choose. Instances from before
 // capture.share get text and links through their web share target instead.
 import type { SharedContent, SharedFile } from "../../modules/flowplan-android/src";
-import { call, type Connection } from "../widgets/api";
+import { call, postFile, type Connection } from "../widgets/api";
 import { newIdempotencyKey } from "../idempotency";
+import { platformUploader, type NativeUploader } from "../upload";
 
 export const MAX_SHARE_FILES = 10;
 // What the instance keeps (photos, PDFs); other types are named as skipped.
@@ -64,16 +65,26 @@ const defaultFetch: Fetcher = (url, init) => fetch(url, init);
 // Saves the share: multipart with the files, JSON without.
 // `idempotencyKey`: one per share; the sheet passes the same one when the
 // person taps Save again after a failure (the first attempt may have arrived).
+// One file goes with the platform's uploader (Android: expo-file-system,
+// src/upload.ts – yannicschuller/flowplan#403). Several files stay one
+// request with React Native's FormData: the native uploader sends one file
+// per request, and capture.share makes one record (or sub page) per request
+// with all its files – several requests would split the share.
 export function saveShare(
   connection: Connection,
   targetId: string,
   draft: Pick<ShareDraft, "title" | "text" | "url" | "files">,
   fetcher: Fetcher = defaultFetch,
   idempotencyKey: string = newIdempotencyKey(),
+  uploader: NativeUploader | null = platformUploader(connection.server),
 ) {
   const fields = shareFields(targetId, draft);
   type Answer = { ok: true; action: string; url?: string; files?: string[] };
   if (!draft.files.length) return call<Answer>(connection, "/api/mobile/widgets/action", { method: "POST", body: JSON.stringify(fields), idempotencyKey }, fetcher);
+  if (draft.files.length === 1) {
+    const [file] = draft.files;
+    return postFile<Answer>(connection, fields, { uri: file.uri, name: file.name, type: file.type }, fetcher, idempotencyKey, uploader);
+  }
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
   // React Native's FormData takes { uri, name, type } for a file.

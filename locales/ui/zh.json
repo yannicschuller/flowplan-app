@@ -292,6 +292,7 @@
   "captureDueToday": "今天到期",
   "captureSaved": "已保存到 {target}",
   "captureFailed": "未保存。{error}",
+  "errorDetails": "详细信息：{detail}",
   "captureNoTarget": "没有可保存的位置。请在 Flowplan 中创建一个数据库。",
   "captureTranscribed": "已识别文字并保存",
   "scanTitle": "扫描 {date}",

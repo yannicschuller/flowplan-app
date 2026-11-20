@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { saveImport, scanEntryShown, scanMode, scannerRefused } from "../src/capture";
 import { bridgeScript } from "../src/bridge-script";
 import { strings } from "../src/i18n";
+import type { NativeUploader, NativeUploadRequest } from "../src/upload";
 
 const root = join(__dirname, "..");
 const read = (path: string) => readFileSync(join(root, path), "utf8");
@@ -48,7 +49,32 @@ test("a scanner that cannot be loaded on Android is explained like missing Play 
   assert.equal(scannerRefused(new Error("x"), "android"), false);
 });
 
-test("a picked file goes to the same place as a scan, without recognised text", async () => {
+test("a picked file goes to the same place as a scan, without recognised text (Android: the native uploader)", async () => {
+  const sent: NativeUploadRequest[] = [];
+  const uploader: NativeUploader = async (request) => {
+    sent.push(request);
+    return { status: 200, body: JSON.stringify({ ok: true, pageId: PAGE, url: `/#page=${PAGE}`, title: "Invoice 42" }) };
+  };
+  const noFetch = async () => {
+    throw new Error("fetch must not be used");
+  };
+  const file = { uri: "file:///cache/FlowplanScans/Invoice%2042.pdf", name: "Invoice 42.pdf", type: "application/pdf" };
+  const result = await saveImport({ server: "https://flowplan.example.com", token: "fpd_x", lang: "en" }, { targetId: PAGE, rowId: ROW, file }, noFetch, "import-key-1", uploader);
+  assert.ok(result.ok);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, "https://flowplan.example.com/api/mobile/capture/save?lang=en");
+  assert.deepEqual(sent[0].file, file);
+  assert.deepEqual(sent[0].fields, { targetId: PAGE, rowId: ROW, place: "append", title: "Invoice 42" });
+  assert.equal(sent[0].headers.Authorization, "Bearer fpd_x");
+  assert.equal(sent[0].headers["Idempotency-Key"], "import-key-1");
+  assert.equal(sent[0].headers["Content-Type"], undefined);
+  // A photo without a name that has an extension keeps its name as the title.
+  await saveImport({ server: "https://a.example", token: "t", lang: "de" }, { targetId: PAGE, file: { uri: "file:///x", name: "Beleg", type: "" } }, noFetch, "k2", uploader);
+  assert.deepEqual(sent[1].fields, { targetId: PAGE, place: "append", title: "Beleg" });
+  assert.equal(sent[1].file.type, "application/octet-stream");
+});
+
+test("without a native uploader (iOS) a picked file still goes as FormData", async () => {
   let form: FormData | null = null;
   let url = "";
   const result = await saveImport(
@@ -59,6 +85,8 @@ test("a picked file goes to the same place as a scan, without recognised text", 
       form = init.body as FormData;
       return { status: 200, ok: true, json: async () => ({ ok: true, pageId: PAGE, url: `/#page=${PAGE}`, title: "Invoice 42" }) };
     },
+    undefined,
+    null,
   );
   assert.ok(result.ok);
   assert.equal(url, "https://flowplan.example.com/api/mobile/capture/save?lang=en");
@@ -69,13 +97,6 @@ test("a picked file goes to the same place as a scan, without recognised text", 
   assert.equal(form!.get("scan"), null);
   assert.equal(form!.get("recognized"), null);
   assert.ok(form!.get("file"));
-  // A photo without a name that has an extension keeps its name as the title.
-  await saveImport({ server: "https://a.example", token: "t", lang: "de" }, { targetId: PAGE, file: { uri: "file:///x", name: "Beleg", type: "image/jpeg" } }, async (_, init) => {
-    form = init.body as FormData;
-    return { status: 200, ok: true, json: async () => ({ url: "/" }) };
-  });
-  assert.equal(form!.get("title"), "Beleg");
-  assert.equal(form!.get("rowId"), null);
 });
 
 test("the explanation names Google Play services in every language", () => {

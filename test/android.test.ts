@@ -8,6 +8,7 @@ import { fileSize, hasContent, saveShare, shareable, shareDraft, shareFields, sh
 import { pageShortcutId, recentPages, shortcutList, shortcutOfLink } from "../src/android/shortcut-list";
 import { materialThemes } from "../src/android/theme";
 import { pathOfAppLink } from "../src/navigation";
+import type { NativeUploader, NativeUploadRequest } from "../src/upload";
 
 const { shortcutsXml, STATIC_SHORTCUTS } = require("../plugins/with-android-extras") as {
   shortcutsXml: (pkg: string) => string;
@@ -55,13 +56,38 @@ test("the share is sent as capture.share; older instances get their web share ta
   assert.equal(seen[0].url, "https://flowplan.example/api/mobile/widgets/action?lang=de");
   assert.equal(seen[0].auth, "Bearer fpd_x");
   assert.deepEqual(JSON.parse(seen[0].body as string), { action: "capture.share", targetId: PAGE, text: "Note" });
-  // With files: multipart, every file as a "file" part.
+  // One file: the native uploader (Android), the share's fields as form fields.
+  const uploads: NativeUploadRequest[] = [];
+  const uploader: NativeUploader = async (request) => {
+    uploads.push(request);
+    return { status: 200, body: JSON.stringify({ ok: true, action: "capture.share", url: `/#page=${PAGE}` }) };
+  };
+  const one = await saveShare(
+    { server: "https://flowplan.example", token: "fpd_x", lang: "de" },
+    PAGE,
+    { title: "Beleg", text: "", url: "", files: [{ uri: "file:///cache/shared/0-Beleg%20M%C3%A4rz.pdf", name: "Beleg März.pdf", type: "application/pdf", size: 1 }] },
+    fetcher,
+    "share-key",
+    uploader,
+  );
+  assert.ok(one.ok);
+  assert.equal(seen.length, 1);
+  assert.equal(uploads[0].url, "https://flowplan.example/api/mobile/widgets/action?lang=de");
+  assert.deepEqual(uploads[0].fields, { action: "capture.share", targetId: PAGE, title: "Beleg" });
+  assert.deepEqual(uploads[0].file, { uri: "file:///cache/shared/0-Beleg%20M%C3%A4rz.pdf", name: "Beleg März.pdf", type: "application/pdf" });
+  assert.equal(uploads[0].headers["Idempotency-Key"], "share-key");
+  // Several files: one request with React Native's FormData, every file as a
+  // "file" part – capture.share makes one record of them (the native uploader
+  // takes one file per request).
   await saveShare(
     { server: "https://flowplan.example", token: "fpd_x", lang: "de" },
     PAGE,
     { title: "", text: "", url: "", files: [{ uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg", size: 1 }, { uri: "file:///b.pdf", name: "b.pdf", type: "application/pdf", size: 1 }] },
     fetcher,
+    "share-key-2",
+    uploader,
   );
+  assert.equal(uploads.length, 1);
   const form = seen[1].body as FormData;
   assert.ok(form instanceof FormData);
   assert.equal(form.get("action"), "capture.share");

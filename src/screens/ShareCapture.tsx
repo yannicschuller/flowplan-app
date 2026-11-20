@@ -17,6 +17,7 @@ import { Button, SheetBody, styles, usePalette } from "../ui";
 import { draftKey, type DraftKey } from "../idempotency";
 import { modalAnimation } from "../motion";
 import { useMotion } from "../native/motion";
+import { detailOf } from "../upload";
 
 export type ShareRequest = { kind: "share"; content: SharedContent } | { kind: "quick" };
 type Target = { id: string; name: string; detail: string; kind: string };
@@ -46,6 +47,8 @@ export function ShareCapture({
   const [takesShare, setTakesShare] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // What actually went wrong, under a failure (src/upload.ts).
+  const [detail, setDetail] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
 
   // A new share or quick capture: its content, the inbox and the other targets.
@@ -59,6 +62,7 @@ export function ShareCapture({
     setQuery("");
     setTakesShare(true);
     setMessage("");
+    setDetail("");
     setSaved(null);
     const server = connection();
     if (!server) return setMessage(t("widgetSignIn"));
@@ -120,6 +124,7 @@ export function ShareCapture({
     }
     setBusy(true);
     setMessage(draft.files.length ? t("uploading") : "");
+    setDetail("");
     saveKey.current = draftKey(saveKey.current, JSON.stringify([target.id, draft.title, draft.text, draft.url, draft.files.map((file) => file.uri)]));
     const result = await saveShare(server, target.id, draft, undefined, saveKey.current.key);
     setBusy(false);
@@ -128,7 +133,10 @@ export function ShareCapture({
       setMessage(t("captureSaved", { target: target.name }));
       if (fromShare) clearShare();
       void refreshSuite({ force: true });
-    } else setMessage(t("captureFailed", { error: "error" in result ? result.error : t("widgetSignIn") }));
+    } else {
+      setMessage(t("captureFailed", { error: "error" in result ? result.error || t("widgetOffline") : t("widgetSignIn") }));
+      setDetail(detailOf(result));
+    }
   };
 
   // Quick capture: a photo from the camera or the library.
@@ -292,6 +300,11 @@ export function ShareCapture({
           {message ? (
             <Text style={[styles.text, { color: p.muted, marginTop: 18 }]} accessibilityLiveRegion="polite">
               {message}
+            </Text>
+          ) : null}
+          {message && detail && !busy ? (
+            <Text style={[styles.small, { color: p.muted, marginTop: 6 }]} selectable>
+              {t("errorDetails", { detail })}
             </Text>
           ) : null}
           {done ? (
