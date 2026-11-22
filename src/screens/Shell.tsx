@@ -53,7 +53,7 @@ import { t } from "../i18n";
 import { inkFailure, inkId, inkRequest, inkScript, InkRuns, type InkDetail } from "../ink-bridge";
 import { aiCall, aiFailure, aiScript, type AiDetail } from "../ai-bridge";
 import { decide, isMainFrame, loadStarted, mayStay, missedSignIn, navigationState, pageRendered } from "../navigation";
-import { checkServer, fetchRequest, instanceAnswers, originOf } from "../server";
+import { checkServer, fetchRequest, instanceAnswers, originOf, shortServer } from "../server";
 import { acceptSignIn, base64Url, beginSignIn, PendingSignIns, redeemScript, signInAnswerScript, SignInStarts, signInVia } from "../sign-in";
 import { openPasskeySheet, passkeyAnswerScript, passkeySheetUrl, passkeyState, PendingPasskey, type PasskeyStatus } from "../passkey";
 import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
@@ -73,8 +73,8 @@ import { offlineAnswer, parseOfflineMessage } from "../offline/messages";
 import { offlineCopy } from "../offline/native";
 import { setOfflineRefreshHook } from "../offline/refresh-hook";
 import { offlineEnableScript, offlineStatusScript } from "../offline-offer";
-import { animatesStatusBar } from "../motion";
-import { useMotion } from "../native/motion";
+import { animatesStatusBar, switchTransition } from "../motion";
+import { currentMotion, useMotion } from "../native/motion";
 import { answerBuild, copyOnReach, forgetCopyPage, pageBuild, parseStaleMessage, staleAction, type StaleMessage } from "../offline/stale";
 
 export type ShellHandle = {
@@ -103,8 +103,10 @@ export type ShellHandle = {
 
 type Props = {
   server: string;
-  // The active profile: its offline copy (iOS).
+  // The active profile: its offline copy (iOS); its name for the switch
+  // to it (#428).
   profile: string;
+  profileName?: string;
   onMessage: (message: PageMessage) => void;
   onAppLink: (link: string) => void;
   onProfiles: () => void;
@@ -152,7 +154,7 @@ async function reachable(server: string): Promise<{ ok: boolean; build: string |
 // files (/_next/static, immutable) stay cacheable.
 const FRESH_DOCUMENT = { "Cache-Control": "no-cache" };
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, onMessage, onAppLink, onProfiles, onProfileSwitcher, onPageLoaded, active }, ref) {
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, profileName = "", onMessage, onAppLink, onProfiles, onProfileSwitcher, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const motion = useMotion();
@@ -182,6 +184,12 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
   const [connecting, setConnecting] = useState(true);
   const [connectRun, setConnectRun] = useState(0);
   const connectEvent = useRef<((event: ConnectEvent) => void) | null>(null);
+  // Another profile (#428, motion.ts switchTransition): the cover names it
+  // and fades in over the leaving page before the next instance loads.
+  const [switching, setSwitching] = useState<{ name: string; fadeIn: number } | null>(null);
+  const loadedProfile = useRef<string | null>(null);
+  const profileRef = useRef({ id: profile, name: profileName });
+  profileRef.current = { id: profile, name: profileName };
   const settle = () => connectEvent.current?.({ type: "settled" });
   const [keyboard, setKeyboard] = useState(0);
   const keyboardRef = useRef(0);
@@ -480,21 +488,42 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     redeemWhenLoaded.current = null;
     pendingPasskey.current.clear();
     pageUrl.current = "";
-    setSource({ uri: server });
+    const { id, name } = profileRef.current;
+    const transition = switchTransition(loadedProfile.current, id, currentMotion());
+    loadedProfile.current = id;
+    setSwitching(transition.switching ? { name: name || shortServer(server), fadeIn: transition.fadeIn } : null);
     setOffline(false);
     setShowingCopy(false);
-    // No network at all: straight to the copy, without waiting for the
-    // web view to fail.
     let stale = false;
-    void Network.getNetworkStateAsync()
-      .then((state) => {
-        if (!stale && !networkConnected(state)) void showCopy();
-      })
-      .catch(() => {});
+    const load = () => {
+      if (stale) return;
+      setSource({ uri: server });
+      // No network at all: straight to the copy, without waiting for the
+      // web view to fail.
+      void Network.getNetworkStateAsync()
+        .then((state) => {
+          if (!stale && !networkConnected(state)) void showCopy();
+        })
+        .catch(() => {});
+    };
+    // The leaving page stays under the cover until it covers the window.
+    const timer = transition.fadeIn ? setTimeout(load, transition.fadeIn) : null;
+    if (!timer) load();
     return () => {
       stale = true;
+      if (timer) clearTimeout(timer);
     };
   }, [server, showCopy]);
+  // A fresh load of the same instance (a new key, a crashed web view) is no
+  // switch: "Connecting" as before.
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    setSwitching(null);
+  }, [attempt, connectRun]);
 
   // A fresh load of the instance's page (src/connecting.ts): the health
   // check runs next to it; without an answer in time, the stored copy or the
@@ -1097,7 +1126,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
         {bars.fadeBottom ? (
           <LinearGradient pointerEvents="none" colors={[transparent(bars.bottom), bars.bottom]} style={[shellStyles.fade, { bottom: 0 }]} />
         ) : null}
-        <Connecting server={server} visible={connecting && !showingCopy} />
+        <Connecting server={server} visible={connecting && !showingCopy} switchingTo={switching?.name ?? null} fadeIn={switching?.fadeIn ?? 0} />
       </View>
       <View style={{ height: bars.cover ? keyboard : Math.max(insets.bottom, keyboard), backgroundColor: keyboard ? fallback : bars.bottom }} />
     </View>

@@ -36,3 +36,14 @@ export function fadeDuration(motion: Motion): number {
 
 // Colour changes of the status bar follow the page with a short fade.
 export const animatesStatusBar = (motion: Motion) => motion !== "off";
+
+// Another profile in the window (#428, screens/Shell.tsx): the "Connecting"
+// cover comes first with the target profile's name – faded in over the
+// page that is leaving, the next instance's page loads only once it covers
+// the window – and fades out as at every load, a cross-dissolve instead of
+// a hard cut. With "off" (also the system's Reduce Motion) it is there at
+// once and nothing waits. The first page of the window is no switch.
+export function switchTransition(previous: string | null, next: string, motion: Motion): { switching: boolean; fadeIn: number } {
+  const switching = previous !== null && previous !== next;
+  return { switching, fadeIn: switching ? fadeDuration(motion) : 0 };
+}

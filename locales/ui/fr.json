@@ -17,6 +17,7 @@
   "redirect": "{server} redirige vers {detail}. Saisissez plutôt cette adresse.",
   "notFlowplan": "Aucun Flowplan ne tourne à {server}.",
   "connectingTo": "Connexion à {server} …",
+  "switchingTo": "Passage à {name} …",
   "offlineTitle": "Flowplan est injoignable",
   "offlineServer": "{server} ne répond pas pour le moment.",
   "offlineHint": "Votre appareil est-il en ligne et sur le même réseau que l’instance – ou connecté au VPN qui permet de l’atteindre ? Flowplan continue d’essayer en arrière-plan.",
