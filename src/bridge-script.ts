@@ -31,7 +31,9 @@
 //   sidebar, or back – the app's back swipe on iOS, the system's gesture on
 //   Android; src/back.ts); and it
 //   carries this device's key for the instance (deviceKey, app-device.ts),
-//   which the password sign-in sends so it lasts as long as the app's;
+//   which the password sign-in sends so it lasts as long as the app's; and
+//   it prints the page's print copy with the system's print dialog (print,
+//   #424: the web views ignore window.print(); src/print.ts);
 // - on iOS the offline copy: window.FlowplanApp.offline, the caches the
 //   page's offline module fills, kept by the app, and the loader that runs
 //   the stored page without a connection (src/offline/loader.ts);
@@ -103,7 +105,10 @@ export type PageMessage =
   // Where offline use stands here (src/offline-offer.ts parseOfflineStatus
   // checks it), and the person's "Animations" (src/motion.ts parseMotion).
   | { type: "offlineStatus"; status: unknown }
-  | { type: "motion"; value: unknown };
+  | { type: "motion"; value: unknown }
+  // "Print / PDF" (#424): the page's lean print copy as one HTML document,
+  // for the system's print dialog (print.ts printRequest checks it).
+  | { type: "print"; html: unknown; title?: unknown; paper?: unknown };
 
 export function parsePageMessage(data: string): PageMessage | null {
   try {
@@ -236,7 +241,8 @@ export function bridgeScript(options: {
     addPasskey: (url) => post({ type: "addPasskey", url: String(url) }),
     recordVoiceNote: (request) => post({ type: "voiceNote", id: String(request && request.id), summarize: !!(request && request.summarize), serverTranscription: !!(request && request.serverTranscription) }),
     shortcuts: (list) => post({ type: "shortcuts", list: Array.isArray(list) ? list.slice(0, 40) : [] }),
-    offlineStatus: (status) => post({ type: "offlineStatus", status: status && typeof status === "object" ? status : null }),${
+    offlineStatus: (status) => post({ type: "offlineStatus", status: status && typeof status === "object" ? status : null }),
+    print: (request) => post({ type: "print", html: request && typeof request.html === "string" ? request.html : "", title: request && typeof request.title === "string" ? request.title : "", paper: request && (request.paper === "a4" || request.paper === "letter") ? request.paper : null }),${
       options.deviceKey ? `\n    deviceKey: Object.freeze(${JSON.stringify({ id: String(options.deviceKey.id), secret: String(options.deviceKey.secret) })}),` : ""
     }${options.offline ? `\n    offline,` : ""}${
       options.windows ? `\n    get openWindow() { return windowsOpen ? openWindow : undefined; },` : ""

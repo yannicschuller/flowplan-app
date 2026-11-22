@@ -1,11 +1,14 @@
 // Small native services for the page: files to the share sheet, haptic taps,
 // and the quick actions on the app icon.
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as QuickActions from "expo-quick-actions";
 import * as Sharing from "expo-sharing";
+import * as Print from "expo-print";
+import { getLocales } from "expo-localization";
 import { File, Paths } from "expo-file-system";
 import { t } from "../i18n";
+import { printFromPage } from "../print";
 
 // A file from the page (export, backup, download) goes to the share sheet:
 // "Save to Files", AirDrop, other apps.
@@ -19,6 +22,17 @@ export async function saveFile(name: string, base64: string, mime: string) {
     if (await Sharing.isAvailableAsync())
       await Sharing.shareAsync(file.uri, { mimeType: mime || undefined, dialogTitle: t("saveFile") });
   } catch {}
+}
+
+// "Print / PDF" in the page (#424, src/print.ts): the system's print dialog
+// – a printer, or "Save as PDF".
+export function printPage(message: { html?: unknown; title?: unknown; paper?: unknown }) {
+  return printFromPage(message, {
+    platform: Platform.OS,
+    region: getLocales()[0]?.regionCode,
+    print: (options) => Print.printAsync(options),
+    alert: (title, text) => Alert.alert(title, text),
+  });
 }
 
 export function haptic(kind: string) {

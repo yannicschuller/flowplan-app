@@ -60,6 +60,7 @@ import { parseInsets, safeAreaMode, type SafeAreaMode } from "../safe-areas";
 import { BACKGROUND, usePalette } from "../ui";
 import { useWindowFeatures } from "../window-features";
 import { switcherRequest } from "../profile-picker";
+import { printPage } from "../native/actions";
 import { Offline, type OfflineReason } from "./Offline";
 import { errorPageStep, httpErrorOnInstance, probePage, RELOAD_AGAIN_MS } from "../error-page";
 import { Connecting } from "./Connecting";
@@ -817,6 +818,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     else if (message.type === "ai") handleAi(message);
     else if (message.type === "signIn") void startSignIn(signInVia(message), "bridge");
     else if (message.type === "addPasskey") void addPasskey(message.url);
+    // "Print / PDF" (#424): the system's print dialog, in every window.
+    else if (message.type === "print") void printPage(message);
     else if (message.type === "openProfileSwitcher") {
       if (switcherRequest(message, switcherToken)) onProfileSwitcher("page");
     } else if (message.type === "openWindow") {
