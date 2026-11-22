@@ -99,7 +99,7 @@ jobs:
           fi
       # CocoaPods' download cache between runs (the pods themselves are
       # generated fresh by prebuild).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/Library/Caches/CocoaPods
           key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json', 'Gemfile.lock') }}
