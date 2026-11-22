@@ -1,4 +1,3 @@
 Nouveautés de cette version :
-• Android : la numérisation, le partage vers Flowplan et la saisie rapide envoient les fichiers de manière plus fiable.
-• Si un envoi échoue, l’app affiche la cause exacte sous « Détails ».
+• Impression : les pages et documents ouvrent la fenêtre d’impression du système – vers une imprimante ou « Enregistrer en PDF » (avec Flowplan 0.11.1).
 • Améliorations mineures et corrections de bugs

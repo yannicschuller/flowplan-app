@@ -1,4 +1,3 @@
 New in this version:
-• Android: scanning, sharing to Flowplan and quick capture upload files more reliably.
-• If an upload fails, the app shows the exact cause under "Details".
+• Printing: pages and documents open the system's print dialog – to a printer or "Save as PDF" (with Flowplan 0.11.1).
 • Minor improvements and bug fixes

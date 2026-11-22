@@ -1,4 +1,3 @@
 Neu in dieser Version:
-• Android: Scannen, Teilen in Flowplan und Schnellerfassung laden Dateien jetzt zuverlässiger hoch.
-• Scheitert ein Upload, zeigt die App unter „Details“ die genaue Ursache.
+• Drucken: Seiten und Dokumente öffnen den Druckdialog des Systems – mit Drucker oder „Als PDF speichern“ (mit Flowplan 0.11.1).
 • Kleinere Verbesserungen und Fehlerbehebungen
