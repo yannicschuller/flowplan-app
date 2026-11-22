@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync, readdirSync } from "node:fs";
 import { bridgeScript, parsePageMessage } from "../src/bridge-script";
-import { animatesStatusBar, effectiveMotion, fadeDuration, modalAnimation, parseMotion, showsSpinner } from "../src/motion";
+import { animatesStatusBar, effectiveMotion, fadeDuration, modalAnimation, parseMotion, showsSpinner, switchTransition } from "../src/motion";
 
 // #260: the app's own motion follows the system's "Reduce motion" always
 // and the person's "Animations" in Flowplan as the page reports it.
@@ -104,7 +104,7 @@ test("the app's sheets, spinners, the Connecting cover and the status bar follow
   assert.match(connecting, /showsSpinner\(motion\) \? <ActivityIndicator/);
   assert.match(connecting, /fadeDuration\(motionRef\.current\)/);
   const shell = src("src/screens/Shell.tsx");
-  assert.match(shell, /<Connecting server=\{server\} visible=\{connecting && !showingCopy\} \/>/);
+  assert.match(shell, /<Connecting server=\{server\} visible=\{connecting && !showingCopy\} /);
   assert.match(shell, /<StatusBar style=\{statusStyle\} animated=\{animatesStatusBar\(motion\)\} \/>/);
   assert.match(src("src/ui.tsx"), /const spinner = busy && showsSpinner\(motion\)/);
   // System setting and its change; the page's report per profile.
@@ -123,4 +123,28 @@ test("iOS edge swipe: the chevron only fades with reduced, appears and goes with
   assert.match(swift, /if motion == "normal" \{ self\.indicator\?\.transform/);
   assert.match(swift, /if motion == "off" \{\s*\n\s*view\.removeFromSuperview\(\)/);
   assert.match(src("modules/flowplan-native/src/index.ts"), /native\?\.setEdgeSwipeMotion\?\.\(motion\)/);
+});
+
+// #428: switching the instance (the switcher sheet, the quick action, ⇧⌘P)
+// is a short cross-dissolve with the target profile's name, not a hard cut.
+test("a switch to another profile fades the cover in first – not with Reduce Motion, not at the first page", () => {
+  assert.deepEqual(switchTransition(null, "a", "normal"), { switching: false, fadeIn: 0 }, "the window's first page");
+  assert.deepEqual(switchTransition("a", "a", "normal"), { switching: false, fadeIn: 0 }, "the same profile loading again");
+  assert.deepEqual(switchTransition("a", "b", "normal"), { switching: true, fadeIn: fadeDuration("normal") });
+  assert.deepEqual(switchTransition("a", "b", "reduced"), { switching: true, fadeIn: fadeDuration("reduced") });
+  assert.deepEqual(switchTransition("a", "b", effectiveMotion("normal", true)), { switching: true, fadeIn: 0 }, "the system's Reduce Motion: no fade, the name still shows");
+  assert.ok(fadeDuration("normal") <= 300);
+});
+
+test("the window waits for the cover before it loads the next instance, and the cover names the profile", () => {
+  const shell = src("src/screens/Shell.tsx");
+  assert.match(shell, /switchTransition\(loadedProfile\.current, id, currentMotion\(\)\)/);
+  assert.match(shell, /const timer = transition\.fadeIn \? setTimeout\(load, transition\.fadeIn\) : null;/);
+  assert.match(shell, /<Connecting server=\{server\} visible=\{connecting && !showingCopy\} switchingTo=\{switching\?\.name \?\? null\} fadeIn=\{switching\?\.fadeIn \?\? 0\} \/>/);
+  assert.match(src("src/App.tsx"), /profileName=\{activeProfile\(profiles\)\?\.name \?\? ""\}/);
+  const cover = src("src/screens/Connecting.tsx");
+  assert.match(cover, /Animated\.timing\(opacity, \{ toValue: 1, duration: fadeIn, useNativeDriver: true \}\)/);
+  assert.match(cover, /t\("switchingTo", \{ name: switchingTo \}\)/);
+  // Only React Native's own Animated: no new native module, no new build.
+  assert.doesNotMatch(cover + shell, /react-native-reanimated|lottie/);
 });

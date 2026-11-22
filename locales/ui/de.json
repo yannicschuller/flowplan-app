@@ -17,6 +17,7 @@
   "redirect": "{server} leitet auf {detail} weiter. Gib bitte diese Adresse ein.",
   "notFlowplan": "Unter {server} läuft kein Flowplan.",
   "connectingTo": "Verbinde mit {server} …",
+  "switchingTo": "Wechsle zu {name} …",
   "offlineTitle": "Flowplan ist nicht erreichbar",
   "offlineServer": "{server} antwortet gerade nicht.",
   "offlineHint": "Ist dein Gerät online und im selben Netz wie die Instanz – oder mit dem VPN verbunden, über das du sie erreichst? Flowplan versucht es im Hintergrund weiter.",

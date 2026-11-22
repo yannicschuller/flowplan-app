@@ -785,6 +785,7 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           ref={shell}
           server={server}
           profile={activeProfile(profiles)?.id ?? ""}
+          profileName={activeProfile(profiles)?.name ?? ""}
           onMessage={(message) => void onMessage(message)}
           // The page's own link to the switcher counts as the page's request.
           onAppLink={(link) => (link === SWITCHER_LINK ? openSwitcher.current("page") : appLink(link))}

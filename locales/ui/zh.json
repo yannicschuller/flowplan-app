@@ -17,6 +17,7 @@
   "redirect": "{server} 重定向到了 {detail}。请输入该地址。",
   "notFlowplan": "{server} 上没有运行 Flowplan。",
   "connectingTo": "正在连接到 {server}…",
+  "switchingTo": "正在切换到 {name}…",
   "offlineTitle": "无法连接到 Flowplan",
   "offlineServer": "{server} 暂时没有响应。",
   "offlineHint": "你的设备是否已联网，并与该实例处于同一网络中，或已连接到访问它所需的 VPN？Flowplan 会在后台继续重试。",
