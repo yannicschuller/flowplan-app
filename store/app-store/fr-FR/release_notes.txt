@@ -1,3 +1,4 @@
 Nouveautés de cette version :
+• Changement d’instance avec une courte transition qui indique l’instance qui s’ouvre (sans animation avec « Réduire les animations »).
 • Impression : les pages et documents ouvrent la fenêtre d’impression du système – vers une imprimante ou « Enregistrer en PDF » (avec Flowplan 0.11.1).
 • Améliorations mineures et corrections de bugs
