@@ -1,4 +1,5 @@
 New in this version:
 • Switching instances with a short transition that shows which instance is opening (no animation with Reduce Motion).
 • Printing: pages and documents open the system's print dialog – to a printer or "Save as PDF" (with Flowplan 0.11.1).
+• Fixed: the app did not start on some iPhones, iPads and Macs.
 • Minor improvements and bug fixes
