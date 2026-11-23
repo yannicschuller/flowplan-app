@@ -86,6 +86,11 @@
           "expo-haptics",
           "expo-application"
         ]
+      },
+      "ios": {
+        "buildFromSource": [
+          "expo-print"
+        ]
       }
     }
   }
