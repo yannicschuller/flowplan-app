@@ -11,7 +11,8 @@ import WidgetKit
 ///   image markup of the page;
 /// - the swipe from the left edge for "back" (the web view's own gesture
 ///   walks its history, which is not what back means in Flowplan): a chevron
-///   follows the finger, and the app asks the page what back is.
+///   follows the finger, and the app asks the page what back is; the Apple
+///   Pencil never swipes back (it draws).
 /// - the sessions of the configurable widgets (WidgetShared.swift): the
 ///   widget extension reads instance, device token, profile and language
 ///   from the App Group's keychain – the active profile's and each
@@ -396,6 +397,15 @@ final class EdgeSwipeObserver: NSObject, UIGestureRecognizerDelegate {
     recognizer = nil
     indicator?.removeFromSuperview()
     indicator = nil
+  }
+
+  // Fingers only (flowplan#548): the Apple Pencil draws. A pencil stroke
+  // that starts at the left edge would otherwise go "back" and, as the
+  // recognizer cancels the touches it takes, cut the stroke in the page.
+  // A touch it never receives also leaves the web view's gestures nothing
+  // to wait for.
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    touch.type != .pencil
   }
 
   // Only over the web view: the app's own screens (settings, setup) keep
