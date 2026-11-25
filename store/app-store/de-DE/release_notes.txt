@@ -1,5 +1,3 @@
 Neu in dieser Version:
-• Instanz wechseln mit einem kurzen Übergang, der zeigt, welche Instanz geöffnet wird (ohne Animation bei „Bewegung reduzieren“).
-• Drucken: Seiten und Dokumente öffnen den Druckdialog des Systems – mit Drucker oder „Als PDF speichern“ (mit Flowplan 0.11.1).
-• Behoben: Die App startete auf manchen iPhones, iPads und Macs nicht.
+• Server nicht erreichbar? Die App zeigt jetzt die Adresse und fragt, ob sie sich geändert hat – mit „Erneut versuchen“ und „Server wechseln“, das direkt die Profilauswahl öffnet.
 • Kleinere Verbesserungen und Fehlerbehebungen
