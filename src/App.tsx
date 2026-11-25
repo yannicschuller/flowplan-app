@@ -789,7 +789,6 @@ function Root({ initialUrl, shortcut }: { initialUrl: string | null; shortcut?: 
           onMessage={(message) => void onMessage(message)}
           // The page's own link to the switcher counts as the page's request.
           onAppLink={(link) => (link === SWITCHER_LINK ? openSwitcher.current("page") : appLink(link))}
-          onProfiles={() => setSetup(true)}
           onProfileSwitcher={(from) => openSwitcher.current(from)}
           onPageLoaded={onPageLoaded}
           active={!settings && !switcher && !locked && !covered}

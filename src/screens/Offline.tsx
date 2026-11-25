@@ -1,7 +1,9 @@
 // Shown when the instance cannot be reached (no network, a network that does
 // not reach it – #203 –, or an error page without Flowplan behind it, #69):
-// the address, what to check, "Try again" and the profiles (another
-// instance, or this one's address). It keeps trying in the background – soon
+// the address, what to check, "Try again" and "Switch server" – the app's
+// profile switcher (another instance, or a new profile for an address that
+// changed, #539: a moved server never loads the page whose workspace menu
+// has "Switch instance …"). It keeps trying in the background – soon
 // at first, then every half minute (src/connecting.ts), at once when the
 // network changes or the app comes back to the front – and opens the page as
 // soon as Flowplan answers there.
@@ -36,14 +38,14 @@ export function Offline({
   reason,
   status = 0,
   onRetry,
-  onProfiles,
+  onSwitchServer,
 }: {
   server: string;
   reason: OfflineReason;
   // The error page's HTTP status ("errorPage").
   status?: number;
   onRetry: () => void;
-  onProfiles: () => void;
+  onSwitchServer: () => void;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -112,12 +114,13 @@ export function Offline({
             <Text style={[styles.text, styles.centered, { color: p.text, fontWeight: "600" }]} selectable>
               {t("offlineServer", { server: shortServer(server) })}
             </Text>
+            <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineMoved")}</Text>
             <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t("offlineHint")}</Text>
             <Text style={[styles.text, styles.centered, { color: p.muted, marginTop: 10 }]}>{t(reason === "copyFailed" ? "offlineCopyFailed" : "offlineNoCopy")}</Text>
           </>
         )}
         <Button title={t("retry")} onPress={onRetry} style={{ marginTop: 22 }} />
-        <Button title={t("switchProfile")} kind="secondary" onPress={onProfiles} style={{ marginTop: 10 }} />
+        <Button title={t("switchServer")} kind="secondary" onPress={onSwitchServer} style={{ marginTop: 10 }} />
       </ScrollView>
     </View>
   );

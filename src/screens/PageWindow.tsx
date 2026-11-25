@@ -42,7 +42,7 @@ export function PageWindow({ url }: { url: string | null }) {
   // "Instanz wechseln …", its link to the switcher and ⇧⌘P in this window.
   const [switcher, setSwitcher] = useState(false);
   const switcherClosedAt = useRef(0);
-  const openSwitcher = (from: "page" | "keyboard") => {
+  const openSwitcher = (from: "page" | "app" | "keyboard") => {
     const front = !locked && !covered;
     if (!mayOpenSwitcher({ open: switcher, front, closedAt: switcherClosedAt.current, now: Date.now(), fromPage: from === "page" })) return;
     if (!front) return;
@@ -73,9 +73,8 @@ export function PageWindow({ url }: { url: string | null }) {
         // flowplan:// links of the page go through the system to the main
         // window; its link to the switcher opens this window's.
         onAppLink={(link) => (link === SWITCHER_LINK ? openSwitcher("page") : void Linking.openURL(link).catch(() => {}))}
-        // The profiles are the main window's (the offline screen's "Switch profile").
-        onProfiles={() => void Linking.openURL("flowplan://change-server").catch(() => {})}
-        // The profile switcher opens here (the page's openProfileSwitcher, ⇧⌘P).
+        // The profile switcher opens here (the page's openProfileSwitcher,
+        // ⇧⌘P, the offline screen's "Switch server").
         onProfileSwitcher={(from) => openSwitcher(from)}
         onPageLoaded={() => {
           const path = pendingPath.current;

@@ -109,10 +109,11 @@ type Props = {
   profileName?: string;
   onMessage: (message: PageMessage) => void;
   onAppLink: (link: string) => void;
-  onProfiles: () => void;
   // The app's profile switcher (profile-picker.ts): the page's
-  // openProfileSwitcher from its top frame, and ⇧⌘P on a hardware keyboard.
-  onProfileSwitcher: (from: "page" | "keyboard") => void;
+  // openProfileSwitcher from its top frame (also from the message of a page
+  // that could not load, lib/stale-copy.ts in Flowplan), ⇧⌘P on a hardware
+  // keyboard and "Switch server" on the offline screen (#539).
+  onProfileSwitcher: (from: "page" | "app" | "keyboard") => void;
   onPageLoaded: () => void;
   // The window is in front (no app settings, lock or setup over it): only
   // then does the edge swipe go back in the page.
@@ -154,7 +155,7 @@ async function reachable(server: string): Promise<{ ok: boolean; build: string |
 // files (/_next/static, immutable) stay cacheable.
 const FRESH_DOCUMENT = { "Cache-Control": "no-cache" };
 
-export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, profileName = "", onMessage, onAppLink, onProfiles, onProfileSwitcher, onPageLoaded, active }, ref) {
+export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, profile, profileName = "", onMessage, onAppLink, onProfileSwitcher, onPageLoaded, active }, ref) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const motion = useMotion();
@@ -931,7 +932,7 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
     setSource({ uri: server });
     setAttempt((value) => value + 1);
   }, [server]);
-  if (offline) return <Offline server={server} reason={offline} status={errorStatus} onRetry={retry} onProfiles={onProfiles} />;
+  if (offline) return <Offline server={server} reason={offline} status={errorStatus} onRetry={retry} onSwitchServer={() => onProfileSwitcher("app")} />;
 
   return (
     <View
