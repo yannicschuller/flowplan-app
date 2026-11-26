@@ -8,5 +8,6 @@
   "updateAllowText": "Android's own names in the settings: \"Install unknown apps\" (de: \"Unbekannte Apps installieren\", fr: \"Installer des applis inconnues\", zh: \"安装未知应用\") and its switch \"Allow from this source\" (de: \"Aus dieser Quelle zulassen\", fr: \"Autoriser cette source\", zh: \"允许来自此来源的应用\").",
   "updateProgress": "Progress of the update download in megabytes (fr: Mo).",
   "errorDetails": "Small line under a failed save (scan, share, photo, voice memo). {detail} is an untranslated technical message, e.g. \"HTTP 502\" or \"ERR_UNABLE_TO_UPLOAD: …\", for the person to pass on in a bug report.",
-  "scanNeedsPlayServices": "Android without Google Play services (ML Kit's document scanner runs there). Google's own name of the service: de \"Google Play-Dienste\", fr \"services Google Play\", zh \"Google Play 服务\". The file is a PDF or a photo the person picks instead."
+  "scanNeedsPlayServices": "Android without Google Play services (ML Kit's document scanner runs there). Google's own name of the service: de \"Google Play-Dienste\", fr \"services Google Play\", zh \"Google Play 服务\". The file is a PDF or a photo the person picks instead.",
+  "sharePagesSaved": "Android share sheet, after files were saved as pages of their own (one page per file) in a space. {count} is a number, {target} the space's name."
 }

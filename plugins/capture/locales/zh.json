@@ -10,6 +10,7 @@
   "search": "搜索页面或数据库",
   "database": "数据库 · 新记录",
   "page": "页面 · 新子页面",
+  "space": "空间 · 每个文件一个页面",
   "loading": "正在加载…",
   "saving": "正在保存…",
   "saved": "已保存到 {target}",

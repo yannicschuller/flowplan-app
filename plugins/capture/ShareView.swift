@@ -50,7 +50,8 @@ final class FPSShareModel: ObservableObject {
     if content.skipped > 0 { notice = FPSStrings.t("skipped") }
     do {
       let answer: FPSTargets = try await FPSAPI.targets(session: session)
-      targets = answer.targets
+      // Spaces take files only (a page per file).
+      targets = files.isEmpty ? answer.targets.filter { $0.kind != "space" } : answer.targets
       maxFiles = answer.maxFiles
       maxUploadMb = answer.maxUploadMb
       // The last target of this profile, else the inbox, else the first.
@@ -71,7 +72,8 @@ final class FPSShareModel: ObservableObject {
   }
 
   var canSave: Bool {
-    guard phase == .ready, target != nil else { return false }
+    guard phase == .ready, let target = target else { return false }
+    if target.kind == "space" { return !files.isEmpty }
     let hasText: Bool = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     let hasTitle: Bool = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     return !files.isEmpty || !link.isEmpty || hasText || hasTitle

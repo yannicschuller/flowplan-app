@@ -72,13 +72,16 @@ async function call<T>(
 // ---- Targets and saving ----
 
 export type CaptureTarget = { id: string; name: string; kind: string; space?: string; workspace?: string; encrypted?: boolean; locked?: boolean };
-export type CaptureTargets = { inbox: CaptureTarget | null; targets: CaptureTarget[]; maxFiles?: number; maxUploadMb?: number };
+// `spaces` (Flowplan #569): where files can become pages of their own;
+// instances from before list none, and take no place "pages".
+export type CaptureSpace = { id: string; name: string; icon?: string; workspace?: string };
+export type CaptureTargets = { inbox: CaptureTarget | null; targets: CaptureTarget[]; spaces?: CaptureSpace[]; maxFiles?: number; maxUploadMb?: number };
 
 export function captureTargets(connection: CaptureConnection, fetcher: Fetch = defaultFetch) {
   return call<CaptureTargets>(connection, "targets", {}, fetcher);
 }
 
-type Saved = { pageId: string; rowId?: string; url: string; title: string };
+type Saved = { pageId: string; rowId?: string; url: string; title: string; pages?: { pageId: string; title: string; url: string }[] };
 const SAVE_TIMEOUT = 120_000;
 
 // The file with its fields to capture/save: with the platform's uploader
@@ -139,6 +142,57 @@ export function saveImport(
   if (title) fields.title = title.slice(0, 300);
   const file = { uri: input.file.uri, name: input.file.name, type: input.file.type || "application/octet-stream" };
   return save(connection, fields, file, fetcher, idempotencyKey, uploader);
+}
+
+// ---- Files as pages of their own (Flowplan #569) ----
+
+// The spaces the instance offers for "a page per file"; none from
+// instances before #569 (the choice is not shown then).
+export function filePageSpaces(targets: Pick<CaptureTargets, "spaces"> | null | undefined): CaptureSpace[] {
+  const list = Array.isArray(targets?.spaces) ? targets.spaces : [];
+  return list.filter((space) => !!space && typeof space.id === "string" && UUID.test(space.id) && typeof space.name === "string" && !!space.name.trim());
+}
+
+// One file as a page of its own in the space (below `parentId`, else at
+// its top level), titled with the file's name. One request per file: the
+// platform's uploader sends one file at a time, and a failure keeps the
+// pages made before.
+export function saveFilePage(
+  connection: CaptureConnection,
+  input: { spaceId: string; parentId?: string; file: { uri: string; name: string; type: string } },
+  fetcher: Fetch = defaultFetch,
+  idempotencyKey: string = newIdempotencyKey(),
+  uploader: NativeUploader | null = platformUploader(connection.server),
+) {
+  const fields: Record<string, string> = { place: "pages", spaceId: input.spaceId };
+  if (input.parentId) fields.parentId = input.parentId;
+  const file = { uri: input.file.uri, name: input.file.name, type: input.file.type || "application/octet-stream" };
+  return save(connection, fields, file, fetcher, idempotencyKey, uploader);
+}
+
+// Several files one after the other. `keys` keeps each file's
+// Idempotency-Key and `saved` the files already through, across attempts:
+// saving again after a failure sends only the rest, each with its key (the
+// first attempt may have arrived). The answer: the first page's path.
+export async function saveFilePages(
+  connection: CaptureConnection,
+  spaceId: string,
+  files: { uri: string; name: string; type: string }[],
+  memory: { keys: Map<string, string>; saved: Map<string, string> },
+  onProgress: (done: number, total: number) => void = () => {},
+  fetcher: Fetch = defaultFetch,
+  uploader: NativeUploader | null = platformUploader(connection.server),
+): Promise<CaptureResult<{ url: string; count: number }>> {
+  for (const [index, file] of files.entries()) {
+    if (memory.saved.has(file.uri)) continue;
+    onProgress(index, files.length);
+    if (!memory.keys.has(file.uri)) memory.keys.set(file.uri, newIdempotencyKey());
+    const result = await saveFilePage(connection, { spaceId, file }, fetcher, memory.keys.get(file.uri)!, uploader);
+    if (!result.ok) return result;
+    memory.saved.set(file.uri, result.value.url);
+  }
+  onProgress(files.length, files.length);
+  return { ok: true, value: { url: files.map((file) => memory.saved.get(file.uri)).find(Boolean) ?? "", count: files.length } };
 }
 
 // Choosing a target: the inbox first, then the rest; protected pages are

@@ -10,6 +10,7 @@
   "search": "Rechercher une page ou une base de données",
   "database": "Base de données · nouvel enregistrement",
   "page": "Page · nouvelle sous-page",
+  "space": "Espace · une page par fichier",
   "loading": "Chargement …",
   "saving": "Enregistrement …",
   "saved": "Enregistré dans {target}",

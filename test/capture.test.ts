@@ -5,9 +5,12 @@ import { join } from "node:path";
 import config from "../app.config";
 import {
   entriesKey,
+  filePageSpaces,
   isSpotlightData,
   matchesTarget,
   pageScanRequest,
+  saveFilePage,
+  saveFilePages,
   saveScan,
   scanLanguages,
   scanRequest,
@@ -126,6 +129,56 @@ test("a scan is sent as multipart with its text, appended to the page (FormData 
     json: async () => ({}),
   }));
   assert.deepEqual(signedOut, { ok: false, signedOut: true });
+});
+
+test("a page per file (Flowplan #569): spaces only from instances that list them, one request per file", async () => {
+  const SPACE = "1f2e3d4c-5b6a-4789-8abc-def012345678";
+  // Instances before #569 send no spaces: nothing is offered.
+  assert.deepEqual(filePageSpaces({}), []);
+  assert.deepEqual(filePageSpaces(null), []);
+  assert.deepEqual(
+    filePageSpaces({ spaces: [{ id: SPACE, name: "Team", workspace: "Acme" }, { id: "not-a-uuid", name: "X" }, { id: SPACE, name: " " }] }).map((s) => s.name),
+    ["Team"],
+  );
+  const sent: NativeUploadRequest[] = [];
+  const connection = { server: "https://flowplan.example.com", token: "fpd_x", lang: "en" };
+  const one = await saveFilePage(connection, { spaceId: SPACE, file: { uri: "file:///cache/shared/Plan.pdf", name: "Plan.pdf", type: "application/pdf" } }, undefined, "page-key-1", async (request) => {
+    sent.push(request);
+    return { status: 200, body: JSON.stringify({ ok: true, pageId: PAGE, url: `/#page=${PAGE}`, title: "Plan" }) };
+  });
+  assert.ok(one.ok);
+  assert.equal(sent[0].url, "https://flowplan.example.com/api/mobile/capture/save?lang=en");
+  assert.deepEqual(sent[0].fields, { place: "pages", spaceId: SPACE });
+  assert.equal(sent[0].headers["Idempotency-Key"], "page-key-1");
+  // Several files: one after the other; after a failure only the rest go
+  // again, each with the key of its first attempt.
+  const memory = { keys: new Map<string, string>(), saved: new Map<string, string>() };
+  const files = ["a.png", "b.png", "c.pdf"].map((name) => ({ uri: `file:///cache/shared/${name}`, name, type: name.endsWith(".pdf") ? "application/pdf" : "image/png" }));
+  const calls: NativeUploadRequest[] = [];
+  let refuse = "b.png";
+  const uploader = async (request: NativeUploadRequest) => {
+    calls.push(request);
+    if (request.file.name === refuse) return { status: 413, body: JSON.stringify({ error: "Too large." }) };
+    return { status: 200, body: JSON.stringify({ ok: true, pageId: PAGE, url: `/#page=${request.file.name}`, title: request.file.name }) };
+  };
+  const progress: string[] = [];
+  const first = await saveFilePages(connection, SPACE, files, memory, (done, total) => progress.push(`${done}/${total}`), undefined, uploader);
+  assert.ok(!first.ok);
+  assert.equal("error" in first && first.error, "Too large.");
+  assert.deepEqual(calls.map((c) => c.file.name), ["a.png", "b.png"]);
+  refuse = "";
+  const second = await saveFilePages(connection, SPACE, files, memory, (done, total) => progress.push(`${done}/${total}`), undefined, uploader);
+  assert.ok(second.ok);
+  assert.deepEqual(second.ok && second.value, { url: "/#page=a.png", count: 3 });
+  assert.deepEqual(calls.map((c) => c.file.name), ["a.png", "b.png", "b.png", "c.pdf"]);
+  assert.equal(calls[1].headers["Idempotency-Key"], calls[2].headers["Idempotency-Key"]);
+  assert.notEqual(calls[0].headers["Idempotency-Key"], calls[1].headers["Idempotency-Key"]);
+  assert.deepEqual(progress, ["0/3", "1/3", "1/3", "2/3", "3/3"]);
+  // The share extension sends spaces as place "pages" with the files only.
+  const model = readFileSync(join(root, "plugins/capture/ShareModel.swift"), "utf8");
+  assert.match(model, /json\["spaces"\]/);
+  assert.match(model, /field\("place", "pages"\)/);
+  assert.match(model, /field\("spaceId", target\.id\)/);
 });
 
 test("targets: the inbox first, protected pages left out, searchable", () => {

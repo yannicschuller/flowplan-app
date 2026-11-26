@@ -10,6 +10,7 @@
   "search": "Szukaj strony lub bazy danych",
   "database": "Baza danych · nowy rekord",
   "page": "Strona · nowa podstrona",
+  "space": "Przestrzeń · strona na plik",
   "loading": "Ładowanie …",
   "saving": "Zapisywanie …",
   "saved": "Zapisano w {target}",

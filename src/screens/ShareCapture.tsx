@@ -3,7 +3,10 @@
 // shortcut). One compact screen: where it goes – the inbox (the person's
 // default capture database) or a page or database they pick –, title, text,
 // link and files, saved in one go with the instance's capture.share action
-// (android/share.ts). After a share, "Done" goes back to the app that shared.
+// (android/share.ts). Files can also go to a space, a page of its own each
+// (Flowplan #569, capture/save with place "pages") – offered only by
+// instances that list spaces. After a share, "Done" goes back to the app
+// that shared.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -11,6 +14,7 @@ import { clearShare, leaveApp, type SharedContent, type SharedFile } from "../..
 import { t } from "../i18n";
 import { localDay } from "../summary";
 import { widgetData, widgetOptions } from "../widgets/api";
+import { captureTargets, filePageSpaces, saveFilePages } from "../capture";
 import { connection, refreshSuite, timeZone } from "../native/suite";
 import { fileSize, hasContent, MAX_SHARE_FILES, saveShare, shareDraft, shareTargetPath, type ShareDraft } from "../android/share";
 import { Button, SheetBody, styles, usePalette } from "../ui";
@@ -41,6 +45,8 @@ export function ShareCapture({
   const [draft, setDraft] = useState<ShareDraft>(EMPTY);
   const [inbox, setInbox] = useState<Target | null>(null);
   const [targets, setTargets] = useState<Target[]>([]);
+  // Spaces for "a page per file" (kind "space"); shown while there are files.
+  const [spaces, setSpaces] = useState<Target[]>([]);
   const [target, setTarget] = useState<Target | null>(null);
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,7 +63,9 @@ export function ShareCapture({
     setDraft(request.kind === "share" ? shareDraft(request.content) : EMPTY);
     setInbox(null);
     setTargets([]);
+    setSpaces([]);
     setTarget(null);
+    pagesMemory.current = { keys: new Map(), saved: new Map() };
     setPicking(false);
     setQuery("");
     setTakesShare(true);
@@ -70,8 +78,17 @@ export function ShareCapture({
     void Promise.all([
       widgetData(server, [{ id: "capture", kind: "capture", config: {} }], { today: localDay(), zone: timeZone() }),
       widgetOptions(server, "capture"),
-    ]).then(([data, options]) => {
+      captureTargets(server),
+    ]).then(([data, options, capture]) => {
       if (!current) return;
+      setSpaces(
+        (capture.ok ? filePageSpaces(capture.value) : []).map((space) => ({
+          id: space.id,
+          name: space.name,
+          detail: [t("shareSpacePages"), space.workspace || ""].filter(Boolean).join(" · "),
+          kind: "space",
+        })),
+      );
       if (!data.ok && !options.ok) return setMessage(t("widgetOffline"));
       const answer = data.ok ? data.value.get("capture") : null;
       const found = answer?.ok ? (answer.data.target as Record<string, unknown> | null) : null;
@@ -93,10 +110,15 @@ export function ShareCapture({
     };
   }, [request]);
 
+  const choices = useMemo(() => (draft.files.length ? [...targets, ...spaces] : targets), [targets, spaces, draft.files.length]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return targets.filter((item) => !q || `${item.name} ${item.detail}`.toLowerCase().includes(q)).slice(0, 50);
-  }, [targets, query]);
+    return choices.filter((item) => !q || `${item.name} ${item.detail}`.toLowerCase().includes(q)).slice(0, 50);
+  }, [choices, query]);
+  // A space without files left takes nothing: back to the inbox.
+  useEffect(() => {
+    if (target?.kind === "space" && !draft.files.length) setTarget(inbox);
+  }, [target, draft.files.length, inbox]);
 
   const set = (change: Partial<ShareDraft>) => setDraft((value) => ({ ...value, ...change }));
   const fromShare = request?.kind === "share";
@@ -111,9 +133,30 @@ export function ShareCapture({
   // The share's Idempotency-Key: Save again after a failure sends the same
   // one while the share is unchanged (the first attempt may have arrived).
   const saveKey = useRef<DraftKey | null>(null);
+  // A page per file: each file's key and the files already through.
+  const pagesMemory = useRef({ keys: new Map<string, string>(), saved: new Map<string, string>() });
   const save = async () => {
     const server = connection();
     if (!server || !target || !hasContent(draft)) return;
+    if (target.kind === "space") {
+      if (!draft.files.length) return;
+      setBusy(true);
+      setDetail("");
+      const result = await saveFilePages(server, target.id, draft.files, pagesMemory.current, (done, total) =>
+        setMessage(t("sharePagesProgress", { done: String(Math.min(done + 1, total)), total: String(total) })),
+      );
+      setBusy(false);
+      if (result.ok) {
+        setSaved(result.value.url);
+        setMessage(t("sharePagesSaved", { count: String(result.value.count), target: target.name }));
+        if (fromShare) clearShare();
+        void refreshSuite({ force: true });
+      } else {
+        setMessage(t("captureFailed", { error: "error" in result ? result.error || t("widgetOffline") : t("widgetSignIn") }));
+        setDetail(detailOf(result));
+      }
+      return;
+    }
     // Instances from before capture.share: text and links through their
     // web share target, files not at all.
     if (!takesShare) {
@@ -172,7 +215,7 @@ export function ShareCapture({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${t("configTarget")}: ${target?.name ?? "–"}. ${t("shareChange")}`}
-            disabled={done || !targets.length}
+            disabled={done || !choices.length}
             onPress={() => setPicking((value) => !value)}
             style={{ flexDirection: "row", alignItems: "center", backgroundColor: p.card, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginTop: 4 }}
           >
@@ -182,7 +225,7 @@ export function ShareCapture({
                 {target ? (target.id === inbox?.id ? `${t("shareInbox")} · ${target.name}` : target.name) : "–"}
               </Text>
             </View>
-            {targets.length && !done ? <Text style={{ color: p.brand, fontWeight: "600" }}>{picking ? "▲" : t("shareChange")}</Text> : null}
+            {choices.length && !done ? <Text style={{ color: p.brand, fontWeight: "600" }}>{picking ? "▲" : t("shareChange")}</Text> : null}
           </Pressable>
           {picking && !done ? (
             <View style={{ marginTop: 8 }}>
@@ -202,14 +245,14 @@ export function ShareCapture({
                     accessibilityRole="radio"
                     accessibilityState={{ checked: item.id === target?.id }}
                     onPress={() => {
-                      setTarget(targets.find((x) => x.id === item.id) ?? inbox);
+                      setTarget(choices.find((x) => x.id === item.id) ?? inbox);
                       setPicking(false);
                       setQuery("");
                       setMessage("");
                     }}
                     style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: index ? 1 : 0, borderColor: p.line }}
                   >
-                    <Text style={{ width: 26, color: p.muted }}>{item.kind === "database" ? "▦" : "▤"}</Text>
+                    <Text style={{ width: 26, color: p.muted }}>{item.kind === "database" ? "▦" : item.kind === "space" ? "▣" : "▤"}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.text, { color: p.text }]} numberOfLines={1}>
                         {item.name || t("configDefault")}
@@ -293,7 +336,13 @@ export function ShareCapture({
                   <Button title={t("choosePhoto")} kind="secondary" disabled={busy} onPress={() => void addPhoto(false)} style={{ flex: 1 }} />
                 </View>
               ) : null}
-              <Button title={t("save")} busy={busy} disabled={!target || !hasContent(draft)} onPress={() => void save()} style={{ marginTop: 18 }} />
+              <Button
+                title={t("save")}
+                busy={busy}
+                disabled={!target || !hasContent(draft) || (target.kind === "space" && !draft.files.length)}
+                onPress={() => void save()}
+                style={{ marginTop: 18 }}
+              />
             </>
           ) : null}
 

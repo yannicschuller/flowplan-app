@@ -45,7 +45,8 @@ enum FPSKeychain {
 }
 
 /// A place to save to: the inbox (the capture database), a database (a new
-/// record) or a page (a new sub page).
+/// record), a page (a new sub page) or a space (kind "space": every file a
+/// page of its own there – instances that list `spaces`, Flowplan #569).
 struct FPSTarget: Identifiable, Equatable {
   let id: String
   let name: String
@@ -57,7 +58,7 @@ struct FPSTarget: Identifiable, Equatable {
     inbox ? FPSStrings.t("inbox") + " · " + name : name
   }
   var detail: String {
-    let kindText: String = kind == "database" ? FPSStrings.t("database") : FPSStrings.t("page")
+    let kindText: String = kind == "database" ? FPSStrings.t("database") : kind == "space" ? FPSStrings.t("space") : FPSStrings.t("page")
     return place.isEmpty ? kindText : kindText + " · " + place
   }
 }
@@ -294,6 +295,13 @@ enum FPSAPI {
       let kind: String = (entry["kind"] as? String) ?? "document"
       targets.append(FPSTarget(id: id, name: name, kind: kind, place: place, inbox: false))
     }
+    // Spaces (Flowplan #569): only instances that list them take files as
+    // pages of their own ("place" "pages"); older ones send none.
+    for entry in (json["spaces"] as? [[String: Any]]) ?? [] {
+      guard let id = entry["id"] as? String, let name = entry["name"] as? String, !name.isEmpty else { continue }
+      let workspace: String = (entry["workspace"] as? String) ?? ""
+      targets.append(FPSTarget(id: id, name: name, kind: "space", place: workspace, inbox: false))
+    }
     let maxFiles: Int = (json["maxFiles"] as? NSNumber)?.intValue ?? 10
     let maxUploadMb: Double = (json["maxUploadMb"] as? NSNumber)?.doubleValue ?? 25
     return FPSTargets(targets: targets, maxFiles: maxFiles, maxUploadMb: maxUploadMb)
@@ -329,11 +337,17 @@ enum FPSAPI {
       body.append(Data(value.utf8))
       body.append(Data("\r\n".utf8))
     }
-    field("targetId", target.inbox ? "inbox" : target.id)
-    field("place", "subpage")
-    if !title.isEmpty { field("title", title) }
-    if !text.isEmpty { field("text", text) }
-    if !link.isEmpty { field("url", link) }
+    if target.kind == "space" {
+      // Every file a page of its own in the space; title, text and link stay out.
+      field("place", "pages")
+      field("spaceId", target.id)
+    } else {
+      field("targetId", target.inbox ? "inbox" : target.id)
+      field("place", "subpage")
+      if !title.isEmpty { field("title", title) }
+      if !text.isEmpty { field("text", text) }
+      if !link.isEmpty { field("url", link) }
+    }
     for file in files {
       let safeName: String = file.name.replacingOccurrences(of: "\"", with: "'").replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
       body.append(Data(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + safeName + "\"\r\n").utf8))
