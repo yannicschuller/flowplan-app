@@ -1,3 +1,4 @@
 Novidades desta versão:
-• Não consegue aceder ao seu servidor? A app mostra agora o endereço e pergunta se mudou – com “Tentar novamente” e “Mudar de servidor”, que abre logo a escolha de perfil.
+• O Flowplan fala agora polaco, português (Portugal) e russo – a app, os widgets, a Siri e os Atalhos e a extensão de partilha seguem o idioma do seu dispositivo.
+• Apple Pencil: desenhar na margem esquerda de um caderno, PDF ou quadro branco já não volta ao ecrã anterior.
 • Pequenas melhorias e correções de erros

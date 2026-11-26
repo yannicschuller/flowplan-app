@@ -1,3 +1,4 @@
 New in this version:
-• Can't reach your server? The app now shows its address and asks whether it has changed – with "Try again" and "Switch server", which opens the profile switcher right away.
+• Flowplan now speaks Polish, Portuguese (Portugal) and Russian – the app, widgets, Siri & Shortcuts and the share extension follow your phone's language.
+• Apple Pencil: drawing at the left edge of a notebook, PDF or whiteboard no longer swipes back to the previous screen.
 • Minor improvements and bug fixes

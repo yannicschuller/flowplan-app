@@ -1,3 +1,4 @@
 Neu in dieser Version:
-• Server nicht erreichbar? Die App zeigt jetzt die Adresse und fragt, ob sie sich geändert hat – mit „Erneut versuchen“ und „Server wechseln“, das direkt die Profilauswahl öffnet.
+• Flowplan spricht jetzt Polnisch, Portugiesisch (Portugal) und Russisch – App, Widgets, Siri & Kurzbefehle und die Teilen-Erweiterung folgen der Sprache deines Geräts.
+• Apple Pencil: Zeichnen am linken Rand eines Notizbuchs, PDFs oder Whiteboards wischt nicht mehr zur vorherigen Ansicht zurück.
 • Kleinere Verbesserungen und Fehlerbehebungen
