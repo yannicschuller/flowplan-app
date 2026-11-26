@@ -6,12 +6,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { buildNumber } from "./src/version";
 
 // The native texts of the widgets, controls and App Shortcuts (German,
-// English, French, Simplified Chinese): Localizable.strings of the app and
-// the widget extension.
+// English, French, Polish, European Portuguese, Russian, Simplified
+// Chinese): Localizable.strings of the app and the widget extension.
+type Lang = "de" | "en" | "fr" | "pl" | "pt" | "ru" | "zh";
 const nativeStrings = require("./plugins/widget-suite/strings") as {
-  strings: Record<string, { de: string; fr: string; zh: string }>;
+  strings: Record<string, Record<Lang, string>>;
   gallery: Record<string, { label: string[]; description: string[] }>;
-  localizable: (table: Record<string, { de: string; fr: string; zh: string }>, lang: string) => Record<string, string>;
+  localizable: (table: Record<string, Record<Lang, string>>, lang: string) => Record<string, string>;
   galleryStrings: (lang: string) => Record<string, string>;
 };
 // Siri, Shortcuts, Focus filter and the controls of plugins/intents.
@@ -23,9 +24,12 @@ const PUSH_PLACEHOLDER = {
   de: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Neue Mitteilung" },
   en: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "New notification" },
   fr: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Nouvelle notification" },
+  pl: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Nowe powiadomienie" },
+  pt: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Nova notificação" },
+  ru: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "Новое уведомление" },
   zh: { FP_PUSH_TITLE: "Flowplan", FP_PUSH_BODY: "新通知" },
 } as const;
-const locale = (lang: "de" | "en" | "fr" | "zh") => {
+const locale = (lang: Lang) => {
   const json = JSON.parse(readFileSync(`./locales/${lang}.json`, "utf8")) as { ios: Record<string, string>; android: Record<string, string> };
   return {
     ...json,
@@ -118,8 +122,18 @@ const config: ExpoConfig = {
   // Simplified Chinese as zh-Hans: iOS zh-Hans.lproj, Android
   // values-b+zh+Hans – used for zh-CN, zh-SG and zh-Hans, not for Traditional
   // Chinese (zh-Hant, zh-TW, zh-HK), which falls back to English like the
-  // app's own texts (src/i18n.ts → pickLocale).
-  locales: { de: locale("de"), en: locale("en"), fr: locale("fr"), "zh-Hans": locale("zh") },
+  // app's own texts (src/i18n.ts → pickLocale). European Portuguese as
+  // pt-PT: iOS pt-PT.lproj, Android values-b+pt+PT; Brazilian Portuguese
+  // devices get it as their nearest Portuguese, as the app's own texts do.
+  locales: {
+    de: locale("de"),
+    en: locale("en"),
+    fr: locale("fr"),
+    pl: locale("pl"),
+    "pt-PT": locale("pt"),
+    ru: locale("ru"),
+    "zh-Hans": locale("zh"),
+  },
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     buildNumber: String(build),
@@ -128,7 +142,7 @@ const config: ExpoConfig = {
     config: { usesNonExemptEncryption: false },
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
-      CFBundleLocalizations: ["de", "en", "fr", "zh-Hans"],
+      CFBundleLocalizations: ["de", "en", "fr", "pl", "pt-PT", "ru", "zh-Hans"],
       // The web app records audio (voice notes: getUserMedia({ audio })) and
       // takes files with <input type=file accept="image/*"> (pages,
       // whiteboard), for which the web view offers "Take Photo or Video";

@@ -1,0 +1,3 @@
+Novidades desta versão:
+• Não consegue aceder ao seu servidor? A app mostra agora o endereço e pergunta se mudou – com “Tentar novamente” e “Mudar de servidor”, que abre logo a escolha de perfil.
+• Pequenas melhorias e correções de erros

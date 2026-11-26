@@ -6,7 +6,7 @@
 // kinds focus, meeting, jobs, incident) – finished texts, no null (the
 // props reach a property list on iOS). Pure functions, tested in
 // test/activities.test.ts; native/activities.ts starts, updates and ends.
-import { t, type Locale } from "./i18n";
+import { intlLocale, t, type Locale } from "./i18n";
 import { appLink } from "./navigation";
 import { pageLink } from "./widgets/present";
 
@@ -41,7 +41,7 @@ export type Activities = {
 type Data = Record<string, unknown> | null | undefined;
 const str = (value: unknown) => (typeof value === "string" ? value : "");
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
-const clock = (ms: number, locale: Locale) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+const clock = (ms: number, locale: Locale) => new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 
 // Which Live Activities the person wants (app settings); focus, voice
 // memos and the timer always show while they run.

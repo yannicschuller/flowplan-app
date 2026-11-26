@@ -60,6 +60,10 @@ test("scan titles and recognition languages follow the person's language", () =>
   assert.deepEqual(scanLanguages("en"), ["en-US", "de-DE", "fr-FR"]);
   assert.equal(scanTitle("zh", date), "扫描 2026-10-24 09.05");
   assert.deepEqual(scanLanguages("zh"), ["zh-Hans", "en-US"]);
+  assert.deepEqual(scanLanguages("ru"), ["ru-RU", "en-US"]);
+  assert.deepEqual(scanLanguages("pt"), ["pt-BR", "de-DE", "en-US", "fr-FR"]);
+  assert.deepEqual(scanLanguages("pl"), ["pl-PL", "de-DE", "en-US", "fr-FR"]);
+  assert.equal(scanTitle("pt", date), "Digitalização 2026-10-24 09.05");
 });
 
 test("Android: a scan goes with the native uploader, its text as a field, 120 s to answer", async () => {
@@ -172,7 +176,7 @@ test("a Spotlight result's link opens its path (as the Swift side encodes it)", 
   assert.match(swift, /abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-\._~\//);
 });
 
-test("the share extension speaks German, English, French and Chinese; every key it uses exists", () => {
+test("the share extension speaks every language of the app; every key it uses exists", () => {
   for (const [key, values] of Object.entries(strings)) {
     assert.equal(values.length, LANGS.length, key);
     for (const value of values) assert.ok(value.trim(), key);
@@ -193,8 +197,11 @@ test("the share extension speaks German, English, French and Chinese; every key 
   // Simplified Chinese: "zh-Hans" on iOS, "zh" for the app and the instance.
   assert.match(table, /private static let zh: \[String: String\] = \[/);
   assert.match(table, /if lang == "zh" \{ return zh \}/);
-  assert.match(table, /from: \["de","en","fr","zh-Hans"\]/);
-  assert.match(table, /found == "zh-Hans" \? "zh" : found/);
+  // European Portuguese: "pt-PT" on iOS, "pt" for the app and the instance.
+  assert.match(table, /if lang == "pt" \{ return pt \}/);
+  assert.match(table, /"heading": "Guardar no Flowplan",/);
+  assert.match(table, /from: \["de","en","fr","pl","pt-PT","ru","zh-Hans"\]/);
+  assert.match(table, /found == "zh-Hans" \? "zh" : found == "pt-PT" \? "pt" : found/);
 });
 
 test("the app's own texts for scanner and Spotlight exist in every language", () => {

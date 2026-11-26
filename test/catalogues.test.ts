@@ -11,7 +11,7 @@ import { sampleResult } from "../src/widgets/present";
 // format the translation tool writes.
 const root = join(import.meta.dirname, "..");
 const FOLDERS = ["locales/ui", "plugins/capture/locales", "plugins/intents/locales", "plugins/widget-suite/locales"];
-const LANGS = ["de", "en", "fr", "zh"] as const;
+const LANGS = ["de", "en", "fr", "pl", "pt", "ru", "zh"] as const;
 
 const read = (folder: string, name: string) => {
   const raw = readFileSync(join(root, folder, `${name}.json`), "utf8");
@@ -34,8 +34,8 @@ for (const folder of FOLDERS)
       for (const key of keys) {
         const text = catalogues[lang][key];
         assert.equal(typeof text, "string", `${lang}: ${key}`);
-        // German and English are complete; an empty French or Chinese text
-        // reads as English.
+        // German and English are complete; an empty text of another
+        // language reads as English.
         if (lang === "de" || lang === "en") assert.ok(text.trim(), `${lang}: ${key} is empty`);
         if (text) assert.deepEqual(placeholders(text), placeholders(catalogues.en[key]), `${lang}: ${key}`);
       }
@@ -74,6 +74,30 @@ test("French says vous", () => {
     assert.doesNotMatch(readFileSync(file, "utf8"), informal, file);
   for (const kind of SUITE_KINDS)
     for (const text of strings(sampleResult(kind, "fr", "2026-10-22", Date.parse("2026-10-22T10:00:00Z")))) assert.doesNotMatch(text, informal, `sample ${kind}: ${text}`);
+});
+
+// Russian and Portuguese address the reader formally ("вы"; Portuguese
+// with "o seu/a sua", never "tu"), Polish informally ("ty", never
+// "Pan"/"Pani") – as Flowplan's own catalogues do.
+test("Russian says вы, Portuguese never tu, Polish never Pan/Pani", () => {
+  const rules: [string, RegExp, string[]][] = [
+    ["ru", /(?<!\p{L})(?:ты|тебя|тебе|тобой|тво[йяеёи]\p{L}*)(?!\p{L})/iu, ["store/app-store/ru", "store/google-play/ru-RU"]],
+    ["pt", /(?<!\p{L})(?:tu|te|ti|contigo|teu|tua|teus|tuas)(?!\p{L})/iu, ["store/app-store/pt-PT", "store/google-play/pt-PT"]],
+    ["pl", /(?<!\p{L})(?:Pan|Pani|Państwo|Pana|Panu)(?!\p{L})/u, ["store/app-store/pl", "store/google-play/pl-PL"]],
+  ];
+  const strings = (value: unknown): string[] =>
+    typeof value === "string" ? [value] : value && typeof value === "object" ? Object.values(value).flatMap(strings) : [];
+  const listings = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? listings(join(dir, entry.name)) : entry.name.endsWith(".txt") ? [join(dir, entry.name)] : [],
+    );
+  for (const [lang, informal, stores] of rules) {
+    for (const folder of FOLDERS) for (const [key, text] of Object.entries(read(folder, lang))) assert.doesNotMatch(text, informal, `${folder}/${lang}: ${key}`);
+    for (const text of strings(JSON.parse(readFileSync(join(root, `locales/${lang}.json`), "utf8")))) assert.doesNotMatch(text, informal, `locales/${lang}.json: ${text}`);
+    for (const file of stores.flatMap((dir) => listings(join(root, dir)))) assert.doesNotMatch(readFileSync(file, "utf8"), informal, file);
+    for (const kind of SUITE_KINDS)
+      for (const text of strings(sampleResult(kind, lang as "ru", "2026-10-22", Date.parse("2026-10-22T10:00:00Z")))) assert.doesNotMatch(text, informal, `sample ${kind} ${lang}: ${text}`);
+  }
 });
 
 test("src/i18n.ts loads its catalogues without default imports (iOS widget layout bundle)", () => {

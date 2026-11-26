@@ -86,6 +86,9 @@ enum FPNotificationContent {
     switch language {
     case "de": return "Neue Mitteilung"
     case "fr": return "Nouvelle notification"
+    case "pl": return "Nowe powiadomienie"
+    case "pt": return "Nova notificação"
+    case "ru": return "Новое уведомление"
     // Simplified Chinese only; Traditional (zh-Hant) stays English, as the app.
     case "zh" where preferred.hasPrefix("zh-hans"): return "新通知"
     default: return "New notification"

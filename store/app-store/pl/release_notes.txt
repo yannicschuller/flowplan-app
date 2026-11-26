@@ -1,0 +1,3 @@
+Nowości w tej wersji:
+• Nie możesz połączyć się z serwerem? Aplikacja pokazuje teraz jego adres i pyta, czy się zmienił – z opcjami „Spróbuj ponownie” i „Przełącz serwer”, która od razu otwiera wybór profilu.
+• Drobne ulepszenia i poprawki błędów

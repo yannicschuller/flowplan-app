@@ -1,12 +1,13 @@
 // The texts of the share extension (plugins/capture/*.swift) in German,
-// English, French and Simplified Chinese: plugins/capture/locales/<lang>.json
+// English, French, Polish, European Portuguese, Russian and Simplified
+// Chinese: plugins/capture/locales/<lang>.json
 // (German is the source; translations come in as pull requests from
 // translate.flowplan.org). plugins/with-capture.js writes them into the
 // extension as Swift (ShareStrings.swift). {name} marks a value.
-const LANGS = ["de", "en", "fr", "zh"];
+const LANGS = ["de", "en", "fr", "pl", "pt", "ru", "zh"];
 const catalogues = Object.fromEntries(LANGS.map((lang) => [lang, require(`./locales/${lang}.json`)]));
 
-// key → [de, en, fr, zh]; a missing or empty translation reads as English.
+// key → [one text per language of LANGS]; a missing or empty translation reads as English.
 const strings = Object.fromEntries(
   Object.keys(catalogues.de).map((key) => [key, LANGS.map((lang) => catalogues[lang][key] || catalogues.en[key] || catalogues.de[key])]),
 );
@@ -27,18 +28,19 @@ enum FPSStrings {
 ${tables.join("\n\n")}
 
   private static func table(_ lang: String) -> [String: String] {
-    if lang == "de" { return de }
-    if lang == "fr" { return fr }
-    if lang == "zh" { return zh }
+${LANGS.filter((lang) => lang !== "en")
+  .map((lang) => `    if lang == "${lang}" { return ${lang} }`)
+  .join("\n")}
     return en
   }
 
   /// The profile's language when the app handed one over, else the phone's
   /// (Simplified Chinese is "zh-Hans" on iOS and "zh" for the app and the
-  /// instance; Traditional Chinese gets English).
+  /// instance, European Portuguese "pt-PT" and "pt"; Traditional Chinese
+  /// gets English).
   static var lang: String = {
-    let found: String = Bundle.preferredLocalizations(from: ${JSON.stringify(LANGS.map((lang) => (lang === "zh" ? "zh-Hans" : lang)))}, forPreferences: Locale.preferredLanguages).first ?? "en"
-    return found == "zh-Hans" ? "zh" : found
+    let found: String = Bundle.preferredLocalizations(from: ${JSON.stringify(LANGS.map((lang) => (lang === "zh" ? "zh-Hans" : lang === "pt" ? "pt-PT" : lang)))}, forPreferences: Locale.preferredLanguages).first ?? "en"
+    return found == "zh-Hans" ? "zh" : found == "pt-PT" ? "pt" : found
   }()
 
   static func t(_ key: String, _ values: [String: String] = [:]) -> String {

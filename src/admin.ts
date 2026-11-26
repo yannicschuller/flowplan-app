@@ -5,7 +5,7 @@
 // only". Like the other widgets they get finished texts in the person's
 // language and no null (summary.ts → widgetProps).
 import { appLink } from "./navigation";
-import { t, type Locale } from "./i18n";
+import { intlLocale, t, type Locale } from "./i18n";
 
 export const ADMIN_PROBLEMS = ["workers", "alerts", "backup", "s3", "key", "mail", "export", "ldap"] as const;
 export const ADMIN_NOTICES = ["restore", "quota", "backupOff", "mailOff", "domains", "maintenance"] as const;
@@ -84,11 +84,11 @@ export function formatBytes(bytes: number, locale: Locale) {
     unit++;
   }
   const digits = value < 10 && unit > 0 ? 1 : 0;
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value)} ${units[unit]}`;
+  return `${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: digits }).format(value)} ${units[unit]}`;
 }
 export const formatPercent = (share: number, locale: Locale, digits = 0) =>
-  new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: digits }).format(Math.max(0, share));
-const formatNumber = (value: number, locale: Locale) => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  new Intl.NumberFormat(intlLocale(locale), { style: "percent", maximumFractionDigits: digits }).format(Math.max(0, share));
+const formatNumber = (value: number, locale: Locale) => new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 0 }).format(value);
 
 // "14:05" today, "21 Oct" before.
 export function formatWhen(at: number, now: number, locale: Locale) {
@@ -96,8 +96,8 @@ export function formatWhen(at: number, now: number, locale: Locale) {
     today = new Date(now);
   const sameDay = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
   return sameDay
-    ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date)
-    : new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(date);
+    ? new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(date)
+    : new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short" }).format(date);
 }
 
 const codeKey = {

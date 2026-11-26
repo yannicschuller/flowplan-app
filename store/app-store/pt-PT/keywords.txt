@@ -1,0 +1,1 @@
+wiki,tarefas,kanban,quadro branco,diário,base de dados,equipa,self-hosted,agenda,widgets,hábitos

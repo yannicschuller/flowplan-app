@@ -10,7 +10,7 @@
 // - "gallery.<widget>.label" and "gallery.<widget>.description": the widget
 //   gallery.
 // A missing or empty translation reads as English.
-const LANGS = ["de", "en", "fr", "zh"];
+const LANGS = ["de", "en", "fr", "pl", "pt", "ru", "zh"];
 
 function read(dir) {
   const catalogues = Object.fromEntries(LANGS.map((lang) => [lang, require(`${dir}/${lang}.json`)]));

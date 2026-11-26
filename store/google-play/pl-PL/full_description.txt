@@ -1,0 +1,29 @@
+Flowplan to Twoje miejsce pracy na notatki, projekty i zespół – teraz jako aplikacja na Androida.
+
+DOKUMENTY, KTÓRE ROSNĄ RAZEM Z TOBĄ
+Pisz notatki, briefy i wiki w szybkim edytorze: nagłówki, listy, zadania do wykonania, tabele, obrazy, kod, wzmianki i linki między stronami. Kilka osób może edytować stronę jednocześnie.
+
+BAZY DANYCH DO WSZYSTKIEGO
+Projekty, roadmapy, listy lektur czy kontakty: jedna baza danych, wiele widoków – tabela, tablica, kalendarz, oś czasu, galeria, lista i formularz. Filtruj, sortuj, grupuj i licz za pomocą formuł.
+
+TABLICE
+Zbieraj pomysły, szkicuj procesy i łącz karty na nieskończonym płótnie – palcem lub rysikiem.
+
+DZIENNIK
+Jeden wpis dziennie, z podsumowaniem, seriami i „Tego dnia”. Na pamiętnik, dziennik pracy lub codzienny stand-up.
+
+DLA ZESPOŁÓW
+Przestrzenie zespołów, uprawnienia, komentarze, wzmianki, powiadomienia, szablony i wyszukiwanie we wszystkim.
+
+WIDŻETY I SZYBKIE PRZECHWYTYWANIE
+Odhaczaj zadania prosto na ekranie głównym, zobacz dzisiejsze spotkania, ulubione, liczby z baz danych, dziennik i nawyki, czas w tym tygodniu, wzmianki i odpowiedzi z formularzy – każdy widżet pokazuje jedną rzecz i ma własne ustawienia. Zapisuj notatki, notatki głosowe i zdjęcia jednym dotknięciem, także z Szybkich ustawień. Skupienie, bieżące spotkanie, importy i timer pozostają widoczne jako powiadomienia.
+
+TWOJE DANE, TWÓJ SERWER
+Flowplan jest open source (AGPL) i można go hostować samodzielnie. Aplikacja łączy się z app.flowplan.org lub z instancją Flowplan Twojej firmy – wystarczy wpisać jej adres przy pierwszym uruchomieniu. Kilka instancji, np. służbową i prywatną, zapisujesz jako profile i przełączasz jednym stuknięciem. Twoje treści są na tym serwerze, nie w aplikacji. Sama aplikacja nie zbiera danych i nie zawiera śledzenia.
+
+LOGUJ SIĘ PO SWOJEMU
+E-mail i hasło, klucze dostępu lub jednokrotne logowanie (SSO) Twojej organizacji – klucze dostępu i SSO działają bezpiecznie przez systemowe okno logowania.
+
+Ten sam Flowplan wszędzie: w przeglądarce, jako aplikacja na komputery z macOS, Windows i Linux, a teraz także na Androidzie. Nowe funkcje przychodzą z serwerem i nie wymagają aktualizacji aplikacji.
+
+Pytania i poradniki: docs.flowplan.org

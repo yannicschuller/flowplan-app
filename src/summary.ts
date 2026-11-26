@@ -3,7 +3,7 @@
 // Live Activity make of it. Widgets get finished texts: their layouts run in
 // a small runtime of their own without the app's code.
 import { appLink } from "./navigation";
-import { t, type Locale } from "./i18n";
+import { intlLocale, t, type Locale } from "./i18n";
 
 export type Summary = {
   name: string;
@@ -70,7 +70,7 @@ export function dueLabel(due: string | null, today: string, locale: Locale) {
   if (days === 0) return t("widgetToday", {}, locale);
   if (days === 1) return t("tomorrow", {}, locale);
   if (days === -1) return t("yesterday", {}, locale);
-  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${due}T00:00:00Z`));
+  return new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${due}T00:00:00Z`));
 }
 
 export type TaskLine = { text: string; page: string; due: string; late: boolean; url: string };
@@ -177,6 +177,9 @@ export function sampleSummary(locale: Locale, now = new Date()): Summary {
     en: ["Send offer to Miller", "Prepare the retro", "Submit travel expenses", "Review website copy", "Sales", "Team", "Finance", "Marketing"],
     fr: ["Envoyer l’offre à Martin", "Préparer la rétro", "Note de frais du voyage", "Relire les textes du site", "Ventes", "Équipe", "Finances", "Marketing"],
     zh: ["给王磊发送报价", "准备回顾会", "报销差旅费", "审阅网站文案", "销售", "团队", "财务", "市场"],
+    pl: ["Wyślij ofertę do Nowaka", "Przygotuj retro", "Rozlicz koszty podróży", "Sprawdź teksty na stronę", "Sprzedaż", "Zespół", "Finanse", "Marketing"],
+    pt: ["Enviar proposta à Silva", "Preparar a retro", "Apresentar despesas de viagem", "Rever os textos do site", "Vendas", "Equipa", "Finanças", "Marketing"],
+    ru: ["Отправить предложение Иванову", "Подготовить ретро", "Отчитаться о командировочных", "Проверить тексты сайта", "Продажи", "Команда", "Финансы", "Маркетинг"],
   }[locale];
   return {
     name: "",
@@ -195,7 +198,7 @@ export function sampleSummary(locale: Locale, now = new Date()): Summary {
     timer: null,
     today,
     at: now.getTime(),
-    study: { due: 12, new: 5, streak: 4, deck: { de: "Spanisch A1", en: "Spanish A1", fr: "Espagnol A1", zh: "西班牙语 A1" }[locale] },
+    study: { due: 12, new: 5, streak: 4, deck: { de: "Spanisch A1", en: "Spanish A1", fr: "Espagnol A1", pl: "Hiszpański A1", pt: "Espanhol A1", ru: "Испанский A1", zh: "西班牙语 A1" }[locale] },
   };
 }
 

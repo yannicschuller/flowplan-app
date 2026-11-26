@@ -1,6 +1,6 @@
 # Store material
 
-Everything for the App Store and Google Play listings, in German (`de-DE`), English (`en-US`), French (`fr-FR`) and Simplified Chinese (App Store `zh-Hans`, Google Play `zh-CN` – the names `deliver` and `supply` use for it). The folders follow the layout fastlane reads:
+Everything for the App Store and Google Play listings, in German (`de-DE`), English (`en-US`), French (`fr-FR`), Polish (App Store `pl`, Google Play `pl-PL`), European Portuguese (`pt-PT` in both), Russian (App Store `ru`, Google Play `ru-RU`) and Simplified Chinese (App Store `zh-Hans`, Google Play `zh-CN` – the names `deliver` and `supply` use for them). The folders follow the layout fastlane reads:
 
 - `app-store/` for `deliver` (`fastlane ios metadata`);
 - `google-play/` for `supply` (`fastlane android metadata`).
@@ -25,6 +25,13 @@ So texts and images can be uploaded with one command or copied into App Store Co
 All icon sizes inside the apps are generated with `npm run icons`: the iOS asset catalog and the Android mipmaps, including adaptive icons and splash screens. Screenshots, video and GIFs are generated too (below and the main README).
 
 `npm test` (part of `npm run check`) checks the listing: the language folders of both stores, App Store and Play limits for every language (name and subtitle 30 characters, keywords 100 bytes without spaces after commas, promotional text 170, descriptions 4000, Play short description 80, changelogs 500; characters counted as Unicode code points), no other apps' names, and every screenshot's size, PNG without alpha and count ([`test/store.test.ts`](../test/store.test.ts)). The keywords are checked in bytes, the stricter reading of Apple's limit: a Chinese character is 3 bytes in UTF-8, so the Chinese keywords hold about 30 characters (`zh-Hans/keywords.txt`: 90 bytes).
+
+## Languages without screenshots
+
+Polish, European Portuguese and Russian have their texts (name, subtitle, keywords, promotional text, description, release notes; Play title, descriptions and changelogs) but no screenshots, creative assets or Play images of their own yet (`TEXT_ONLY` in [`test/store.test.ts`](../test/store.test.ts)). Until they exist, App Store Connect and Play Console show the primary language's (en-US) screenshots for these localizations; `fastlane ios metadata` uploads their texts and leaves their screenshots alone. To give them their own, extend the screenshot scripts' languages (`scripts/store-style.mjs`, `scripts/store-flowplan.mjs`, `--locales`), run `npm run screenshots`, `npm run store:images` and `npm run store:creative`, and take the locale out of `TEXT_ONLY`.
+
+- **App Store Connect** names them *Polish* (*Polnisch*), *Portuguese (Portugal)* (*Portugiesisch (Portugal)*) and *Russian* (*Russisch*). `fastlane ios metadata` creates the localizations of the version; check afterwards under the version that all three are there.
+- **Play Console** names them *Polish – pl-PL*, *Portuguese (Portugal) – pt-PT* and *Russian – ru-RU* (*Manage translations*).
 
 ## Simplified Chinese
 

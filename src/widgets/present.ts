@@ -4,7 +4,7 @@
 // (plugins/widget-suite/ios). Finished texts in the person's language, links
 // into the app, no null anywhere (summary.ts → widgetProps), nothing of a
 // page behind a journal PIN or end-to-end encryption.
-import { t, type Locale } from "../i18n";
+import { intlLocale, t, type Locale } from "../i18n";
 import { appLink, safePath } from "../navigation";
 import { dueLabel, widgetProps } from "../summary";
 import { formatWhen } from "../admin";
@@ -176,7 +176,7 @@ export function formatHours(hours: number) {
 
 function clockOf(iso: string, locale: Locale) {
   const at = Date.parse(iso);
-  return Number.isFinite(at) ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(at)) : "";
+  return Number.isFinite(at) ? new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(new Date(at)) : "";
 }
 // "25 min", "3 h", "2 d": a short duration, rounded the way a countdown
 // reads (no plural forms needed).
@@ -198,16 +198,16 @@ function eventWhen(start: number, end: number, allDay: boolean, now: number, loc
   const today = day(now);
   const tomorrow = day(now + 86_400_000);
   const startDay = day(start);
-  const prefix = startDay === today ? "" : startDay === tomorrow ? t("tomorrow", {}, locale) : new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(start));
+  const prefix = startDay === today ? "" : startDay === tomorrow ? t("tomorrow", {}, locale) : new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short" }).format(new Date(start));
   if (allDay) return prefix ? `${prefix} · ${t("allDay", {}, locale)}` : t("allDay", {}, locale);
-  const clock = (at: number) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+  const clock = (at: number) => new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(new Date(at));
   const range = end > start && day(end) === startDay ? `${clock(start)}–${clock(end)}` : clock(start);
   return prefix ? `${prefix} ${range}` : range;
 }
 
 function weekdayOf(day: string, locale: Locale) {
   const at = Date.parse(`${day}T12:00:00Z`);
-  return Number.isFinite(at) ? new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(new Date(at)) : day;
+  return Number.isFinite(at) ? new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short", timeZone: "UTC" }).format(new Date(at)) : day;
 }
 
 // The view of one widget: a result of the data request (or none yet).
@@ -577,7 +577,7 @@ export function suiteView<K extends SuiteKind>(
       if (d.available === false) return closedView(kind, "forbidden", locale, title, str(d.url, "/"));
       const series = (Array.isArray(d.series) ? d.series : []).filter((v): v is number => typeof v === "number" && Number.isFinite(v)).slice(-30);
       const delta = typeof d.delta === "number" && Number.isFinite(d.delta) ? d.delta : null;
-      const value = str(d.formatted) || (typeof d.value === "number" ? new Intl.NumberFormat(locale).format(d.value) : "–");
+      const value = str(d.formatted) || (typeof d.value === "number" ? new Intl.NumberFormat(intlLocale(locale)).format(d.value) : "–");
       return {
         kind,
         state: "metric",
@@ -587,7 +587,7 @@ export function suiteView<K extends SuiteKind>(
         unit: str(d.unit),
         label: str(d.label),
         series,
-        delta: delta === null ? "" : `${delta > 0 ? "+" : delta < 0 ? "−" : "±"}${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Math.abs(delta))}`,
+        delta: delta === null ? "" : `${delta > 0 ? "+" : delta < 0 ? "−" : "±"}${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 2 }).format(Math.abs(delta))}`,
         trend: delta === null ? "" : delta > 0 ? "up" : delta < 0 ? "down" : "flat",
       };
     }
@@ -601,7 +601,7 @@ export function suiteView<K extends SuiteKind>(
       const label = Number.isFinite(at)
         ? dateOnly
           ? dueLabel(str(d.due).slice(0, 10), today, locale)
-          : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(at))
+          : new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(at))
         : "";
       const created = Date.parse(str(d.created ?? d.createdAt));
       return {
@@ -630,7 +630,7 @@ export function suiteView<K extends SuiteKind>(
 // Made-up content for the widget pickers and previews, in the person's
 // language: the same answer shapes the instance sends.
 export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now = Date.now()): WidgetResult {
-  const L = (de: string, en: string, fr: string, zh: string) => ({ de, en, fr, zh })[locale];
+  const L = (de: string, en: string, fr: string, zh: string, pl: string, pt: string, ru: string) => ({ de, en, fr, pl, pt, ru, zh })[locale];
   const day = (offset: number) => {
     const d = new Date(`${today}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() + offset);
@@ -638,74 +638,74 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
   };
   const id = "00000000-0000-4000-8000-000000000000";
   const data: Record<SuiteKind, Data> = {
-    capture: { title: kindTitle("capture", locale), target: { id, name: L("Eingang", "Inbox", "Boîte d’entrée", "收件箱"), kind: "database" }, voice: true },
+    capture: { title: kindTitle("capture", locale), target: { id, name: L("Eingang", "Inbox", "Boîte d’entrée", "收件箱", "Skrzynka odbiorcza", "Caixa de entrada", "Входящие"), kind: "database" }, voice: true },
     tasks: {
-      title: L("Meine Aufgaben", "My tasks", "Mes tâches", "我的任务"),
+      title: L("Meine Aufgaben", "My tasks", "Mes tâches", "我的任务", "Moje zadania", "As minhas tarefas", "Мои задачи"),
       total: 3,
       items: [
-        { source: "doc", pageId: id, text: L("Angebot an Müller senden", "Send offer to Miller", "Envoyer l’offre à Martin", "给王磊发送报价"), due: day(-1), page: L("Vertrieb", "Sales", "Ventes", "销售"), url: "/#tasks", canEdit: true },
-        { source: "doc", pageId: id, text: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会"), due: today, page: L("Team", "Team", "Équipe", "团队"), url: "/#tasks", canEdit: true },
-        { source: "doc", pageId: id, text: L("Reisekosten abrechnen", "Submit travel expenses", "Note de frais du voyage", "报销差旅费"), due: day(1), page: L("Finanzen", "Finance", "Finances", "财务"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Angebot an Müller senden", "Send offer to Miller", "Envoyer l’offre à Martin", "给王磊发送报价", "Wyślij ofertę do Nowaka", "Enviar proposta à Silva", "Отправить предложение Иванову"), due: day(-1), page: L("Vertrieb", "Sales", "Ventes", "销售", "Sprzedaż", "Vendas", "Продажи"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会", "Przygotuj retro", "Preparar a retro", "Подготовить ретро"), due: today, page: L("Team", "Team", "Équipe", "团队", "Zespół", "Equipa", "Команда"), url: "/#tasks", canEdit: true },
+        { source: "doc", pageId: id, text: L("Reisekosten abrechnen", "Submit travel expenses", "Note de frais du voyage", "报销差旅费", "Rozlicz koszty podróży", "Apresentar despesas de viagem", "Отчитаться о командировочных"), due: day(1), page: L("Finanzen", "Finance", "Finances", "财务", "Finanse", "Finanças", "Финансы"), url: "/#tasks", canEdit: true },
       ],
     },
     calendar: {
-      title: L("Heute", "Today", "Aujourd’hui", "今天"),
+      title: L("Heute", "Today", "Aujourd’hui", "今天", "Dziś", "Hoje", "Сегодня"),
       items: [
-        { type: "event", title: L("Standup", "Stand-up", "Point d’équipe", "站会"), day: today, start: `${today}T07:30:00Z`, timed: true, calendar: L("Team", "Team", "Équipe", "团队"), url: "/" },
-        { type: "event", title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议"), day: today, start: `${today}T12:00:00Z`, timed: true, calendar: L("Vertrieb", "Sales", "Ventes", "销售"), url: "/" },
-        { type: "task", title: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会"), day: today, timed: false, calendar: L("Team", "Team", "Équipe", "团队"), url: "/" },
+        { type: "event", title: L("Standup", "Stand-up", "Point d’équipe", "站会", "Stand-up", "Stand-up", "Стендап"), day: today, start: `${today}T07:30:00Z`, timed: true, calendar: L("Team", "Team", "Équipe", "团队", "Zespół", "Equipa", "Команда"), url: "/" },
+        { type: "event", title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议", "Spotkanie z klientem Nowakiem", "Reunião com a cliente Silva", "Встреча с клиентом Ивановым"), day: today, start: `${today}T12:00:00Z`, timed: true, calendar: L("Vertrieb", "Sales", "Ventes", "销售", "Sprzedaż", "Vendas", "Продажи"), url: "/" },
+        { type: "task", title: L("Retro vorbereiten", "Prepare the retro", "Préparer la rétro", "准备回顾会", "Przygotuj retro", "Preparar a retro", "Подготовить ретро"), day: today, timed: false, calendar: L("Team", "Team", "Équipe", "团队", "Zespół", "Equipa", "Команда"), url: "/" },
       ],
     },
     pinned: {
-      title: L("Favoriten", "Favorites", "Favoris", "收藏"),
+      title: L("Favoriten", "Favorites", "Favoris", "收藏", "Ulubione", "Favoritos", "Избранное"),
       items: [
-        { id, kind: "document", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划"), url: "/" },
+        { id, kind: "document", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划", "Plan tygodnia", "Plano semanal", "План на неделю"), url: "/" },
         { id, kind: "database", title: "Roadmap", url: "/" },
-        { id, kind: "record", title: L("Website-Relaunch", "Website relaunch", "Refonte du site", "网站改版"), detail: "Roadmap", url: "/" },
+        { id, kind: "record", title: L("Website-Relaunch", "Website relaunch", "Refonte du site", "网站改版", "Odświeżenie strony internetowej", "Relançamento do site", "Перезапуск сайта"), detail: "Roadmap", url: "/" },
       ],
     },
     counter: {
-      title: L("Bewerbungen", "Applications", "Candidatures", "求职申请"),
-      label: L("Einträge", "Records", "Entrées", "记录"),
+      title: L("Bewerbungen", "Applications", "Candidatures", "求职申请", "Rekrutacja", "Candidaturas", "Отклики на вакансии"),
+      label: L("Einträge", "Records", "Entrées", "记录", "Rekordy", "Registos", "Записи"),
       formatted: "42",
       history: [28, 29, 29, 31, 30, 32, 33, 33, 35, 36, 38, 39, 41, 42].map((value, i) => ({ day: day(i - 13), value, ...(i < 4 ? { estimated: true } : {}) })),
       url: "/",
     },
     journal: {
-      title: L("Journal", "Journal", "Journal", "日记"),
-      journal: { id, name: L("Mein Journal", "My journal", "Mon journal", "我的日记"), written: true, streak: 6, today: "/", canWrite: true, trackers: [] },
+      title: L("Journal", "Journal", "Journal", "日记", "Dziennik", "Diário", "Дневник"),
+      journal: { id, name: L("Mein Journal", "My journal", "Mon journal", "我的日记", "Mój dziennik", "O meu diário", "Мой дневник"), written: true, streak: 6, today: "/", canWrite: true, trackers: [] },
       habits: {
         id,
-        name: L("Gewohnheiten", "Habits", "Habitudes", "习惯"),
+        name: L("Gewohnheiten", "Habits", "Habitudes", "习惯", "Nawyki", "Hábitos", "Привычки"),
         done: 2,
         total: 3,
         canWrite: true,
         url: "/",
         items: [
-          { fieldId: "a", name: L("Laufen", "Run", "Courir", "跑步"), done: true },
-          { fieldId: "b", name: L("Lesen", "Read", "Lire", "阅读"), done: true },
-          { fieldId: "c", name: L("Kein Zucker", "No sugar", "Sans sucre", "不吃糖"), done: false },
+          { fieldId: "a", name: L("Laufen", "Run", "Courir", "跑步", "Bieganie", "Correr", "Бег"), done: true },
+          { fieldId: "b", name: L("Lesen", "Read", "Lire", "阅读", "Czytanie", "Ler", "Чтение"), done: true },
+          { fieldId: "c", name: L("Kein Zucker", "No sugar", "Sans sucre", "不吃糖", "Bez cukru", "Sem açúcar", "Без сахара"), done: false },
         ],
       },
     },
     time: {
-      title: L("Zeit diese Woche", "Time this week", "Temps cette semaine", "本周时间"),
+      title: L("Zeit diese Woche", "Time this week", "Temps cette semaine", "本周时间", "Czas w tym tygodniu", "Tempo esta semana", "Время за неделю"),
       today: 3.5,
       week: 17.25,
       days: [6.5, 7.25, 3.5, 0, 0, 0, 0].map((hours, i) => ({ day: day(i - 2), hours })),
-      timer: { start: now - 47 * 60_000, title: L("Angebot schreiben", "Write offer", "Rédiger l’offre", "撰写报价"), database: L("Projekte", "Projects", "Projets", "项目"), url: "/" },
+      timer: { start: now - 47 * 60_000, title: L("Angebot schreiben", "Write offer", "Rédiger l’offre", "撰写报价", "Napisz ofertę", "Escrever proposta", "Написать предложение"), database: L("Projekte", "Projects", "Projets", "项目", "Projekty", "Projetos", "Проекты"), url: "/" },
       recent: [],
     },
     mentions: {
-      title: L("Erwähnungen", "Mentions", "Mentions", "提及"),
+      title: L("Erwähnungen", "Mentions", "Mentions", "提及", "Wzmianki", "Menções", "Упоминания"),
       unread: { mentions: 2, assignments: 1 },
       items: [
-        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada vous a mentionné dans « Roadmap »", "Ada 在“Roadmap”中提及了你"), read: false, createdAt: now - 20 * 60_000, url: "/" },
-        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben vous a confié « Préparer la rétro »", "Ben 把“准备回顾会”分配给了你"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
+        { id: "1", type: "mention", text: L("Ada hat dich in „Roadmap“ erwähnt", "Ada mentioned you in “Roadmap”", "Ada vous a mentionné dans « Roadmap »", "Ada 在“Roadmap”中提及了你", "Ada wspomniała Cię w „Roadmap”", "A Ada mencionou-o em “Roadmap”", "Ада упомянула вас в «Roadmap»"), read: false, createdAt: now - 20 * 60_000, url: "/" },
+        { id: "2", type: "assignment", text: L("Ben hat dir „Retro vorbereiten“ gegeben", "Ben gave you “Prepare the retro”", "Ben vous a confié « Préparer la rétro »", "Ben 把“准备回顾会”分配给了你", "Ben przypisał Ci „Przygotuj retro”", "O Ben atribuiu-lhe “Preparar a retro”", "Бен поручил вам «Подготовить ретро»"), read: false, createdAt: now - 3 * 3_600_000, url: "/" },
       ],
     },
     forms: {
-      title: L("Kontaktformular", "Contact form", "Formulaire de contact", "联系表单"),
+      title: L("Kontaktformular", "Contact form", "Formulaire de contact", "联系表单", "Formularz kontaktowy", "Formulário de contacto", "Форма обратной связи"),
       total: 12,
       new: 2,
       items: [
@@ -715,41 +715,41 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
       ],
     },
     event: {
-      title: L("Nächster Termin", "Next appointment", "Prochain rendez-vous", "下一个日程"),
+      title: L("Nächster Termin", "Next appointment", "Prochain rendez-vous", "下一个日程", "Najbliższe spotkanie", "Próximo compromisso", "Следующая встреча"),
       items: [
         {
           id: "1",
-          title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议"),
+          title: L("Kundentermin Müller", "Client meeting Miller", "Rendez-vous client Martin", "与王磊的客户会议", "Spotkanie z klientem Nowakiem", "Reunião com a cliente Silva", "Встреча с клиентом Ивановым"),
           start: new Date(now + 25 * 60_000).toISOString(),
           end: new Date(now + 85 * 60_000).toISOString(),
           allDay: false,
           location: "Zoom",
           joinUrl: "https://zoom.us/j/0000000000",
-          calendarName: L("Vertrieb", "Sales", "Ventes", "销售"),
+          calendarName: L("Vertrieb", "Sales", "Ventes", "销售", "Sprzedaż", "Vendas", "Продажи"),
           url: "/",
         },
         {
           id: "2",
-          title: L("Retro", "Retro", "Rétro", "回顾会"),
+          title: L("Retro", "Retro", "Rétro", "回顾会", "Retro", "Retro", "Ретро"),
           start: new Date(now + 4 * 3_600_000).toISOString(),
           end: new Date(now + 5 * 3_600_000).toISOString(),
           allDay: false,
-          calendarName: L("Team", "Team", "Équipe", "团队"),
+          calendarName: L("Team", "Team", "Équipe", "团队", "Zespół", "Equipa", "Команда"),
           url: "/",
         },
       ],
     },
     reading: {
-      title: L("Weiterlesen", "Continue reading", "Reprendre la lecture", "继续阅读"),
+      title: L("Weiterlesen", "Continue reading", "Reprendre la lecture", "继续阅读", "Czytaj dalej", "Continuar a ler", "Продолжить чтение"),
       items: [
-        { id: "1", title: L("Handbuch für neue Kolleginnen", "Handbook for new colleagues", "Guide d’accueil", "新同事手册"), icon: "", kind: "book", progress: 0.4, lastOpened: now - 3_600_000, url: "/" },
-        { id: "2", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划"), icon: "", kind: "document", lastOpened: now - 5 * 3_600_000, url: "/" },
+        { id: "1", title: L("Handbuch für neue Kolleginnen", "Handbook for new colleagues", "Guide d’accueil", "新同事手册", "Podręcznik dla nowych współpracowników", "Manual para novos colegas", "Справочник для новых коллег"), icon: "", kind: "book", progress: 0.4, lastOpened: now - 3_600_000, url: "/" },
+        { id: "2", title: L("Wochenplan", "Weekly plan", "Plan de la semaine", "周计划", "Plan tygodnia", "Plano semanal", "План на неделю"), icon: "", kind: "document", lastOpened: now - 5 * 3_600_000, url: "/" },
         { id: "3", title: "Roadmap", icon: "", kind: "database", lastOpened: now - 26 * 3_600_000, url: "/" },
       ],
     },
     metric: {
-      title: L("Umsatz", "Revenue", "Chiffre d’affaires", "营收"),
-      label: L("Diesen Monat", "This month", "Ce mois-ci", "本月"),
+      title: L("Umsatz", "Revenue", "Chiffre d’affaires", "营收", "Przychody", "Receitas", "Выручка"),
+      label: L("Diesen Monat", "This month", "Ce mois-ci", "本月", "Ten miesiąc", "Este mês", "Этот месяц"),
       value: 48200,
       unit: "€",
       formatted: "48.200 €",
@@ -758,20 +758,20 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
       url: "/",
     },
     deadline: {
-      title: L("Angebot an Müller", "Offer to Miller", "Offre à Martin", "给王磊的报价"),
+      title: L("Angebot an Müller", "Offer to Miller", "Offre à Martin", "给王磊的报价", "Oferta dla Nowaka", "Proposta para a Silva", "Предложение для Иванова"),
       due: new Date(now + 2 * 86_400_000 + 3 * 3_600_000).toISOString(),
       done: false,
       overdue: false,
       url: "/",
     },
     study: {
-      title: L("Karten fällig", "Cards due", "Cartes à réviser", "待复习卡片"),
+      title: L("Karten fällig", "Cards due", "Cartes à réviser", "待复习卡片", "Fiszki do powtórki", "Cartões para rever", "Карточки к повторению"),
       due: 12,
       new: 5,
       streak: 4,
       decks: [
-        { pageId: id, title: L("Spanisch A1", "Spanish A1", "Espagnol A1", "西班牙语 A1"), due: 8, new: 3, url: "/" },
-        { pageId: id, title: L("Anatomie", "Anatomy", "Anatomie", "解剖学"), due: 4, new: 2, url: "/" },
+        { pageId: id, title: L("Spanisch A1", "Spanish A1", "Espagnol A1", "西班牙语 A1", "Hiszpański A1", "Espanhol A1", "Испанский A1"), due: 8, new: 3, url: "/" },
+        { pageId: id, title: L("Anatomie", "Anatomy", "Anatomie", "解剖学", "Anatomia", "Anatomia", "Анатомия"), due: 4, new: 2, url: "/" },
       ],
       more: 0,
       url: "/#study",

@@ -8,9 +8,18 @@ import { join } from "node:path";
 // uploads (scripts/store-images.mjs).
 const STORE = join(__dirname, "..", "store");
 // fastlane's folder names: Simplified Chinese is zh-Hans in the App Store
-// (deliver) and zh-CN on Google Play (supply).
-const APP_STORE = ["de-DE", "en-US", "fr-FR", "zh-Hans"];
-const PLAY = ["de-DE", "en-US", "fr-FR", "zh-CN"];
+// (deliver) and zh-CN on Google Play (supply); Polish, European Portuguese
+// and Russian are pl, pt-PT and ru in the App Store, pl-PL, pt-PT and ru-RU
+// on Google Play.
+const APP_STORE = ["de-DE", "en-US", "fr-FR", "pl", "pt-PT", "ru", "zh-Hans"];
+const PLAY = ["de-DE", "en-US", "fr-FR", "pl-PL", "pt-PT", "ru-RU", "zh-CN"];
+// Listings that have their texts but no pictures of their own yet: until
+// npm run screenshots / store:images / store:creative make them, both stores
+// show the primary language's (en-US) screenshots for them (store/README.md
+// → Languages without screenshots).
+const TEXT_ONLY = new Set(["pl", "pt-PT", "ru", "pl-PL", "ru-RU"]);
+const SHOTS = APP_STORE.filter((locale) => !TEXT_ONLY.has(locale));
+const PLAY_SHOTS = PLAY.filter((locale) => !TEXT_ONLY.has(locale));
 const read = (...path: string[]) => readFileSync(join(STORE, ...path), "utf8").trim();
 const bytes = (text: string) => Buffer.byteLength(text, "utf8");
 // Characters as App Store Connect and Play Console count them (code points).
@@ -80,7 +89,8 @@ test("App Store screenshots: every device and language, exact sizes, PNG without
   const SIZES: Record<string, [number, number]> = { "iphone-69": [1320, 2868], "iphone-65": [1284, 2778], "ipad-13": [2064, 2752] };
   const frames = (locale: string) => readdirSync(join(STORE, "app-store", "screenshots", locale)).filter((f) => !f.startsWith(".")).sort();
   const reference = frames(APP_STORE[0]);
-  for (const locale of APP_STORE) {
+  for (const locale of APP_STORE.filter((l) => TEXT_ONLY.has(l))) assert.ok(!existsSync(join(STORE, "app-store", "screenshots", locale)), `${locale} has screenshots now: take it out of TEXT_ONLY`);
+  for (const locale of SHOTS) {
     const files = frames(locale);
     assert.deepEqual(files, reference, `${locale} has other screenshots than ${APP_STORE[0]}`);
     for (const [device, [width, height]] of Object.entries(SIZES)) {
@@ -99,7 +109,7 @@ test("App Store screenshots: every device and language, exact sizes, PNG without
 
 test("App Store creative assets: header 3840×1646 (21:9) and search results 3:2, every language, PNG without alpha", () => {
   // App Store Connect Help → Creative assets specifications (scripts/creative-assets.mjs).
-  for (const locale of APP_STORE) {
+  for (const locale of SHOTS) {
     const dir = join(STORE, "app-store", "creative", locale);
     assert.deepEqual(readdirSync(dir).filter((f) => !f.startsWith(".")).sort(), ["header.png", "search-results.png"], `${locale} creative assets`);
     const header = png(join(dir, "header.png"));
@@ -116,7 +126,8 @@ test("App Store creative assets: header 3840×1646 (21:9) and search results 3:2
 
 test("Google Play images: sizes, no alpha, two to eight screenshots per device", () => {
   const SIZES: Record<string, [number, number]> = { phoneScreenshots: [1080, 1920], sevenInchScreenshots: [1200, 1920], tenInchScreenshots: [1600, 2560] };
-  for (const locale of PLAY) {
+  for (const locale of PLAY.filter((l) => TEXT_ONLY.has(l))) assert.ok(!existsSync(join(STORE, "google-play", locale, "images")), `${locale} has images now: take it out of TEXT_ONLY`);
+  for (const locale of PLAY_SHOTS) {
     const images = join(STORE, "google-play", locale, "images");
     for (const [folder, [width, height]] of Object.entries(SIZES)) {
       const shots = readdirSync(join(images, folder)).filter((f) => f.endsWith(".png"));

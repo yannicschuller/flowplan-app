@@ -7,7 +7,8 @@
 // (POST /api/mobile/capture/save); the app need not be opened.
 //
 // - plugins/capture/*.swift → ios/FlowplanShare, with ShareStrings.swift
-//   (German, English, French, Simplified Chinese) from
+//   (German, English, French, Polish, European Portuguese, Russian,
+//   Simplified Chinese) from
 //   plugins/capture/locales/<lang>.json through plugins/capture/strings.js;
 // - Info.plist (activation rule: up to one link, text, ten images or PDFs),
 //   the entitlements (App Group) and the target, embedded in the app.
@@ -56,7 +57,7 @@ function infoPlist(appGroup) {
     CFBundleExecutable: "$(EXECUTABLE_NAME)",
     CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)",
     CFBundleInfoDictionaryVersion: "6.0",
-    CFBundleLocalizations: ["de", "en", "fr", "zh-Hans"],
+    CFBundleLocalizations: ["de", "en", "fr", "pl", "pt-PT", "ru", "zh-Hans"],
     CFBundleName: "$(PRODUCT_NAME)",
     CFBundlePackageType: "XPC!",
     CFBundleShortVersionString: "$(MARKETING_VERSION)",

@@ -1,0 +1,1 @@
+wiki,zadania,kanban,tablica,dziennik,baza danych,zespół,self-hosted,planer,widżety,nawyki,todo

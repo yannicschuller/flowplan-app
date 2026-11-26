@@ -1,0 +1,17 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Flowplan",
+    "NSCameraUsageDescription": "O Flowplan usa a câmara quando tira uma fotografia para uma página ou um quadro branco, ou digitaliza um documento.",
+    "NSMicrophoneUsageDescription": "O Flowplan usa o microfone quando grava uma nota de voz ou um vídeo para uma página.",
+    "NSPhotoLibraryUsageDescription": "O Flowplan abre as suas fotografias quando escolhe imagens para adicionar a uma página.",
+    "NSPhotoLibraryAddUsageDescription": "O Flowplan guarda imagens nas suas fotografias quando o pede.",
+    "NSFaceIDUsageDescription": "O Flowplan usa o Face ID para desbloquear a app quando o bloqueio da app está ativado e para confirmar aprovações de fluxos de trabalho.",
+    "NSSpeechRecognitionUsageDescription": "O Flowplan converte as suas notas de voz em texto neste dispositivo.",
+    "NSLocalNetworkUsageDescription": "O Flowplan liga-se à sua instância Flowplan quando esta funciona na sua rede local."
+  },
+  "android": {
+    "share_label": "Guardar no Flowplan",
+    "restriction_server_title": "Instância Flowplan",
+    "restriction_server_description": "Endereço sugerido no primeiro arranque, p. ex. https://flowplan.example.com"
+  }
+}

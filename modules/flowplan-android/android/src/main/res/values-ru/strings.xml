@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="flowplan_tile_capture">Быстрая запись</string>
+  <string name="flowplan_shortcut_note">Новая заметка</string>
+  <string name="flowplan_shortcut_note_long">Новая заметка</string>
+  <string name="flowplan_shortcut_capture">Быстрая запись</string>
+  <string name="flowplan_shortcut_capture_long">Быстрая запись во Flowplan</string>
+</resources>

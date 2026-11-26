@@ -27,13 +27,13 @@ npm run ios          # or: npm run android
 - Match the surrounding code: naming, comment density, no new dependencies without a reason.
 - Add or update tests in `test/*.test.ts` for logic you change.
 - Run `npm run check` (TypeScript and tests) before you push; CI also builds the JavaScript bundle and runs `expo prebuild`.
-- Texts live in flat JSON catalogues, one file per language (`de.json`, `en.json`, `fr.json`, `zh.json` for Simplified Chinese), keys in German's order:
+- Texts live in flat JSON catalogues, one file per language (`de.json`, `en.json`, `fr.json`, `pl.json`, `pt.json` for European Portuguese, `ru.json`, `zh.json` for Simplified Chinese), keys in German's order:
   - `locales/ui/` – the app's own screens, dialogs, notifications and widgets (`t("key")` from `src/i18n.ts`; the key type comes from `de.json`);
   - `plugins/capture/locales/` – the iOS share extension;
   - `plugins/intents/locales/` and `plugins/widget-suite/locales/` – Siri, Shortcuts, controls and the configurable iOS widgets (the English text is the key; `phrase.<name>` are Siri phrases, `gallery.<widget>.label` / `.description` the widget gallery).
 
-  A new text goes into German and English (and French and Chinese if you can; an empty text reads as English) at the same place in every file. A `context.json` next to a catalogue holds notes for translators. `locales/{de,en,fr,zh}.json` (nested) keep the iOS and Android system texts, `store/` the store listings.
-- Translations into French and Chinese – and corrections – come in as pull requests from [translate.flowplan.org](https://translate.flowplan.org); `test/catalogues.test.ts` checks that every language has German's keys and English's placeholders (`{name}`, `%@`, `%d`, `%1$s`, `${applicationName}`). German uses informal "du", French "vous".
+  A new text goes into German and English (and the other languages if you can; an empty text reads as English) at the same place in every file. A `context.json` next to a catalogue holds notes for translators. `locales/{de,en,fr,pl,pt,ru,zh}.json` (nested) keep the iOS and Android system texts, `store/` the store listings.
+- Translations into French, Polish, Portuguese, Russian and Chinese – and corrections – come in as pull requests from [translate.flowplan.org](https://translate.flowplan.org); `test/catalogues.test.ts` checks that every language has German's keys and English's placeholders (`{name}`, `%@`, `%d`, `%1$s`, `${applicationName}`). German uses informal "du", French "vous", Russian "вы", Portuguese "o seu/a sua" (never "tu"), Polish informal "ty".
 - Update the documentation ([flowplan-docs](https://github.com/yannicschuller/flowplan-docs), page "Offline and apps") when behaviour changes.
 
 By contributing you agree that your contributions are licensed under the [AGPL-3.0](LICENSE).

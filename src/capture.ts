@@ -210,13 +210,17 @@ export function scanTitle(locale: Locale, date = new Date()) {
   return t("scanTitle", { date: `${localDay(date)} ${time}` }, locale);
 }
 
-// Vision's languages, the person's first. Chinese goes with English only:
-// Vision pairs Chinese with English, and a request it refuses recognises
-// nothing (modules/flowplan-capture/ios/DocumentScanner.swift). Android's
-// ML Kit (Latin script) needs none.
+// Vision's languages, the person's first. Chinese and Russian go with
+// English only: Vision pairs them with English, and a request it refuses
+// recognises nothing (modules/flowplan-capture/ios/DocumentScanner.swift,
+// which also drops the languages a device's Vision lacks, e.g. Polish on
+// older iOS). Portuguese is Vision's pt-BR, the one Portuguese it reads.
+// Android's ML Kit (Latin script) needs none.
 export function scanLanguages(locale: Locale) {
   const all = { de: "de-DE", en: "en-US", fr: "fr-FR" } as const;
   if (locale === "zh") return ["zh-Hans", all.en];
+  if (locale === "ru") return ["ru-RU", all.en];
+  if (locale === "pl" || locale === "pt") return [locale === "pl" ? "pl-PL" : "pt-BR", ...Object.values(all)];
   return [all[locale], ...Object.values(all).filter((language) => language !== all[locale])];
 }
 

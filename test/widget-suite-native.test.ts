@@ -82,19 +82,29 @@ test("every widget has a gallery name and description in every language", () => 
 
 test("every language has its .lproj: the app's and the extensions' localizations and the config's locales", () => {
   const folders = LANGS.map(lproj);
-  assert.deepEqual(folders, ["de", "en", "fr", "zh-Hans"]);
+  assert.deepEqual(folders, ["de", "en", "fr", "pl", "pt-PT", "ru", "zh-Hans"]);
   assert.deepEqual(config.ios?.infoPlist?.CFBundleLocalizations, folders);
   assert.deepEqual(Object.keys(config.locales ?? {}), folders);
-  assert.match(readFileSync(join(root, "plugins/with-capture.js"), "utf8"), /CFBundleLocalizations: \["de", "en", "fr", "zh-Hans"\]/);
+  assert.match(readFileSync(join(root, "plugins/with-capture.js"), "utf8"), /CFBundleLocalizations: \["de", "en", "fr", "pl", "pt-PT", "ru", "zh-Hans"\]/);
 });
 
 test("the overview is not called a tasks widget and points to the one that checks off", () => {
-  ["de", "en", "fr", "zh"].forEach((lang, i) => {
+  const expected: Record<string, [string, string]> = {
+    de: ["Übersicht", "Aufgaben"],
+    en: ["Overview", "Tasks"],
+    fr: ["Aperçu", "Tâches"],
+    pl: ["Przegląd", "Zadania"],
+    pt: ["Visão geral", "Tarefas"],
+    ru: ["Обзор", "Задачи"],
+    zh: ["概览", "任务"],
+  };
+  assert.deepEqual(Object.keys(expected), [...LANGS]);
+  LANGS.forEach((lang, i) => {
     const ios = localizable(strings, lang);
     const overview = ios[gallery.FlowplanTasks.label[1]];
     const tasks = ios[gallery.FlowplanTaskList.label[1]];
-    assert.equal(overview, ["Übersicht", "Overview", "Aperçu", "概览"][i]);
-    assert.equal(tasks, ["Aufgaben", "Tasks", "Tâches", "任务"][i]);
+    assert.equal(overview, expected[lang][0]);
+    assert.equal(tasks, expected[lang][1]);
     assert.equal(tasks, gallery.FlowplanTaskList.label[i]);
     assert.ok(gallery.FlowplanTasks.description[i].includes(tasks), `${lang}: the overview's description names "${tasks}"`);
   });

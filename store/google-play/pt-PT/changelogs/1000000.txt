@@ -1,0 +1,6 @@
+A primeira versão do Flowplan para Android:
+• Liga-se a app.flowplan.org ou às suas próprias instâncias Flowplan, várias delas como perfis
+• Widgets com definições próprias, tarefas para concluir
+• Temporizador, foco, reunião e importações como notificações em direto
+• Início de sessão com chave de acesso ou SSO, bloqueio da app com impressão digital
+• Partilhar a partir de outras apps, notas e memos de voz com um toque

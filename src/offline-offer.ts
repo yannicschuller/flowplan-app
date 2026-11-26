@@ -15,7 +15,7 @@
 // iOS from the copy's marker the app keeps (src/offline/store.ts), on
 // Android from the page's last report.
 // Pure – App.tsx and Settings.tsx hand in the store, the page and the clock.
-import { t, type Locale } from "./i18n";
+import { intlLocale, t, type Locale } from "./i18n";
 
 export const ENABLE_EVENT = "flowplan:offline-enable";
 export const STATUS_EVENT = "flowplan:offline-status";
@@ -106,13 +106,13 @@ export function formatBytes(bytes: number, locale: Locale) {
     unit++;
   }
   const digits = unit >= 2 && value < 10 ? 1 : 0;
-  return `${new Intl.NumberFormat(locale === "zh" ? "zh-CN" : locale, { maximumFractionDigits: digits }).format(value)} ${units[unit]}`;
+  return `${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: digits }).format(value)} ${units[unit]}`;
 }
 
 // "vor 3 Stunden", "gestern": the age of the copy.
 export function formatAge(at: number, now: number, locale: Locale) {
   const seconds = Math.round((at - now) / 1000);
-  const format = new Intl.RelativeTimeFormat(locale === "zh" ? "zh-CN" : locale, { numeric: "auto" });
+  const format = new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: "auto" });
   const abs = Math.abs(seconds);
   if (abs < 60) return format.format(0, "minute");
   if (abs < 3600) return format.format(Math.round(seconds / 60), "minute");
