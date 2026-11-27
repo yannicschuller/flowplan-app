@@ -25,8 +25,10 @@ import { widgetAction, widgetData, type ActionName, type Connection, type Widget
 import { renderSuite, SUITE_CLICKS } from "../widgets/android-suite";
 import { kindTitle, sampleConfig, sampleResult, suiteView, themeOf } from "../widgets/present";
 import {
+  extraRequests,
   needsSetup,
-  serverConfig,
+  OFFERED_KINDS,
+  serverRequest,
   sessionReloaded,
   SUITE_KINDS,
   SUITE_WIDGETS,
@@ -152,9 +154,12 @@ const writeActions = (state: ActionState) => writeText(actionsFile(), JSON.strin
 const writeConfigs = (state: ConfigState) => writeText(configFile(), JSON.stringify(state));
 const writeBindings = (bindings: Bindings) => writeText(bindingsFile(), JSON.stringify(bindings));
 
-function readAnswers(profile: string): Record<string, WidgetResult> {
+// An answer with when it came from the instance (the widget's footer; a
+// failed refresh keeps the last good one and its time).
+type StoredAnswer = WidgetResult & { at?: number };
+function readAnswers(profile: string): Record<string, StoredAnswer> {
   try {
-    return JSON.parse(readText(answersFile(profile)) || "{}") as Record<string, WidgetResult>;
+    return JSON.parse(readText(answersFile(profile)) || "{}") as Record<string, StoredAnswer>;
   } catch {
     return {};
   }
@@ -188,8 +193,18 @@ export function suiteRender(kind: SuiteKind, widgetId: number, size: { width: nu
   const binding = bindingFor(readBindings(), widgetId);
   const profile = widgetProfileId(state, binding.profile);
   const config = configFor(readConfigs(), profile, widgetId, kind);
-  const answer = profile ? (readAnswers(profile)[String(widgetId)] ?? null) : null;
-  const view = suiteView(kind, config, answer, { locale: locale(), today: localDay(), signedIn: !!connectionFor(profile), marks: actionMarks(readActions()) });
+  const answers = profile ? readAnswers(profile) : {};
+  const answer = answers[String(widgetId)] ?? null;
+  // The further answers ("Today": the next appointment, unread mentions).
+  const extras = Object.fromEntries(extraRequests(kind, config).map((extra) => [extra.key, answers[`${widgetId}:${extra.key}`] ?? null]));
+  const view = suiteView(kind, config, answer, {
+    locale: locale(),
+    today: localDay(),
+    signedIn: !!connectionFor(profile),
+    marks: actionMarks(readActions()),
+    ...(answer?.ok && typeof answer.at === "number" ? { fetchedAt: answer.at } : {}),
+    extras,
+  });
   const accent = widgetAccent(binding.color, { theme: themeOf(answer), profile: profile ? profileAccent(state, profile) : null });
   return renderSuite(view, size, widgetId, accent);
 }
@@ -217,7 +232,10 @@ export async function refreshAndroidSuite(options: { fetch: boolean; force?: boo
         .filter((w) => w.profile === profile)
         .map((w) => ({ w, config: configFor(configs, profile, w.id, w.kind) }))
         .filter(({ w, config }) => !needsSetup(w.kind, config))
-        .map(({ w, config }) => ({ id: String(w.id), kind: w.kind, config: serverConfig(w.kind, config) }));
+        .flatMap(({ w, config }) => [
+          { id: String(w.id), ...serverRequest(w.kind, config) },
+          ...extraRequests(w.kind, config).map((extra) => ({ id: `${w.id}:${extra.key}`, kind: extra.kind, config: extra.config })),
+        ]);
       if (!requests.length) continue;
       const result = await widgetData(target, requests, { today: localDay(), zone: timeZone() });
       if (!result.ok) {
@@ -231,17 +249,18 @@ export async function refreshAndroidSuite(options: { fetch: boolean; force?: boo
       }
       fresh = true;
       const answers = readAnswers(profile);
+      const at = Date.now();
       for (const [id, answer] of result.value) {
         const previous = answers[id];
         // A failed answer keeps the last good one, unless the page is gone.
         if (!answer.ok && previous?.ok && answer.status !== 403 && answer.status !== 404) continue;
-        answers[id] = answer;
+        answers[id] = { ...answer, at };
         // The instance's accent: the default of the profile's colour dot.
         const theme = themeOf(answer);
         if (theme) store.setInstanceAccent(profile, theme.accent);
       }
       const live = new Set(widgets.filter((w) => w.profile === profile).map((w) => String(w.id)));
-      await writeText(answersFile(profile), JSON.stringify(Object.fromEntries(Object.entries(answers).filter(([id]) => live.has(id)))));
+      await writeText(answersFile(profile), JSON.stringify(Object.fromEntries(Object.entries(answers).filter(([id]) => live.has(id.split(":")[0])))));
     }
     // Fresh answers: what was tapped before is shown as the instance says.
     if (fresh) await writeActions(settled(readActions(), started));
@@ -342,7 +361,8 @@ export async function syncWidgetPreviews() {
     AndroidWidget: { createPreview(tree: unknown, width: number, height: number): Promise<{ base64Image: string }> };
   };
   const now = Date.now();
-  for (const kind of SUITE_KINDS) {
+  // The widgets no longer offered are hidden from the picker: no picture.
+  for (const kind of OFFERED_KINDS) {
     const name = SUITE_WIDGETS[kind];
     if (done[name] === key) continue;
     const wide = !["counter", "forms", "study", "metric", "deadline"].includes(kind);

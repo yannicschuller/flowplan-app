@@ -7,6 +7,9 @@ import WidgetKit
 // request for every widget of the same profile on a screen (FPRefresher).
 // The refresh budget is spent where it matters: lists every 30 minutes, the
 // counters hourly, the capture widget (no live content) every six hours. The
+// widgets that show more than one answer ("Today": the next appointment and
+// unread mentions; "My day": appointments, tasks, habits) ask for them in
+// the same request (FPRefresher.load, also:). The
 // app reloads all of them when something changes (and that does not count
 // against the budget); on iOS 26 the instance can also push a reload
 // (WidgetKit push, SuiteWidgets.swift → FPWidgetPushHandler).
@@ -27,10 +30,10 @@ enum FPState: Sendable {
 }
 
 struct FPEntry: TimelineEntry {
-  let date: Date
+  var date: Date
   let kind: String
   let state: FPState
-  let data: FPJSON
+  var data: FPJSON
   let settings: FPSettings
   // The answer is older than it should be (offline).
   var stale = false
@@ -41,6 +44,17 @@ struct FPEntry: TimelineEntry {
   var profile: String? = nil
   var palette = FPPalette.flowplan
   var relevance: TimelineEntryRelevance? = nil
+  // When the answer came from the instance (also when the cached one is
+  // shown again): the footer's "12 min ago" / "As of 01:10".
+  var fetched: Date? = nil
+  // The kind the instance was asked for, where it is not the widget's own
+  // ("Key figure" of a database: "counter"; "Pages", recently opened:
+  // "reading").
+  var request: String? = nil
+  // The further answers of widgets that show several (kind → data).
+  var extras: [String: FPJSON] = [:]
+
+  var dataKind: String { request ?? kind }
 
   var locked: Bool { data["locked"].bool }
   var encrypted: Bool { data["encrypted"].bool }
@@ -59,7 +73,7 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
   private var maxAge: TimeInterval {
     switch Configuration.kind {
     case "capture": return 6 * 3600
-    case "counter", "forms", "pinned", "metric", "deadline": return 3600
+    case "counter", "pinned", "metric", "deadline": return 3600
     default: return 1800
     }
   }
@@ -71,7 +85,7 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
   func snapshot(for configuration: Configuration, in context: Context) async -> FPEntry {
     // The widget gallery shows made-up content in the person's language.
     if context.isPreview {
-      var entry = FPSamples.entry(Configuration.kind, settings: configuration.settings)
+      var entry = FPSamples.entry(Configuration.kind, settings: configuration.settings, request: configuration.request.kind)
       entry.palette = FPPalette.resolve(configuration.color, theme: FPJSON(nil), profile: configuration.profileId)
       return entry
     }
@@ -86,14 +100,21 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
     if !entry.marks.failed.isEmpty { next = min(next, FPActions.failedFor) }
     if !entry.marks.pending.isEmpty { next = min(next, FPActions.pendingFor + 10) }
     var entries: [FPEntry] = [entry]
-    // An appointment starts or ends before the next refresh: the widget
-    // shows "Now" at its start and the next one after its end, without
-    // asking the instance (the countdown itself is a live Text).
-    if entry.state == .data, Configuration.kind == "event" {
-      let changes = FPRelevance.eventChanges(entry.data).filter { $0 > Date() && $0 < Date().addingTimeInterval(next) }
-      for at in changes.prefix(4) {
-        var later = FPEntry(date: at, kind: entry.kind, state: entry.state, data: entry.data, settings: entry.settings, stale: entry.stale, marks: entry.marks, profile: entry.profile, palette: entry.palette)
-        later.relevance = FPRelevance.of(kind: entry.kind, data: entry.data, at: at)
+    // Changes before the next refresh, drawn without asking the instance:
+    // an appointment starts ("Now") or ends (the next one shows; the
+    // countdown itself is a live Text), and the answer turns older than an
+    // hour (the footer's warning).
+    if entry.state == .data {
+      var changes: [Date] = []
+      if Configuration.kind == "event" { changes += FPRelevance.eventChanges(entry.data) }
+      if let events = entry.extras["event"] { changes += FPRelevance.eventChanges(events) }
+      if let fetched = entry.fetched { changes.append(fetched.addingTimeInterval(FPFooter.staleAfter + 1)) }
+      let now = Date()
+      let until = now.addingTimeInterval(next)
+      for at in Set(changes).filter({ $0 > now && $0 < until }).sorted().prefix(5) {
+        var later = entry
+        later.date = at
+        later.relevance = FPRelevance.of(kind: entry.dataKind, data: entry.data, at: at)
         entries.append(later)
       }
     }
@@ -104,6 +125,8 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
     let kind = Configuration.kind
     let settings = configuration.settings
     let profile = configuration.profileId
+    let request = configuration.profiledRequest
+    let extras: [FPRequest] = configuration.extraRequests.map { FPRequest(kind: $0.kind, config: $0.config, profile: profile) }
     let palette = FPPalette.resolve(configuration.color, theme: FPJSON(nil), profile: profile)
     func closed(_ state: FPState) -> FPEntry {
       FPEntry(date: Date(), kind: kind, state: state, data: FPJSON(nil), settings: settings, profile: profile, palette: palette)
@@ -111,19 +134,28 @@ struct FPProvider<Configuration: FPSuiteConfiguration>: AppIntentTimelineProvide
     if configuration.needsSetup {
       return closed(FPKeychain.session(for: profile)?.token == nil ? .signedOut : .setup)
     }
-    switch await FPRefresher.shared.load(configuration.profiledRequest, maxAge: maxAge) {
+    switch await FPRefresher.shared.load(request, maxAge: maxAge, also: extras) {
     case .signedOut:
       return closed(.signedOut)
     case .unavailable:
       return closed(.offline)
     case .answer(let result, let stale):
       if !result.ok {
-        if FPNewKinds.all.contains(kind) && (result.status == 400 || result.status == 501) { return closed(.outdated) }
+        if FPNewKinds.all.contains(request.kind) && (result.status == 400 || result.status == 501) { return closed(.outdated) }
         return closed(result.status == 403 || result.status == 404 ? .gone : .offline)
       }
       var entry = FPEntry(date: Date(), kind: kind, state: .data, data: result.data, settings: settings, stale: stale, marks: FPActions.marks(), profile: profile)
       entry.palette = FPPalette.resolve(configuration.color, theme: result.theme, profile: profile)
-      entry.relevance = FPRelevance.of(kind: kind, data: result.data, at: Date())
+      entry.fetched = result.at
+      entry.request = request.kind == kind ? nil : request.kind
+      // The further answers came with the same request; one the instance
+      // does not know (an older Flowplan) is left out.
+      for extra in extras {
+        if case .answer(let answer, _) = await FPRefresher.shared.load(extra, maxAge: maxAge), answer.ok {
+          entry.extras[extra.kind] = answer.data
+        }
+      }
+      entry.relevance = FPRelevance.of(kind: entry.dataKind, data: result.data, at: Date())
       return entry
     }
   }
@@ -187,10 +219,26 @@ enum FPDeadline {
 /// Made-up content for the gallery, in the person's language (the same
 /// shapes the instance sends).
 enum FPSamples {
-  static func entry(_ kind: String, settings: FPSettings) -> FPEntry {
+  static func entry(_ kind: String, settings: FPSettings, request: String? = nil) -> FPEntry {
     var settings = settings
     if settings.buttons.isEmpty { settings.buttons = ["note", "task", "voice", "photo"] }
-    return FPEntry(date: Date(), kind: kind, state: .sample, data: FPJSON(data(kind)), settings: settings)
+    let shown: String = request ?? kind
+    var entry = FPEntry(date: Date(), kind: kind, state: .sample, data: FPJSON(data(shown)), settings: settings)
+    entry.fetched = Date().addingTimeInterval(-4 * 60)
+    entry.request = shown == kind ? nil : shown
+    switch kind {
+    case "calendar":
+      entry.extras["event"] = FPJSON(data("event"))
+      let mentions: [String: Any] = ["unread": ["mentions": 2, "assignments": 1], "items": [Any]()]
+      entry.extras["mentions"] = FPJSON(mentions)
+    case "myday":
+      entry.data = FPJSON(data("calendar"))
+      entry.extras["tasks"] = FPJSON(data("tasks"))
+      entry.extras["journal"] = FPJSON(data("journal"))
+    default:
+      break
+    }
+    return entry
   }
 
   private static func day(_ offset: Int) -> String {
@@ -210,11 +258,13 @@ enum FPSamples {
     case "capture":
       return ["title": L("Quick capture"), "target": ["id": "sample", "name": L("Inbox"), "kind": "database"], "voice": true]
     case "tasks":
-      return ["title": L("My tasks"), "total": 4, "items": [
-        ["source": "doc", "pageId": "sample", "text": L("Send offer to Miller"), "due": day(-1), "page": L("Sales"), "url": "/", "canEdit": true],
-        ["source": "doc", "pageId": "sample", "text": L("Prepare the retro"), "due": day(0), "page": L("Team"), "url": "/", "canEdit": true],
-        ["source": "doc", "pageId": "sample", "text": L("Submit travel expenses"), "due": day(1), "page": L("Finance"), "url": "/", "canEdit": true],
-        ["source": "doc", "pageId": "sample", "text": L("Review website copy"), "page": L("Marketing"), "url": "/", "canEdit": true],
+      return ["title": L("My tasks"), "total": 6, "overdue": 1, "items": [
+        ["source": "doc", "pageId": "sample", "index": 0, "text": L("Send offer to Miller"), "due": day(-2), "page": L("Sales"), "url": "/", "canEdit": true],
+        ["source": "doc", "pageId": "sample", "index": 1, "text": L("Prepare the retro"), "due": day(0), "page": L("Team"), "url": "/", "canEdit": true],
+        ["source": "doc", "pageId": "sample", "index": 2, "text": L("Submit travel expenses"), "due": day(1), "page": L("Finance"), "url": "/", "canEdit": true],
+        ["source": "doc", "pageId": "sample", "index": 3, "text": L("Book the team offsite"), "due": day(3), "page": L("Team"), "url": "/", "canEdit": true],
+        ["source": "doc", "pageId": "sample", "index": 4, "text": L("Review website copy"), "due": day(9), "page": L("Marketing"), "url": "/", "canEdit": true],
+        ["source": "doc", "pageId": "sample", "index": 5, "text": L("Plan the newsletter"), "page": L("Marketing"), "url": "/", "canEdit": true],
       ]]
     case "calendar":
       return ["title": L("Today"), "items": [
@@ -252,17 +302,6 @@ enum FPSamples {
               "days": hours.enumerated().map { index, value -> [String: Any] in ["day": FPAPI.today(monday.addingTimeInterval(Double(index) * 86_400 + 43_200)), "hours": value] },
               "timer": ["start": now - 47 * 60_000, "title": L("Write offer"), "database": L("Projects"), "url": "/"],
               "recent": []]
-    case "mentions":
-      return ["title": L("Mentions"), "unread": ["mentions": 2, "assignments": 1], "items": [
-        ["id": "1", "type": "mention", "text": L("Ada mentioned you in “Roadmap”"), "read": false, "createdAt": now - 20 * 60_000, "url": "/"],
-        ["id": "2", "type": "assignment", "text": L("Ben gave you “Prepare the retro”"), "read": false, "createdAt": now - 3 * 3_600_000, "url": "/"],
-      ]]
-    case "forms":
-      return ["title": L("Contact form"), "total": 12, "new": 2, "url": "/", "items": [
-        ["id": "1", "title": "Clara Weber", "createdAt": now - 35 * 60_000, "new": true, "url": "/"],
-        ["id": "2", "title": "Jonas Klein", "createdAt": now - 5 * 3_600_000, "new": true, "url": "/"],
-        ["id": "3", "title": "Mia Sommer", "createdAt": now - 30 * 3_600_000, "new": false, "url": "/"],
-      ]]
     case "study":
       return ["title": L("Cards due"), "due": 12, "new": 5, "streak": 4, "url": "/#study", "more": 0, "decks": [
         ["pageId": "sample", "title": L("Spanish A1"), "due": 8, "new": 3, "url": "/"],

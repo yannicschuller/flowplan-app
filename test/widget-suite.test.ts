@@ -47,7 +47,7 @@ test("settings are checked: unknown values fall back, ids must be ids", () => {
     mode: "page",
     pageId: PAGE,
     properties: ["a", "b"],
-    max: 6,
+    max: 10,
   });
   assert.equal(normalizeConfig("pinned", { mode: "page" }).mode, "favorites");
   // Sum without a number property counts instead.
@@ -168,12 +168,13 @@ test("answers with null fields still give finished texts", () => {
   assertNoNull(view);
   assert.equal(view.state, "tasks");
   if (view.state !== "tasks") return;
-  assert.equal(view.headline, "2 open");
+  // "Read" was due yesterday: the counter says it.
+  assert.equal(view.headline, "2 open · 1 overdue");
   assert.deepEqual(view.items[0].complete, { source: "row", pageId: PAGE, rowId: ROW, text: "Call Ben" });
   // No rowId: left out; may not edit: no checkbox.
   assert.equal(view.items[1].complete, undefined);
   assert.equal(view.items[1].late, true);
-  assert.equal(view.items[1].due, "Yesterday");
+  assert.equal(view.items[1].due, "Overdue · 1 d");
   // Only paths of the instance open; anything else the start page.
   assert.equal(view.items[1].url, "flowplan://open?path=%2F");
   assert.equal(view.items[0].url, `flowplan://open?path=${encodeURIComponent("/#page=" + PAGE)}`);

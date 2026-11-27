@@ -90,9 +90,26 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
   // Each row starts with a dot, not a circle: the rows open their task's
   // page, they do not check off (the suite's "Tasks" widget does). Links per
   // row from medium up; a small widget opens only its one link.
-  const rows = family === "systemExtraLarge" ? 8 : family === "systemLarge" ? 7 : family === "systemMedium" ? 3 : 2;
+  const rows = family === "systemExtraLarge" ? 10 : family === "systemLarge" ? 9 : family === "systemMedium" ? 3 : 2;
   const items = props.items.slice(0, rows);
   const small = family === "systemSmall";
+  // The quiet footer: "12 min ago" as a live text, older than an hour a
+  // warning and "As of 01:10" (small widgets: only the warning).
+  const fresh = props.fresh;
+  const old = !!fresh && Date.now() - fresh.at > 3_600_000;
+  const footer = !fresh ? null : old ? (
+    <HStack spacing={3}>
+      <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 10 }), foregroundStyle("#c27c0e")]} />
+      <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>{fresh.asOf}</Text>
+    </HStack>
+  ) : (
+    <HStack spacing={3}>
+      {fresh.before ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.before}</Text> : null}
+      <Text date={new Date(fresh.at)} dateStyle="relative" modifiers={[font({ size: 10 }), monospacedDigit(), foregroundStyle({ type: "hierarchical", style: "tertiary" }), lineLimit(1)]} />
+      {fresh.after ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.after}</Text> : null}
+    </HStack>
+  );
+
   // Explicit colours: a link would tint its text otherwise.
   const row = (item: TasksWidgetProps["items"][number], index: number) => (
     <HStack key={index} spacing={6}>
@@ -138,6 +155,7 @@ function FlowplanTasks(props: TasksWidgetProps, environment: WidgetEnvironment<T
           <Text date={new Date(props.timer.start)} dateStyle="timer" modifiers={[font({ size: 12, weight: "semibold" }), monospacedDigit(), foregroundStyle(brand)]} />
         </HStack>
       ) : null}
+      {footer && (!small || old) ? footer : null}
     </VStack>
   );
 }
@@ -178,6 +196,12 @@ function FlowplanInbox(props: InboxWidgetProps, environment: WidgetEnvironment) 
         <Image systemName="person.crop.circle.badge.exclamationmark" modifiers={[font({ size: 22 }), foregroundStyle(secondary)]} />
       )}
       <Text modifiers={[font({ size: 12 }), foregroundStyle(secondary), lineLimit(2)]}>{props.label}</Text>
+      {props.fresh && Date.now() - props.fresh.at > 3_600_000 ? (
+        <HStack spacing={3}>
+          <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 10 }), foregroundStyle("#c27c0e")]} />
+          <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>{props.fresh.asOf}</Text>
+        </HStack>
+      ) : null}
     </VStack>
   );
 }
@@ -186,8 +210,10 @@ function FlowplanInbox(props: InboxWidgetProps, environment: WidgetEnvironment) 
 // storage – one thing each, chosen in the widget's settings. Everyone else
 // sees "Administrators only". Status colours only as accents.
 
-// The instance: its state with the first problem, the last backup, or the
-// version and update (setting "Show").
+// "Admin status" (kind FlowplanInstance, so placed widgets stay): a traffic
+// light and the instance's health, the errors of the last hour, the age of
+// the last backup and the free disk (setting "Show": State); or the last
+// backup, or the version and update, big.
 function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironment<InstanceConfig>) {
   "widget";
   const family = environment.widgetFamily || "systemSmall";
@@ -205,29 +231,32 @@ function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironmen
       </VStack>
     );
   const closed = props.state === "signedOut" || props.state === "notAdmin" || props.state === "pending";
-  const tone = accented
-    ? brand
-    : props.state === "problem"
-      ? "#d14343"
-      : props.state === "notice"
-        ? "#c27c0e"
-        : props.state === "ok"
-          ? "#2f9e6e"
-          : brand;
+  // The traffic light: green, amber, red (in the tinted look: the tint).
+  const toneOf = (tone: string) => (accented ? brand : tone === "problem" ? "#d14343" : tone === "notice" ? "#c27c0e" : tone === "ok" ? "#2f9e6e" : brand);
+  const light = props.light || props.state;
+  const tone = toneOf(light);
   const icon =
-    props.state === "problem"
+    light === "problem"
       ? "xmark.octagon.fill"
-      : props.state === "notice"
+      : light === "notice"
         ? "exclamationmark.triangle.fill"
-        : props.state === "ok"
+        : light === "ok"
           ? "checkmark.seal.fill"
           : props.state === "notAdmin"
             ? "lock.fill"
             : props.state === "pending"
               ? "arrow.clockwise"
               : "person.crop.circle.badge.exclamationmark";
+  const rows = props.rows || [];
+  const attention = rows.filter((row) => row.tone !== "ok");
   if (family === "accessoryInline")
-    return <Text modifiers={[widgetURL(props.url)]}>{closed ? props.message : props.detail ? `${props.headline} · ${props.detail}` : props.headline}</Text>;
+    return <Text modifiers={[widgetURL(props.url)]}>{closed ? props.message : attention.length ? `${props.lightLabel} · ${attention[0].label}` : props.lightLabel}</Text>;
+  if (family === "accessoryCircular")
+    return (
+      <VStack spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget"), accessibilityLabel(closed ? props.message : props.lightLabel)]}>
+        <Image systemName={icon} modifiers={[font({ size: 22 })]} />
+      </VStack>
+    );
   if (family === "accessoryRectangular")
     return (
       <VStack alignment="leading" spacing={1} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "thin" }, "widget")]}>
@@ -235,11 +264,27 @@ function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironmen
           <Image systemName={icon} modifiers={[font({ textStyle: "caption" })]} />
           <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.title}</Text>
         </HStack>
-        <Text modifiers={[font({ textStyle: "headline" }), lineLimit(1)]}>{closed ? props.message : props.headline}</Text>
-        {!closed ? <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{props.detail || props.backup}</Text> : null}
+        <Text modifiers={[font({ textStyle: "headline" }), lineLimit(1)]}>{closed ? props.message : props.lightLabel}</Text>
+        {!closed ? <Text modifiers={[font({ textStyle: "caption" }), lineLimit(1)]}>{attention.length ? `${attention[0].label}: ${attention[0].value}` : props.detail || props.backup}</Text> : null}
       </VStack>
     );
   const small = family === "systemSmall";
+  // The quiet footer: "12 min ago" as a live text, older than an hour a
+  // warning and "As of 01:10" (small widgets: only the warning).
+  const fresh = props.fresh;
+  const old = !!fresh && Date.now() - fresh.at > 3_600_000;
+  const footer = !fresh ? null : old ? (
+    <HStack spacing={3}>
+      <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 10 }), foregroundStyle("#c27c0e")]} />
+      <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>{fresh.asOf}</Text>
+    </HStack>
+  ) : (
+    <HStack spacing={3}>
+      {fresh.before ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.before}</Text> : null}
+      <Text date={new Date(fresh.at)} dateStyle="relative" modifiers={[font({ size: 10 }), monospacedDigit(), foregroundStyle({ type: "hierarchical", style: "tertiary" }), lineLimit(1)]} />
+      {fresh.after ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.after}</Text> : null}
+    </HStack>
+  );
   const header = (
     <HStack spacing={5}>
       <Image systemName="server.rack" modifiers={[foregroundStyle(brand), font({ size: 12, weight: "semibold" })]} />
@@ -257,25 +302,48 @@ function FlowplanInstance(props: AdminStatusProps, environment: WidgetEnvironmen
         <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(secondary), lineLimit(3)]}>{props.message}</Text>
       </VStack>
     );
+  // One row of the four: its dot in its tone, the label, the value.
+  const row = (item: AdminStatusProps["rows"][number], index: number) => (
+    <HStack key={index} spacing={6}>
+      <Image systemName="circle.fill" modifiers={[font({ size: 7 }), foregroundStyle(toneOf(item.tone))]} />
+      <Text modifiers={[font({ size: 12 }), foregroundStyle(secondary), lineLimit(1)]}>{item.label}</Text>
+      <Spacer />
+      <Text modifiers={[font({ size: 12, weight: "semibold" }), monospacedDigit(), lineLimit(1), minimumScaleFactor(0.7)]}>{item.value}</Text>
+    </HStack>
+  );
+  if (show === "state")
+    return (
+      <VStack alignment="leading" spacing={small ? 4 : 6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
+        {header}
+        {small ? <Spacer /> : null}
+        <HStack spacing={6}>
+          <Image systemName={icon} modifiers={[foregroundStyle(tone), font({ size: small ? 18 : 20, weight: "semibold" })]} />
+          <Text modifiers={[font({ size: small ? 17 : 20, weight: "bold", design: "rounded" }), lineLimit(1), minimumScaleFactor(0.6)]}>{props.lightLabel}</Text>
+        </HStack>
+        {/* Small: what needs attention (or the backup and errors); wider: all four. */}
+        {(small ? (attention.length ? attention : rows.slice(1, 3)).slice(0, 2) : rows).map((item, index) => row(item, index))}
+        {!small && props.detail && family === "systemLarge" ? <Text modifiers={[font({ size: 11 }), foregroundStyle(secondary), lineLimit(2)]}>{props.more ? `${props.detail} · ${props.more}` : props.detail}</Text> : null}
+        {!small ? <Spacer /> : null}
+        {!small && props.update ? <Text modifiers={[font({ size: 11 }), foregroundStyle(brand), lineLimit(1)]}>{props.update}</Text> : null}
+        {footer && (!small || old) ? footer : null}
+      </VStack>
+    );
   // One big value with its label; the rest small and muted.
-  const big = show === "backup" ? props.backupTime : show === "version" ? props.version : props.headline;
-  const label = show === "backup" ? props.backupShort : show === "version" ? props.update || props.headline : props.detail;
-  const footer = show === "state" ? (props.update ? props.update : props.backup) : props.headline;
+  const big = show === "backup" ? props.backupTime : props.version;
+  const label = show === "backup" ? props.backupShort : props.update || props.headline;
   return (
     <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
       {header}
       <Spacer />
-      <HStack spacing={6}>
-        {show === "state" ? <Image systemName={icon} modifiers={[foregroundStyle(tone), font({ size: small ? 18 : 20, weight: "semibold" })]} /> : null}
-        <Text modifiers={[font({ size: show === "state" ? (small ? 20 : 24) : 32, weight: "bold", design: "rounded" }), lineLimit(1), minimumScaleFactor(0.6)]}>{big}</Text>
-      </HStack>
+      <Text modifiers={[font({ size: 32, weight: "bold", design: "rounded" }), lineLimit(1), minimumScaleFactor(0.6)]}>{big}</Text>
       {label ? (
         <HStack spacing={4}>
           {show === "backup" && props.backupLate ? <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 11 }), foregroundStyle(tone)]} /> : null}
           <Text modifiers={[font({ size: 12 }), foregroundStyle(secondary), lineLimit(small ? 2 : 1)]}>{label}</Text>
         </HStack>
       ) : null}
-      {!small && footer ? <Text modifiers={[font({ size: 11 }), foregroundStyle(secondary), lineLimit(1)]}>{footer}</Text> : null}
+      {!small ? <Text modifiers={[font({ size: 11 }), foregroundStyle(secondary), lineLimit(1)]}>{props.lightLabel}</Text> : null}
+      {footer && (!small || old) ? footer : null}
     </VStack>
   );
 }
@@ -305,6 +373,8 @@ function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment<Live
   const icon =
     !main ? "waveform.path.ecg" : main.id === "requests" ? "arrow.left.arrow.right" : main.id === "errors" ? "exclamationmark.triangle" : main.id === "signins" ? "person.badge.key.fill" : "person.2.fill";
   const alert = accented ? brand : "#d14343";
+  if (family === "accessoryInline")
+    return <Text modifiers={[widgetURL(props.url)]}>{main ? `${main.value} ${main.label}` : props.message}</Text>;
   if (family === "accessoryCircular")
     return main && main.id === "errors" ? (
       <Gauge
@@ -332,6 +402,23 @@ function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment<Live
   const small = family === "systemSmall";
   const large = family === "systemLarge";
   const chart = open && !small && props.spark.length > 0;
+  // The quiet footer: "12 min ago" as a live text, older than an hour a
+  // warning and "As of 01:10" (small widgets: only the warning).
+  const fresh = props.fresh;
+  const old = !!fresh && Date.now() - fresh.at > 3_600_000;
+  const footer = !fresh ? null : old ? (
+    <HStack spacing={3}>
+      <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 10 }), foregroundStyle("#c27c0e")]} />
+      <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>{fresh.asOf}</Text>
+    </HStack>
+  ) : (
+    <HStack spacing={3}>
+      {fresh.before ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.before}</Text> : null}
+      <Text date={new Date(fresh.at)} dateStyle="relative" modifiers={[font({ size: 10 }), monospacedDigit(), foregroundStyle({ type: "hierarchical", style: "tertiary" }), lineLimit(1)]} />
+      {fresh.after ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.after}</Text> : null}
+    </HStack>
+  );
+
   return (
     <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
       <HStack spacing={5}>
@@ -385,6 +472,7 @@ function FlowplanLive(props: AdminLiveProps, environment: WidgetEnvironment<Live
             </HStack>
           ))
         : null}
+      {open && footer && (!small || old) ? footer : null}
     </VStack>
   );
 }
@@ -436,6 +524,22 @@ function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironmen
       </VStack>
     );
   const small = family === "systemSmall";
+  // The quiet footer: "12 min ago" as a live text, older than an hour a
+  // warning and "As of 01:10" (small widgets: only the warning).
+  const fresh = props.fresh;
+  const old = !!fresh && Date.now() - fresh.at > 3_600_000;
+  const footer = !fresh ? null : old ? (
+    <HStack spacing={3}>
+      <Image systemName="exclamationmark.triangle.fill" modifiers={[font({ size: 10 }), foregroundStyle("#c27c0e")]} />
+      <Text modifiers={[font({ size: 10 }), foregroundStyle(secondary), lineLimit(1)]}>{fresh.asOf}</Text>
+    </HStack>
+  ) : (
+    <HStack spacing={3}>
+      {fresh.before ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.before}</Text> : null}
+      <Text date={new Date(fresh.at)} dateStyle="relative" modifiers={[font({ size: 10 }), monospacedDigit(), foregroundStyle({ type: "hierarchical", style: "tertiary" }), lineLimit(1)]} />
+      {fresh.after ? <Text modifiers={[font({ size: 10 }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]}>{fresh.after}</Text> : null}
+    </HStack>
+  );
   return (
     <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground(background, "widget")]}>
       <HStack spacing={5}>
@@ -458,6 +562,7 @@ function FlowplanStorage(props: AdminStorageProps, environment: WidgetEnvironmen
           {metric === "database" ? props.diskLabel || props.quotaLabel : `${props.used} · ${props.usedLabel}`}
         </Text>
       ) : null}
+      {open && footer && (!small || old) ? footer : null}
     </VStack>
   );
 }

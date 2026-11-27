@@ -12,7 +12,7 @@ import { FlexWidget, TextWidget } from "react-native-android-widget";
 import { DARK, hex, LIGHT, widgetThemes, type Theme } from "./android";
 import { accentThemes, type Themes } from "../android/theme";
 import { widgetRadii } from "../../modules/flowplan-android/src";
-import type { ClosedView, SuiteView } from "./present";
+import { taskRows, type ClosedView, type SuiteView } from "./present";
 import type { Accent } from "./suite";
 
 // What a tap does (clickAction); the data is what the action needs.
@@ -107,6 +107,27 @@ function Notice({ text, theme }: { text?: string; theme: Theme }) {
   return text ? <TextWidget text={text} maxLines={1} truncate="END" style={{ fontSize: 12, fontWeight: "500", color: hex(theme.late) }} /> : null;
 }
 
+// The last update, quiet at the bottom ("Updated 14:05"); older than an
+// hour with a warning ("⚠ As of 01:10"). Small widgets: only the warning.
+function Footer({ view, theme, small }: { view: SuiteView; theme: Theme; small: boolean }) {
+  if (!view.updated || (small && !view.old)) return null;
+  return (
+    <FlexWidget style={{ width: "match_parent", flexDirection: "row", marginTop: 4 }}>
+      <TextWidget
+        text={view.old ? `⚠ ${view.updated}` : view.updated}
+        maxLines={1}
+        truncate="END"
+        style={{ fontSize: 11, color: hex(view.old ? theme.late : theme.muted) }}
+      />
+    </FlexWidget>
+  );
+}
+
+// The heading of a group in a list (Overdue, Today, Later).
+function Heading({ text, theme, late }: { text: string; theme: Theme; late?: boolean }) {
+  return <TextWidget text={text.toUpperCase()} maxLines={1} style={{ fontSize: 11, fontWeight: "600", color: hex(late ? theme.late : theme.muted), marginTop: 4 }} />;
+}
+
 function Message({ text, theme }: { text: string; theme: Theme }) {
   return (
     <FlexWidget style={{ flex: 1, justifyContent: "center", width: "match_parent" }}>
@@ -169,14 +190,37 @@ const CLOSED_GLYPHS: Record<ClosedView["reason"], string> = {
   outdated: "↑",
 };
 
-function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Size; look: Look; widgetId: number }) {
+// Every widget: its content and the footer (not on quick capture).
+function SuiteWidget(props: { view: SuiteView; size: Size; look: Look; widgetId: number }) {
+  const { view, size, look } = props;
+  const content = SuiteContent(props);
+  if (view.state === "closed" || view.state === "capture" || !view.updated || (size.width < 200 && !view.old)) return content;
+  return (
+    <FlexWidget style={frame(look)}>
+      <FlexWidget style={{ flex: 1, width: "match_parent", flexDirection: "column" }}>{content}</FlexWidget>
+      <Footer view={view} theme={look.theme} small={size.width < 200} />
+    </FlexWidget>
+  );
+}
+
+// The rows of a list that fit (40 dp each, the tap targets' height): the
+// header and the footer taken off, up to ten.
+export function suiteRows(size: Size, footer = true) {
+  return Math.max(1, Math.min(10, Math.floor((size.height - 56 - (footer ? 16 : 0)) / 40)));
+}
+
+function SuiteContent({ view, size, look, widgetId }: { view: SuiteView; size: Size; look: Look; widgetId: number }) {
   const { theme, radii } = look;
+  // Inside SuiteWidget's frame (with the footer) the content has no frame
+  // of its own.
+  const framed = view.state === "closed" || view.state === "capture" || !view.updated || (size.width < 200 && !view.old);
+  const box = framed ? frame(look) : ({ height: "match_parent", width: "match_parent", flexDirection: "column" } as const);
   const small = size.width < 200;
-  const rows = Math.max(1, Math.min(8, Math.floor((size.height - 56) / 40)));
+  const rows = suiteRows(size, !framed);
   switch (view.state) {
     case "closed":
       return (
-        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={frame(look)} accessibilityLabel={`${view.title}: ${view.message}`}>
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={box} accessibilityLabel={`${view.title}: ${view.message}`}>
           <Header title={view.title} theme={theme} />
           <FlexWidget style={{ flex: 1, justifyContent: "center", width: "match_parent", flexDirection: "column" }}>
             <TextWidget text={CLOSED_GLYPHS[view.reason]} style={{ fontSize: 20, color: hex(theme.brand), marginBottom: 4 }} />
@@ -188,7 +232,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       const buttons = small ? view.buttons.slice(0, 1) : view.buttons;
       const glyph = { note: "✎", task: "☑", voice: "🎤", photo: "📷" } as const;
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <Header title={view.title} trailing={small ? "" : view.target} theme={theme} />
           <FlexWidget style={{ flex: 1, flexDirection: "row", width: "match_parent", alignItems: "center" }}>
             {buttons.map((button, index) => (
@@ -218,13 +262,25 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
     }
     case "tasks":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
             <Header title={view.title} trailing={view.items.length ? view.headline : ""} theme={theme} />
           </FlexWidget>
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
-          {view.items.slice(0, rows).map((item, index) => (
-            <FlexWidget key={index} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
+          {view.items.length || small ? null : (
+            <FlexWidget
+              clickAction="OPEN_URI"
+              clickActionData={{ uri: view.add.url }}
+              accessibilityLabel={view.add.label}
+              style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: hex(theme.line), alignItems: "center", justifyContent: "center", marginBottom: 4 }}
+            >
+              <TextWidget text={`＋ ${view.add.label}`} maxLines={1} style={{ fontSize: 14, fontWeight: "600", color: hex(theme.brand) }} />
+            </FlexWidget>
+          )}
+          {taskRows(view.items, rows).map(({ item, heading }, index) => (
+            <FlexWidget key={index} style={{ width: "match_parent", flexDirection: "column" }}>
+            {heading !== undefined ? <Heading text={view.groups[heading]} late={heading === 0} theme={theme} /> : null}
+            <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
               {item.done ? (
                 <Checked theme={theme} />
               ) : item.complete ? (
@@ -243,14 +299,40 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
                 theme={theme}
               />
             </FlexWidget>
+            </FlexWidget>
           ))}
         </FlexWidget>
       );
     case "calendar":
+      // Small: the next appointment with its countdown and "Join".
+      if (small && view.next) {
+        const next = view.next;
+        return (
+          <FlexWidget style={box}>
+            <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: next.url }} style={{ width: "match_parent", flexDirection: "column" }} accessibilityLabel={[next.title, next.when, next.countdown].filter(Boolean).join(", ")}>
+              <Header title={view.title} trailing={view.unread ? `@ ${view.unread}` : ""} theme={theme} />
+              {next.countdown ? <TextWidget text={next.countdown} maxLines={1} style={{ fontSize: 20, fontWeight: "700", color: hex(theme.brand) }} /> : null}
+              <TextWidget text={next.title} maxLines={2} truncate="END" style={{ fontSize: 16, fontWeight: "600", color: hex(theme.text) }} />
+              <TextWidget text={next.when} maxLines={1} truncate="END" style={{ fontSize: 12, color: hex(theme.muted), marginTop: 2 }} />
+            </FlexWidget>
+            <FlexWidget style={{ flex: 1 }} />
+            {next.join ? (
+              <FlexWidget
+                clickAction="OPEN_URI"
+                clickActionData={{ uri: next.join }}
+                accessibilityLabel={`${view.joinLabel}: ${next.title}`}
+                style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: hex(theme.brand), alignItems: "center", justifyContent: "center" }}
+              >
+                <TextWidget text={view.joinLabel} maxLines={1} style={{ fontSize: 14, fontWeight: "600", color: hex(theme.background) }} />
+              </FlexWidget>
+            ) : null}
+          </FlexWidget>
+        );
+      }
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
-            <Header title={view.title} theme={theme} />
+            <Header title={view.title} trailing={view.unread ? `@ ${view.unread}` : ""} theme={theme} />
           </FlexWidget>
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
           {view.items.slice(0, rows).map((item, index) => (
@@ -264,7 +346,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "list":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
             <Header title={view.title} trailing={small ? "" : view.columns.join(" · ")} theme={theme} />
           </FlexWidget>
@@ -278,10 +360,10 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "counter":
       return (
-        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={frame(look)} accessibilityLabel={`${view.title}: ${view.value} ${view.label}`}>
-          <Header title={view.title} theme={theme} />
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={box} accessibilityLabel={`${view.title}: ${view.value} ${view.label}`}>
+          <Header title={view.title} trailing={small ? "" : view.delta} theme={theme} />
           <FlexWidget style={{ flex: 1 }} />
-          <Big value={view.value} label={[view.label, view.group].filter(Boolean).join(" · ")} theme={theme} />
+          <Big value={view.value} label={[view.label, view.group, small ? view.delta : ""].filter(Boolean).join(" · ")} theme={theme} />
           {!small ? (
             <Spark
               values={view.history.map((h) => h.value)}
@@ -295,7 +377,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "journal":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <Header title={view.title} theme={theme} />
           {view.journal ? (
             <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.journal.url }} style={{ width: "match_parent", flexDirection: "column", marginBottom: 6 }}>
@@ -327,7 +409,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "time":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
             <Header title={view.title} theme={theme} />
           </FlexWidget>
@@ -358,7 +440,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "mentions":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center" }}>
             <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ flex: 1 }}>
               <Header title={view.title} trailing={view.headline} theme={theme} />
@@ -379,7 +461,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "forms":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
             <Header title={view.title} trailing={view.headline} theme={theme} />
           </FlexWidget>
@@ -396,7 +478,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       // "Karten fällig": the number, the next deck and the streak; wider
       // widgets list the decks (each opens its deck).
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }} accessibilityLabel={`${view.title}: ${view.count}`}>
             <Header title={view.title} trailing={small ? "" : view.detail} theme={theme} />
           </FlexWidget>
@@ -427,13 +509,13 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       const [next, ...later] = view.items;
       if (!next)
         return (
-          <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={frame(look)}>
+          <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={box}>
             <Header title={view.title} theme={theme} />
             <Message text={view.empty} theme={theme} />
           </FlexWidget>
         );
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: next.url }} style={{ width: "match_parent", flexDirection: "column" }} accessibilityLabel={[next.title, next.when, next.countdown, next.location].filter(Boolean).join(", ")}>
             <Header title={view.title} trailing={small ? "" : next.countdown} theme={theme} />
             {small && next.countdown ? <TextWidget text={next.countdown} maxLines={1} style={{ fontSize: 20, fontWeight: "700", color: hex(theme.brand) }} /> : null}
@@ -464,7 +546,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
     }
     case "reading":
       return (
-        <FlexWidget style={frame(look)}>
+        <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
             <Header title={view.title} theme={theme} />
           </FlexWidget>
@@ -483,7 +565,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
       );
     case "metric":
       return (
-        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={frame(look)} accessibilityLabel={`${view.title}: ${view.value} ${view.unit} ${view.delta}`}>
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={box} accessibilityLabel={`${view.title}: ${view.value} ${view.unit} ${view.delta}`}>
           <Header title={view.title} trailing={small ? "" : view.delta} theme={theme} />
           <FlexWidget style={{ flex: 1 }} />
           <Big value={view.unit && !view.value.includes(view.unit) ? `${view.value} ${view.unit}` : view.value} label={small && view.delta ? `${view.label} ${view.delta}`.trim() : view.label} theme={theme} />
@@ -493,7 +575,7 @@ function SuiteWidget({ view, size, look, widgetId }: { view: SuiteView; size: Si
     case "deadline": {
       const tone = view.done ? theme.ok : view.overdue ? theme.late : theme.brand;
       return (
-        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={frame(look)} accessibilityLabel={[view.title, view.countdown, view.due].filter(Boolean).join(", ")}>
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={box} accessibilityLabel={[view.title, view.countdown, view.due].filter(Boolean).join(", ")}>
           <Header title={view.title} theme={theme} />
           <FlexWidget style={{ flex: 1 }} />
           <Big value={view.countdown} label={view.due} theme={theme} size={small ? 24 : 30} color={tone} />

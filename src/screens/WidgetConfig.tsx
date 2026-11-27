@@ -133,21 +133,29 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
   const set = (patch: Json) => setConfigState((current) => ({ ...current, ...patch }));
   // The database whose views and properties are offered.
   const pageId = str(config.pageId);
-  const needsDatabase = (kind === "tasks" && config.source === "view") || (kind === "pinned" && config.mode === "page") || kind === "counter";
+  // "Key figure" of a database takes the counter's options.
+  const figureDatabase = kind === "metric" && config.source === "database";
+  const optionKind = kind === "time" ? "time" : figureDatabase ? "counter" : kind;
+  const needsDatabase = (kind === "tasks" && config.source === "view") || (kind === "pinned" && config.mode === "page") || kind === "counter" || figureDatabase;
 
   // Another profile: its settings for this widget, its instance's options.
   useEffect(() => {
     if (!kind) return;
     setConfigState(configFor(readConfigs(), profile, widgetInfo.widgetId, kind) as unknown as Json);
-    setOptions(null);
-    if (!target) return;
-    void widgetOptions(target, kind === "time" ? "time" : kind).then((answer) => setOptions(answer.ok ? answer.value : {}));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, profile]);
+  // Its options (again when "Key figure" changes its source).
+  useEffect(() => {
+    if (!kind) return;
+    setOptions(null);
+    if (!target) return;
+    void widgetOptions(target, optionKind as NonNullable<typeof kind>).then((answer) => setOptions(answer.ok ? answer.value : {}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, profile, optionKind]);
   useEffect(() => {
     setDatabase(null);
     if (!kind || !target || !pageId || !needsDatabase) return;
-    void widgetOptions(target, kind, pageId).then((answer) => answer.ok && setDatabase((answer.value.database as Json) ?? null));
+    void widgetOptions(target, optionKind as NonNullable<typeof kind>, pageId).then((answer) => answer.ok && setDatabase((answer.value.database as Json) ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, pageId, needsDatabase, profile]);
   const dashboardId = str(config.dashboardId);
@@ -200,7 +208,6 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
           {config.source === "view" && database ? <Choice title={t("configView")} items={views} value={str(config.viewId)} onChange={(v) => set({ viewId: v || undefined })} /> : null}
           {config.source === "page" ? <Choice title={t("configPage")} items={list(o.pages).map(pageItem)} value={pageId} onChange={(v) => set({ pageId: v })} /> : null}
           <Choice title={t("configFilter")} items={named(o.filters)} value={str(config.filter)} onChange={(v) => set({ filter: v })} />
-          <Count title={t("configCount")} value={Number(config.max) || 5} min={1} max={10} onChange={(max) => set({ max })} />
         </>
       );
       break;
@@ -225,7 +232,13 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
     case "pinned":
       fields = (
         <>
-          <Choice title={t("configShow")} items={named(o.modes)} value={str(config.mode)} onChange={(v) => set({ mode: v, pageId: undefined, viewId: undefined, properties: [] })} />
+          <Choice
+            title={t("configShow")}
+            // "Recently opened" is the app's (the continue-reading answer).
+            items={[...named(o.modes).filter((m) => m.value !== "recent"), { value: "recent", label: t("readingRecent") }]}
+            value={str(config.mode)}
+            onChange={(v) => set({ mode: v, pageId: undefined, viewId: undefined, properties: [] })}
+          />
           {config.mode === "page" ? <Choice title={t("configPage")} items={list(o.pages).map(pageItem)} value={pageId} onChange={(v) => set({ pageId: v, viewId: undefined, properties: [] })} /> : null}
           {config.mode === "page" && database ? <Choice title={t("configView")} items={views} value={str(config.viewId)} onChange={(v) => set({ viewId: v || undefined })} /> : null}
           {config.mode === "page" && database ? (
@@ -234,7 +247,8 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
         </>
       );
       break;
-    case "counter": {
+    case "counter":
+    case "metric": {
       const groupField = properties.find((f) => f.id === config.groupFieldId);
       const groupValues: Item[] =
         groupField?.type === "checkbox"
@@ -243,8 +257,38 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
               { value: "false", label: "☐" },
             ]
           : list(groupField?.values).map((v) => ({ value: str(v.value ?? v.name ?? v), label: str(v.name ?? v.value ?? v) }));
+      // "Key figure": a dashboard's tile, or a database's number.
+      const source = (
+        <Choice
+          title={t("configSource")}
+          items={[
+            { value: "dashboard", label: t("configDashboard") },
+            { value: "database", label: t("configDatabase") },
+          ]}
+          value={str(config.source) || "dashboard"}
+          onChange={(v) => set({ source: v, pageId: undefined, dashboardId: undefined, widgetId: undefined, viewId: undefined, fieldId: undefined, groupFieldId: undefined, groupValue: undefined })}
+        />
+      );
+      if (kind === "metric" && !figureDatabase) {
+        fields = (
+          <>
+            {source}
+            <Choice title={t("configDashboard")} items={list(o.dashboards).map(pageItem)} value={dashboardId} onChange={(v) => set({ dashboardId: v, widgetId: undefined })} />
+            {dashboardId ? (
+              <Choice
+                title={t("configFigure")}
+                items={named(list(o.dashboards).find((d) => str(d.id) === dashboardId)?.widgets)}
+                value={str(config.widgetId)}
+                onChange={(v) => set({ widgetId: v })}
+              />
+            ) : null}
+          </>
+        );
+        break;
+      }
       fields = (
         <>
+          {kind === "metric" ? source : null}
           <Choice title={t("configDatabase")} items={list(o.databases).map(pageItem)} value={pageId} onChange={(v) => set({ pageId: v, viewId: undefined, fieldId: undefined, groupFieldId: undefined, groupValue: undefined })} />
           {database ? <Choice title={t("configView")} items={views} value={str(config.viewId)} onChange={(v) => set({ viewId: v || undefined })} /> : null}
           <Choice title={t("configValue")} items={named(o.aggregates)} value={str(config.aggregate)} onChange={(v) => set({ aggregate: v })} />
@@ -260,7 +304,7 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
             />
           ) : null}
           {groupField ? <Choice title={t("configGroupValue")} items={groupValues} value={str(config.groupValue)} onChange={(v) => set({ groupValue: v })} /> : null}
-          <Toggle title={t("configHistory")} value={config.history !== false} onChange={(history) => set({ history })} />
+          {kind === "counter" ? <Toggle title={t("configHistory")} value={config.history !== false} onChange={(history) => set({ history })} /> : null}
         </>
       );
       break;
@@ -345,21 +389,6 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
             onChange={(v) => set({ source: v })}
           />
           <Count title={t("configCount")} value={Number(config.max) || 3} min={1} max={6} onChange={(max) => set({ max })} />
-        </>
-      );
-      break;
-    case "metric":
-      fields = (
-        <>
-          <Choice title={t("configDashboard")} items={list(o.dashboards).map(pageItem)} value={dashboardId} onChange={(v) => set({ dashboardId: v, widgetId: undefined })} />
-          {dashboardId ? (
-            <Choice
-              title={t("configFigure")}
-              items={named(list(o.dashboards).find((d) => str(d.id) === dashboardId)?.widgets)}
-              value={str(config.widgetId)}
-              onChange={(v) => set({ widgetId: v })}
-            />
-          ) : null}
         </>
       );
       break;

@@ -4,6 +4,7 @@
 // a small runtime of their own without the app's code.
 import { appLink } from "./navigation";
 import { intlLocale, t, type Locale } from "./i18n";
+import { freshness, type Freshness } from "./admin";
 
 export type Summary = {
   name: string;
@@ -66,11 +67,16 @@ export function localDay(date = new Date()) {
 export function dueLabel(due: string | null, today: string, locale: Locale) {
   if (!due) return "";
   const days = Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 864e5);
-  // Hermes has no Intl.RelativeTimeFormat: the near days are words of our own.
+  // The same words in every widget: "Overdue · 10 d", "Today", "Tomorrow",
+  // the weekday within a week, the date only beyond that. Hermes has no
+  // Intl.RelativeTimeFormat: the near days are words of our own.
+  if (!Number.isFinite(days)) return "";
+  if (days < 0) return t("dueOverdueDays", { count: -days }, locale);
   if (days === 0) return t("widgetToday", {}, locale);
   if (days === 1) return t("tomorrow", {}, locale);
-  if (days === -1) return t("yesterday", {}, locale);
-  return new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${due}T00:00:00Z`));
+  const date = new Date(`${due}T00:00:00Z`);
+  if (days < 7) return new Intl.DateTimeFormat(intlLocale(locale), { weekday: "long", timeZone: "UTC" }).format(date);
+  return new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
 }
 
 export type TaskLine = { text: string; page: string; due: string; late: boolean; url: string };
@@ -88,8 +94,10 @@ export type TasksWidgetProps = {
   inboxUrl: string;
   // Left out without a running timer: widget props carry no null (below).
   timer?: { title: string; start: number; url: string };
+  // When the summary came from the instance (the footer).
+  fresh?: Freshness;
 };
-export type InboxWidgetProps = { signedIn: boolean; title: string; count: number; label: string; url: string };
+export type InboxWidgetProps = { signedIn: boolean; title: string; count: number; label: string; url: string; fresh?: Freshness };
 
 // What the list below shows: the due ones and how many are open, so "Nothing
 // due" above a list of open tasks does not read as a contradiction.
@@ -135,6 +143,7 @@ export function tasksWidget(summary: Summary | null, locale: Locale): TasksWidge
     unread: summary.unread,
     unreadLabel: summary.unread ? t("widgetUnread", { count: summary.unread }, locale) : t("widgetInboxEmpty", {}, locale),
     inboxUrl,
+    ...(summary.at ? { fresh: freshness(summary.at, Date.now(), locale) } : {}),
     ...(summary.timer ? { timer: { title: summary.timer.title || summary.timer.database, start: summary.timer.start, url: appLink(summary.timer.url) } } : {}),
   };
 }
@@ -150,6 +159,7 @@ export function inboxWidget(summary: Summary | null, locale: Locale): InboxWidge
         ? t("widgetUnread", { count: summary.unread }, locale)
         : t("widgetInboxEmpty", {}, locale),
     url: appLink(summary ? "/#inbox" : "/"),
+    ...(summary?.at ? { fresh: freshness(summary.at, Date.now(), locale) } : {}),
   };
 }
 

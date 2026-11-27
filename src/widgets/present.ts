@@ -41,10 +41,16 @@ export function themeOf(result: WidgetResult | null | undefined): WidgetTheme | 
 // kind of widget yet (an older Flowplan).
 export type Closed = "signedOut" | "setup" | "gone" | "offline" | "locked" | "encrypted" | "forbidden" | "outdated";
 
-type Base = { kind: SuiteKind; title: string; url: string };
+// updated: the quiet footer – when the answer came from the instance
+// ("Updated 14:05"; Android cannot count "12 min ago" on without drawing
+// the widget again), old: more than an hour ago ("As of 01:10" with a
+// warning). Not on quick capture.
+type Base = { kind: SuiteKind; title: string; url: string; updated?: string; old?: boolean };
 export type ClosedView = Base & { state: "closed"; reason: Closed; message: string };
 
 export type TaskRow = {
+  // 0 overdue, 1 today, 2 later (or no date): the headings of tall widgets.
+  group: 0 | 1 | 2;
   text: string;
   detail: string;
   due: string;
@@ -80,10 +86,30 @@ function marking(marks: ActionMarks | undefined, now: number) {
 export type SuiteView =
   | ClosedView
   | (Base & { state: "capture"; target: string; buttons: { id: CaptureButton; label: string; url: string }[] })
-  | (Base & { state: "tasks"; headline: string; empty: string; items: TaskRow[] })
-  | (Base & { state: "calendar"; empty: string; items: { title: string; when: string; day: string; calendar: string; task: boolean; url: string }[] })
+  | (Base & {
+      state: "tasks";
+      // "24 open · 10 overdue".
+      headline: string;
+      empty: string;
+      items: TaskRow[];
+      // The headings of the groups (tall widgets) and the empty state's
+      // quick add.
+      groups: [string, string, string];
+      add: { label: string; url: string };
+    })
+  | (Base & {
+      state: "calendar";
+      empty: string;
+      items: { title: string; when: string; day: string; calendar: string; task: boolean; url: string }[];
+      // The next appointment (the small size) and the unread mentions, from
+      // the further answers.
+      next?: EventItem;
+      joinLabel: string;
+      unread: number;
+      unreadLabel: string;
+    })
   | (Base & { state: "list"; empty: string; columns: string[]; items: { title: string; detail: string; url: string }[] })
-  | (Base & { state: "counter"; value: string; label: string; group: string; history: { value: number; estimated: boolean }[]; estimated: string })
+  | (Base & { state: "counter"; value: string; label: string; group: string; history: { value: number; estimated: boolean }[]; estimated: string; delta: string; trend: "up" | "down" | "flat" | "" })
   | (Base & {
       state: "journal";
       journal?: { name: string; line: string; written: boolean; url: string; protected: boolean };
@@ -114,15 +140,60 @@ export type SuiteView =
     })
   | (Base & { state: "forms"; headline: string; empty: string; items: { title: string; when: string; isNew: boolean; url: string }[] })
   | (Base & { state: "study"; count: string; label: string; detail: string; decks: { title: string; due: string; url: string }[] })
-  | (Base & {
-      state: "event";
-      empty: string;
-      joinLabel: string;
-      items: { title: string; when: string; countdown: string; allDay: boolean; now: boolean; start: number; end: number; location: string; calendar: string; join?: string; url: string }[];
-    })
+  | (Base & { state: "event"; empty: string; joinLabel: string; items: EventItem[] })
   | (Base & { state: "reading"; empty: string; items: { title: string; detail: string; progress?: number; kind: string; url: string }[] })
   | (Base & { state: "metric"; value: string; unit: string; label: string; series: number[]; delta: string; trend: "up" | "down" | "flat" | "" })
   | (Base & { state: "deadline"; due: string; countdown: string; overdue: boolean; done: boolean; share?: number });
+
+export type EventItem = { title: string; when: string; countdown: string; allDay: boolean; now: boolean; start: number; end: number; location: string; calendar: string; join?: string; url: string };
+
+// The appointments of a next-appointment answer still to come (or running),
+// the first with its countdown. Timed ones in UTC (ISO), all-day ones as
+// dates – those from the start of their first to the end of their last day,
+// on the phone.
+function eventItems(d: Data, options: { showJoin: boolean; max: number; now: number; locale: Locale }): EventItem[] {
+  const { now, locale } = options;
+  return list(d.items)
+    .map((item) => {
+      const allDay = item.allDay === true;
+      const day = (value: unknown, end: boolean) => {
+        const text = str(value);
+        return /^\d{4}-\d{2}-\d{2}$/.test(text) ? Date.parse(`${text}T${end ? "23:59:59" : "00:00:00"}`) : Date.parse(text);
+      };
+      const start = allDay ? day(item.start, false) : Date.parse(str(item.start));
+      const end = allDay ? day(item.end || item.start, true) : Date.parse(str(item.end));
+      return { item, allDay, start, end: Number.isFinite(end) ? end : start };
+    })
+    .filter(({ start, end }) => Number.isFinite(start) && end >= now - 60_000)
+    .slice(0, options.max)
+    .map(({ item, allDay, start, end }) => {
+      const running = !allDay && start <= now && now < end;
+      const join = options.showJoin ? joinLink(item.joinUrl) : null;
+      return {
+        title: str(item.title),
+        when: eventWhen(start, end, allDay, now, locale),
+        countdown: running ? t("eventNow", {}, locale) : allDay ? "" : t("countdownIn", { time: formatDuration(start - now, locale) }, locale),
+        allDay,
+        now: running,
+        start,
+        end,
+        location: str(item.location),
+        calendar: str(item.calendarName ?? item.calendar),
+        ...(join ? { join } : {}),
+        url: pageLink(item.url),
+      };
+    });
+}
+
+// "Updated 14:05", or older than an hour "As of 01:10" (another day: with
+// the date).
+export function updatedLine(at: number, now: number, locale: Locale) {
+  const time = formatWhen(at, now, locale);
+  const sameDay = new Date(at).toDateString() === new Date(now).toDateString();
+  const when = sameDay ? time : `${time} ${new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(new Date(at))}`;
+  const old = now - at > 3_600_000;
+  return { updated: old ? t("widgetAsOf", { time: when }, locale) : t("widgetUpdatedAt", { time: when }, locale), old };
+}
 
 const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   capture: "suiteCapture",
@@ -198,7 +269,7 @@ function eventWhen(start: number, end: number, allDay: boolean, now: number, loc
   const today = day(now);
   const tomorrow = day(now + 86_400_000);
   const startDay = day(start);
-  const prefix = startDay === today ? "" : startDay === tomorrow ? t("tomorrow", {}, locale) : new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short" }).format(new Date(start));
+  const prefix = startDay === today ? "" : startDay === tomorrow ? t("tomorrow", {}, locale) : dueLabel(startDay, today, locale);
   if (allDay) return prefix ? `${prefix} · ${t("allDay", {}, locale)}` : t("allDay", {}, locale);
   const clock = (at: number) => new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(new Date(at));
   const range = end > start && day(end) === startDay ? `${clock(start)}–${clock(end)}` : clock(start);
@@ -210,13 +281,26 @@ function weekdayOf(day: string, locale: Locale) {
   return Number.isFinite(at) ? new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short", timeZone: "UTC" }).format(new Date(at)) : day;
 }
 
+type ViewOptions = {
+  locale: Locale;
+  today: string;
+  signedIn: boolean;
+  now?: number;
+  marks?: ActionMarks;
+  // When the answer came from the instance (ms): the footer.
+  fetchedAt?: number;
+  // Further answers the widget shows ("Today": event, mentions).
+  extras?: Record<string, WidgetResult | null | undefined>;
+};
+
 // The view of one widget: a result of the data request (or none yet).
-export function suiteView<K extends SuiteKind>(
-  kind: K,
-  config: SuiteConfig[K],
-  result: WidgetResult | null,
-  options: { locale: Locale; today: string; signedIn: boolean; now?: number; marks?: ActionMarks },
-): SuiteView {
+export function suiteView<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: WidgetResult | null, options: ViewOptions): SuiteView {
+  const view = viewOf(kind, config, result, options);
+  if (view.state === "closed" || view.state === "capture" || typeof options.fetchedAt !== "number" || !Number.isFinite(options.fetchedAt)) return view;
+  return { ...view, ...updatedLine(options.fetchedAt, options.now ?? Date.now(), options.locale) };
+}
+
+function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: WidgetResult | null, options: ViewOptions): SuiteView {
   const { locale, today } = options;
   const now = options.now ?? Date.now();
   const marks = marking(options.marks, now);
@@ -245,7 +329,15 @@ export function suiteView<K extends SuiteKind>(
   const url = pageLink(d.url);
   if (d.locked === true) return closedView(kind, "locked", locale, title, str(d.url, "/"));
   if (d.encrypted === true) return closedView(kind, "encrypted", locale, "", str(d.url, "/"));
-  switch (kind) {
+  // What the answer is (serverRequest): "Key figure" of a database is a
+  // counter's, "Pages" recently opened a continue-reading answer.
+  const shown: SuiteKind =
+    kind === "metric" && (config as SuiteConfig["metric"]).source === "database"
+      ? "counter"
+      : kind === "pinned" && (config as SuiteConfig["pinned"]).mode === "recent"
+        ? "reading"
+        : kind;
+  switch (shown) {
     case "capture": {
       const target = d.target as Data | null;
       if (!target) return closedView(kind, "gone", locale, title);
@@ -278,6 +370,7 @@ export function suiteView<K extends SuiteKind>(
         });
         const id = taskItemId(complete);
         const row: TaskRow = {
+          group: !due ? 2 : due < today ? 0 : due === today ? 1 : 2,
           text: str(item.text),
           detail: str(item.page),
           due: dueLabel(due, today, locale),
@@ -290,24 +383,43 @@ export function suiteView<K extends SuiteKind>(
         return row;
       });
       const total = Math.max(0, num(d.total, items.length) - rows.filter((row) => row.done).length);
+      // The instance's count of overdue tasks where it sends one; otherwise
+      // those of the answer (at most ten).
+      const lateDone = rows.filter((row) => row.done && row.group === 0).length;
+      const overdue = typeof d.overdue === "number" ? Math.max(0, d.overdue - lateDone) : rows.filter((row) => !row.done && row.group === 0).length;
       return {
         kind,
         state: "tasks",
         title,
         url: (config as SuiteConfig["tasks"]).source === "mine" ? appLink("/#tasks") : url,
-        headline: total ? t("tasksOpen", { count: total }, locale) : t("tasksDone", {}, locale),
+        headline: !total
+          ? t("tasksDone", {}, locale)
+          : overdue
+            ? `${t("tasksOpen", { count: total }, locale)} · ${t("tasksOverdue", { count: overdue }, locale)}`
+            : t("tasksOpen", { count: total }, locale),
         empty: t("tasksDone", {}, locale),
         items: rows,
+        groups: [t("groupOverdue", {}, locale), t("widgetToday", {}, locale), t("groupLater", {}, locale)],
+        add: { label: t("newTask", {}, locale), url: captureLink("task") },
       };
     }
     case "calendar": {
       const range = (config as SuiteConfig["calendar"]).range;
+      const event = options.extras?.event;
+      const next = event && event.ok ? eventItems(event.data, { showJoin: true, max: 1, now, locale })[0] : undefined;
+      const mentions = options.extras?.mentions;
+      const counts = (mentions && mentions.ok ? mentions.data.unread : null) as Data | null;
+      const unread = counts ? Math.max(0, num(counts.mentions) + num(counts.assignments)) : 0;
       return {
         kind,
         state: "calendar",
         title,
         url: appLink("/#home"),
         empty: t("calendarEmpty", {}, locale),
+        ...(next ? { next } : {}),
+        joinLabel: t("eventJoin", {}, locale),
+        unread,
+        unreadLabel: unread ? t("widgetUnread", { count: unread }, locale) : "",
         items: list(d.items).map((item) => {
           const task = item.type === "task";
           const day = str(item.day);
@@ -345,9 +457,16 @@ export function suiteView<K extends SuiteKind>(
     }
     case "counter": {
       const history = list(d.history).map((h) => ({ value: num(h.value), estimated: h.estimated === true }));
+      // The trend: the last day of the history against its first.
+      const delta = history.length > 1 ? history[history.length - 1].value - history[0].value : null;
       return {
         kind,
         state: "counter",
+        delta:
+          delta === null
+            ? ""
+            : `${delta > 0 ? "+" : delta < 0 ? "−" : "±"}${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 2 }).format(Math.abs(delta))} · ${t("trendDays", { count: history.length }, locale)}`,
+        trend: delta === null ? "" : delta > 0 ? "up" : delta < 0 ? "down" : "flat",
         title,
         url,
         value: str(d.formatted, "–"),
@@ -503,36 +622,7 @@ export function suiteView<K extends SuiteKind>(
       // Timed ones in UTC (ISO), all-day ones as dates – those from the
       // start of their first to the end of their last day, on the phone.
       const showJoin = (config as SuiteConfig["event"]).showJoin !== false;
-      const items = list(d.items)
-        .map((item) => {
-          const allDay = item.allDay === true;
-          const day = (value: unknown, end: boolean) => {
-            const text = str(value);
-            return /^\d{4}-\d{2}-\d{2}$/.test(text) ? Date.parse(`${text}T${end ? "23:59:59" : "00:00:00"}`) : Date.parse(text);
-          };
-          const start = allDay ? day(item.start, false) : Date.parse(str(item.start));
-          const end = allDay ? day(item.end || item.start, true) : Date.parse(str(item.end));
-          return { item, allDay, start, end: Number.isFinite(end) ? end : start };
-        })
-        .filter(({ start, end }) => Number.isFinite(start) && end >= now - 60_000)
-        .slice(0, (config as SuiteConfig["event"]).max || 3)
-        .map(({ item, allDay, start, end }) => {
-          const running = !allDay && start <= now && now < end;
-          const join = showJoin ? joinLink(item.joinUrl) : null;
-          return {
-            title: str(item.title),
-            when: eventWhen(start, end, allDay, now, locale),
-            countdown: running ? t("eventNow", {}, locale) : allDay ? "" : t("countdownIn", { time: formatDuration(start - now, locale) }, locale),
-            allDay,
-            now: running,
-            start,
-            end,
-            location: str(item.location),
-            calendar: str(item.calendarName ?? item.calendar),
-            ...(join ? { join } : {}),
-            url: pageLink(item.url),
-          };
-        });
+      const items = eventItems(d, { showJoin, max: (config as SuiteConfig["event"]).max || 3, now, locale });
       return {
         kind,
         state: "event",
@@ -551,7 +641,7 @@ export function suiteView<K extends SuiteKind>(
         url: appLink("/#home"),
         empty: t("readingEmpty", {}, locale),
         items: list(d.items)
-          .slice(0, (config as SuiteConfig["reading"]).max)
+          .slice(0, Math.min(10, (config as SuiteConfig["reading"]).max || 6))
           .map((item) => {
             const closed = item.locked === true ? t("widgetLockedShort", {}, locale) : item.encrypted === true ? t("widgetEncryptedShort", {}, locale) : "";
             const raw = typeof item.progress === "number" && Number.isFinite(item.progress) ? Math.min(1, Math.max(0, item.progress)) : undefined;
@@ -625,6 +715,24 @@ export function suiteView<K extends SuiteKind>(
     }
   }
   return closedView(kind, "offline", locale);
+}
+
+// The tasks that fit, with the heading of their group where it changes (only
+// when they fall into more than one group and there is room for headings:
+// tall widgets).
+export function taskRows(items: TaskRow[], rows: number) {
+  const headings = rows >= 6 && new Set(items.map((item) => item.group)).size > 1;
+  const out: { item: TaskRow; heading?: 0 | 1 | 2 }[] = [];
+  let used = 0;
+  for (const item of items) {
+    const heading = headings && (!out.length || out[out.length - 1].item.group !== item.group) ? item.group : undefined;
+    // A heading takes half a row.
+    const need = heading === undefined ? 1 : 1.5;
+    if (used + need > rows) break;
+    used += need;
+    out.push(heading === undefined ? { item } : { item, heading });
+  }
+  return out;
 }
 
 // Made-up content for the widget pickers and previews, in the person's

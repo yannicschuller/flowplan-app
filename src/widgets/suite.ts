@@ -37,6 +37,24 @@ export const SUITE_WIDGETS: Record<SuiteKind, string> = {
   metric: "FlowplanMetric",
   deadline: "FlowplanDeadline",
 };
+// Fewer widgets (2026): "Key figure" (metric) takes a database or a
+// dashboard as its source, "Pages" (pinned) shows the favorites, what was
+// opened last or one page, "Today" (calendar) is the next appointment in its
+// smallest size. The widgets merged into them – and the two given up
+// (mentions: "Today" counts the unread ones instead; forms) – keep working
+// where they are on a screen, but are no longer offered: hidden from
+// Android's picker (hide_from_picker) and from the app's "Add widget". iOS
+// cannot hide a kind from its gallery without removing the widgets on
+// screens: it keeps the merged ones marked "old" and has removed the two
+// given up (plugins/widget-suite/ios/SuiteWidgets.swift).
+export const LEGACY_KINDS: readonly SuiteKind[] = ["counter", "reading", "event"];
+export const RETIRED_KINDS: readonly SuiteKind[] = ["mentions", "forms"];
+export const OFFERED_KINDS: readonly SuiteKind[] = SUITE_KINDS.filter((kind) => !LEGACY_KINDS.includes(kind) && !RETIRED_KINDS.includes(kind));
+// The iOS widgets of the suite: Android's without the two given up, and
+// "My day" (iOS only: appointments, tasks and habits in one widget).
+export const IOS_KINDS: readonly string[] = [...SUITE_KINDS.filter((kind) => !RETIRED_KINDS.includes(kind)), "myday"];
+export const IOS_ONLY_WIDGETS: Record<string, string> = { myday: "FlowplanMyDay" };
+
 // Kinds an instance from before them does not know: it refuses them (400),
 // and the widget says the instance needs an update.
 export const NEWER_KINDS: readonly SuiteKind[] = ["event", "reading", "metric", "deadline"];
@@ -52,7 +70,9 @@ export type SuiteConfig = {
   capture: { targetId?: string; buttons: CaptureButton[] };
   tasks: { source: "mine" | "view" | "page"; pageId?: string; viewId?: string; filter: "today" | "overdue" | "open"; max: number };
   calendar: { sources: { pageId: string; viewId?: string }[]; range: "today" | "3days" | "week"; tasks: boolean; max: number };
-  pinned: { mode: "favorites" | "page"; pageId?: string; viewId?: string; properties: string[]; max: number };
+  // "recent": what was opened last (the "reading" answer: books with how
+  // far you got).
+  pinned: { mode: "favorites" | "recent" | "page"; pageId?: string; viewId?: string; properties: string[]; max: number };
   counter: {
     pageId?: string;
     viewId?: string;
@@ -72,7 +92,19 @@ export type SuiteConfig = {
   // none: all, like the "today" widget); up to three appointments.
   event: { calendars: string[]; within: "today" | "48h" | "week"; showJoin: boolean; max: number };
   reading: { source: "recent" | "library"; max: number };
-  metric: { dashboardId?: string; widgetId?: string };
+  // A dashboard's number tile, or – source "database" – a database's
+  // number as the old counter had it (with its last 14 days: the trend).
+  metric: {
+    source: "dashboard" | "database";
+    dashboardId?: string;
+    widgetId?: string;
+    pageId?: string;
+    viewId?: string;
+    aggregate?: "count" | "sum" | "average";
+    fieldId?: string;
+    groupFieldId?: string;
+    groupValue?: string;
+  };
   // A record of a database ({ pageId, rowId }), or a document task (its key
   // as the tasks widget has it, with its page and position).
   deadline: { pageId?: string; rowId?: string; taskKey?: string; index?: number };
@@ -80,9 +112,10 @@ export type SuiteConfig = {
 
 export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
   capture: { buttons: ["note", "task", "voice", "photo"] },
-  tasks: { source: "mine", filter: "open", max: 5 },
+  // Ten, the instance's most: a tall widget fills its rows.
+  tasks: { source: "mine", filter: "open", max: 10 },
   calendar: { sources: [], range: "today", tasks: true, max: 10 },
-  pinned: { mode: "favorites", properties: [], max: 6 },
+  pinned: { mode: "favorites", properties: [], max: 10 },
   counter: { aggregate: "count", history: true },
   journal: {},
   time: {},
@@ -91,7 +124,7 @@ export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
   study: { pageIds: [] },
   event: { calendars: [], within: "48h", showJoin: true, max: 3 },
   reading: { source: "recent", max: 4 },
-  metric: {},
+  metric: { source: "dashboard" },
   deadline: {},
 };
 
@@ -135,7 +168,7 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
         pageId,
         viewId: source === "view" && pageId ? shortId(r.viewId) : undefined,
         filter: oneOf(r.filter, ["today", "overdue", "open"] as const, "open"),
-        max: count(r.max, 1, 10, 5),
+        max: count(r.max, 1, 10, 10),
       });
       break;
     }
@@ -154,8 +187,16 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
       out = { source: oneOf(r.source, ["recent", "library"] as const, "recent"), max: count(r.max, 1, 6, 4) };
       break;
     case "metric": {
+      const pageId = uuid(r.pageId);
+      // Settings from before the source: a dashboard tile.
+      const source = oneOf(r.source, ["dashboard", "database"] as const, pageId && !r.dashboardId ? "database" : "dashboard");
+      if (source === "database") {
+        const counter = normalizeConfig("counter", r);
+        out = compact({ source, pageId: counter.pageId, viewId: counter.viewId, aggregate: counter.aggregate, fieldId: counter.fieldId, groupFieldId: counter.groupFieldId, groupValue: counter.groupValue });
+        break;
+      }
       const dashboardId = uuid(r.dashboardId);
-      out = compact({ dashboardId, widgetId: dashboardId ? shortId(r.widgetId) : undefined });
+      out = compact({ source, dashboardId, widgetId: dashboardId ? shortId(r.widgetId) : undefined });
       break;
     }
     case "deadline": {
@@ -169,14 +210,14 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
     }
     case "pinned": {
       const pageId = uuid(r.pageId);
-      const mode = pageId ? oneOf(r.mode, ["favorites", "page"] as const, "page") : "favorites";
+      const mode = pageId ? oneOf(r.mode, ["favorites", "recent", "page"] as const, "page") : r.mode === "recent" ? "recent" : "favorites";
       out = compact({
         mode,
         pageId: mode === "page" ? pageId : undefined,
         viewId: mode === "page" ? shortId(r.viewId) : undefined,
         // At most two properties: one thing, clearly.
         properties: mode === "page" && Array.isArray(r.properties) ? [...new Set(r.properties.map(shortId).filter((p): p is string => !!p))].slice(0, 2) : [],
-        max: count(r.max, 1, 10, 6),
+        max: count(r.max, 1, 10, 10),
       });
       break;
     }
@@ -243,7 +284,7 @@ export function needsSetup(kind: SuiteKind, config: SuiteConfig[SuiteKind]) {
   if (kind === "forms") return !(config as SuiteConfig["forms"]).pageId;
   if (kind === "metric") {
     const c = config as SuiteConfig["metric"];
-    return !c.dashboardId || !c.widgetId;
+    return c.source === "database" ? !c.pageId : !c.dashboardId || !c.widgetId;
   }
   if (kind === "deadline") {
     const c = config as SuiteConfig["deadline"];
@@ -306,6 +347,34 @@ export function widgetProfileId(state: ProfileState, chosen: string | null | und
   return state.active;
 }
 
+// What a widget asks the instance for: mostly its own kind; "Key figure"
+// of a database asks for the counter, "Pages" recently opened for the
+// continue-reading answer.
+export function serverRequest(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { kind: SuiteKind; config: Record<string, unknown> } {
+  if (kind === "metric" && (config as SuiteConfig["metric"]).source === "database") {
+    const { source: _source, dashboardId: _dashboard, widgetId: _widget, ...counter } = config as SuiteConfig["metric"];
+    return { kind: "counter", config: { ...normalizeConfig("counter", counter), history: true } };
+  }
+  if (kind === "pinned" && (config as SuiteConfig["pinned"]).mode === "recent") return { kind: "reading", config: { source: "recent", max: 6 } };
+  // Lists ask for the instance's most: a tall widget fills its rows (the
+  // widget shows as many as fit).
+  if (kind === "tasks" || kind === "pinned") return { kind, config: { ...serverConfig(kind, config), max: 10 } };
+  return { kind, config: serverConfig(kind, config) };
+}
+
+// Further answers a widget shows besides its own: "Today" its next
+// appointment (the small size) and the unread mentions (a badge).
+export function extraRequests(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { key: string; kind: SuiteKind; config: Record<string, unknown> }[] {
+  if (kind !== "calendar") return [];
+  const c = config as SuiteConfig["calendar"];
+  const calendars = [...new Set(c.sources.map((s) => (s.viewId ? `${s.pageId}:${s.viewId}` : s.pageId)))].sort().slice(0, 10);
+  const within = c.range === "today" ? "today" : c.range === "3days" ? "48h" : "week";
+  return [
+    { key: "event", kind: "event", config: { ...(calendars.length ? { calendars } : {}), within, showJoin: true, max: 3 } },
+    { key: "mentions", kind: "mentions", config: { show: "all", unreadOnly: true, max: 1 } },
+  ];
+}
+
 // The configuration as the instance's data endpoint takes it (app-only
 // settings such as the capture buttons or the time widget's timer stay
 // on the phone).
@@ -315,6 +384,10 @@ export function serverConfig(kind: SuiteKind, config: SuiteConfig[SuiteKind]): R
       return compact({ targetId: (config as SuiteConfig["capture"]).targetId });
     case "time":
       return {};
+    case "metric": {
+      const { dashboardId, widgetId } = config as SuiteConfig["metric"];
+      return compact({ dashboardId, widgetId });
+    }
     case "study": {
       // No decks chosen: the instance counts all of them.
       const { pageIds } = config as SuiteConfig["study"];

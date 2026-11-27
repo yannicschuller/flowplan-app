@@ -56,12 +56,17 @@ const SUITE_ANDROID: [string, [number, number], [number, number]][] = [
   ["FlowplanForms", [2, 2], [110, 110]],
   // "Karten fällig" (#352): settings since it lets you choose the decks.
   ["FlowplanStudy", [2, 2], [110, 110]],
+  // Old ones, hidden from the picker (HIDDEN_ANDROID below): next
+  // appointment (now the small "Today"), continue reading (now "Pages").
   // Widgets 2026.
   ["FlowplanNextEvent", [4, 2], [110, 110]],
   ["FlowplanReading", [4, 2], [180, 110]],
   ["FlowplanMetric", [2, 2], [110, 110]],
   ["FlowplanDeadline", [2, 2], [110, 110]],
 ];
+// Merged into others or given up (src/widgets/suite.ts): no longer in the
+// picker, the ones on home screens keep working.
+const HIDDEN_ANDROID = new Set(["FlowplanCounter", "FlowplanReading", "FlowplanNextEvent", "FlowplanMentions", "FlowplanForms"]);
 // Android widgets: name, label and description from the gallery table.
 const androidWidget = (name: string, size: Record<string, unknown>) => ({
   name,
@@ -367,7 +372,10 @@ const config: ExpoConfig = {
             displayName: nativeStrings.gallery.FlowplanInstance.label[1],
             description: nativeStrings.gallery.FlowplanInstance.description[1],
             ios: {
-              supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular", "accessoryInline"],
+              // "Admin status": health, errors in the last hour, backup age
+              // and free disk with a traffic light (setting "State");
+              // medium and large list all four.
+              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular", "accessoryInline"],
               initialLayout: "./src/widgets/ios.tsx",
               configuration: {
                 title: "Flowplan Instance",
@@ -383,7 +391,7 @@ const config: ExpoConfig = {
             displayName: nativeStrings.gallery.FlowplanLive.label[1],
             description: nativeStrings.gallery.FlowplanLive.description[1],
             ios: {
-              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular"],
+              supportedFamilies: ["systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular", "accessoryInline"],
               initialLayout: "./src/widgets/ios.tsx",
               configuration: {
                 title: "Flowplan Live",
@@ -460,7 +468,7 @@ const config: ExpoConfig = {
               maxResizeWidth: "500dp",
               maxResizeHeight: "500dp",
               resizeMode: "horizontal|vertical",
-              widgetFeatures: "reconfigurable|configuration_optional",
+              widgetFeatures: HIDDEN_ANDROID.has(name) ? "reconfigurable|configuration_optional|hide_from_picker" : "reconfigurable|configuration_optional",
             }),
           ),
         ],

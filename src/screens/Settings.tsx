@@ -21,7 +21,7 @@ import { CertificatePin } from "./CertificatePin";
 import { activityChoices, setActivityChoices } from "../native/activities";
 import { addWidget, lastWidgetActionError } from "../native/suite";
 import { kindTitle } from "../widgets/present";
-import { SUITE_KINDS } from "../widgets/suite";
+import { OFFERED_KINDS } from "../widgets/suite";
 import type { ActionError } from "../widgets/actions";
 import { canAddTile, requestAddTile } from "../../modules/flowplan-android/src";
 import { copyLine, infoOfMarker, type CopyInfo } from "../offline-offer";
@@ -190,7 +190,7 @@ export function Settings({
               <>
                 <Text style={[styles.small, { color: p.muted, marginTop: 12 }]}>{t("widgetsAddText")}</Text>
                 <View style={settingsStyles.chips}>
-                  {SUITE_KINDS.map((kind) => (
+                  {OFFERED_KINDS.map((kind) => (
                     <Text
                       key={kind}
                       accessibilityRole="button"

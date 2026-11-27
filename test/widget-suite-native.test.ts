@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import config from "../app.config";
-import { SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
+import { IOS_KINDS, IOS_ONLY_WIDGETS, LEGACY_KINDS, RETIRED_KINDS, SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
 import { configFor, forgetProfile, parseConfigState, removeWidget, setConfig } from "../src/widgets/widget-config";
 
 const { strings, phrases, gallery, galleryStrings, localizable, LANGS, lproj } = require("../plugins/widget-suite/strings") as {
@@ -66,7 +66,7 @@ test("Siri phrases exist in German, English, French and Chinese and name the app
 
 test("every widget has a gallery name and description in every language", () => {
   // FlowplanStudy is a widget of the suite (#352).
-  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
+  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k]), ...Object.values(IOS_ONLY_WIDGETS)];
   assert.deepEqual(Object.keys(gallery).sort(), [...names].sort());
   for (const lang of ["de", "en", "fr", "zh"]) {
     const android = galleryStrings(lang);
@@ -119,8 +119,11 @@ test("the app config wires the suite: Android settings screens, iOS plugin befor
   for (const kind of SUITE_KINDS) {
     const widget = android[1].widgets.find((w) => w.name === SUITE_WIDGETS[kind]);
     assert.ok(widget, kind);
-    // Works without configuring: optional, can be changed later.
-    assert.equal(widget.widgetFeatures, "reconfigurable|configuration_optional");
+    // Works without configuring: optional, can be changed later; the ones
+    // merged into others or given up are kept out of the picker (those on
+    // screens keep working).
+    const hidden = LEGACY_KINDS.includes(kind) || RETIRED_KINDS.includes(kind);
+    assert.equal(widget.widgetFeatures, hidden ? "reconfigurable|configuration_optional|hide_from_picker" : "reconfigurable|configuration_optional", kind);
     assert.equal(widget.label, `@string/widget_label_${SUITE_WIDGETS[kind].toLowerCase()}`);
   }
   // The localized texts reach Localizable.strings of app and extension.
@@ -135,20 +138,31 @@ test("the app config wires the suite: Android settings screens, iOS plugin befor
 
 test("Swift widget kinds match the app's widget names", () => {
   const swift = readFileSync(join(root, "plugins/widget-suite/ios/SuiteWidgets.swift"), "utf8");
-  for (const kind of SUITE_KINDS) assert.ok(swift.includes(`kind: "${SUITE_WIDGETS[kind]}"`), kind);
   const intents = readFileSync(join(root, "plugins/widget-suite/ios/SuiteIntents.swift"), "utf8");
-  for (const kind of SUITE_KINDS) assert.ok(intents.includes(`static let kind = "${kind}"`), kind);
+  const widgetOf = (kind: string) => (SUITE_WIDGETS as Record<string, string>)[kind] ?? IOS_ONLY_WIDGETS[kind];
+  for (const kind of IOS_KINDS) {
+    assert.ok(swift.includes(`kind: "${widgetOf(kind)}"`), kind);
+    assert.ok(intents.includes(`static let kind = "${kind}"`), kind);
+  }
+  // Given up on iOS: no widget, no settings (a kind left in the bundle would
+  // stay in the gallery).
+  for (const kind of RETIRED_KINDS) {
+    assert.ok(!swift.includes(`kind: "${SUITE_WIDGETS[kind]}"`), kind);
+    assert.ok(!intents.includes(`static let kind = "${kind}"`), kind);
+  }
+  // The merged ones stay with their kind, marked old in the gallery.
+  for (const kind of LEGACY_KINDS) assert.match(swift, new RegExp(`kind: "${SUITE_WIDGETS[kind]}"[\\s\\S]*?configurationDisplayName\\("[^"]+ \\(old\\)"\\)`), kind);
 });
 
 const PAGE = "3f2b8c1e-7d4a-4b6e-9a1c-2e5f6a7b8c9d";
 
 test("Android keeps settings per profile and widget; sign-out keeps them, removal drops them", () => {
   let state = parseConfigState(null);
-  assert.deepEqual(configFor(state, "work", 7, "tasks"), { source: "mine", filter: "open", max: 5 });
+  assert.deepEqual(configFor(state, "work", 7, "tasks"), { source: "mine", filter: "open", max: 10 });
   state = setConfig(state, "work", 7, "tasks", { source: "page", pageId: PAGE, filter: "today", max: 3 });
   assert.deepEqual(configFor(state, "work", 7, "tasks"), { source: "page", pageId: PAGE, filter: "today", max: 3 });
   // Another profile: the defaults (its pages are another instance's) …
-  assert.deepEqual(configFor(state, "home", 7, "tasks"), { source: "mine", filter: "open", max: 5 });
+  assert.deepEqual(configFor(state, "home", 7, "tasks"), { source: "mine", filter: "open", max: 10 });
   // … and back: the settings are still there (stored as text and read again).
   state = parseConfigState(JSON.stringify(state));
   assert.equal(configFor(state, "work", 7, "tasks").filter, "today");
@@ -219,7 +233,7 @@ test("iOS: every widget button's intent logs first, and intent types have unique
     .split(/\n(?=@available|struct )/)
     .map((block) => ({ name: block.match(/struct (\w+): (?:AppIntent|SetValueIntent) \{/)?.[1], block }))
     .filter(({ name, block }) => name && /FPWidgets\.(run|act)\(/.test(block));
-  assert.ok(buttons.length >= 6, String(buttons.length));
+  assert.ok(buttons.length >= 5, String(buttons.length));
   for (const { name, block } of buttons) {
     const first = block.match(/func perform\(\) async throws -> some IntentResult \{\n(.*)\n/)?.[1]?.trim();
     assert.equal(first, `FPLog.intent("${name}")`, String(name));

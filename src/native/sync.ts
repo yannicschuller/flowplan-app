@@ -223,7 +223,7 @@ export async function updateWidgets(summary: Summary | null = store.summary(), a
   await Promise.allSettled([
     requestWidgetUpdate({ widgetName: "FlowplanTasks", renderWidget: (info) => renderTasks(tasks, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanInbox", renderWidget: () => renderInbox(inbox) }),
-    requestWidgetUpdate({ widgetName: "FlowplanInstance", renderWidget: () => renderAdminStatus(status) }),
+    requestWidgetUpdate({ widgetName: "FlowplanInstance", renderWidget: (info) => renderAdminStatus(status, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanLive", renderWidget: (info) => renderAdminLive(live, info.height) }),
     requestWidgetUpdate({ widgetName: "FlowplanStorage", renderWidget: () => renderAdminStorage(storage) }),
   ]);

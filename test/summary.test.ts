@@ -31,7 +31,11 @@ test("the summary is recognised", () => {
 test("due dates read like in Flowplan", () => {
   assert.equal(dueLabel("2026-03-04", "2026-03-04", "de"), "Heute");
   assert.equal(dueLabel("2026-03-05", "2026-03-04", "en"), "Tomorrow");
-  assert.equal(dueLabel("2026-03-03", "2026-03-04", "fr"), "Hier");
+  // The same words in every widget: overdue with its days, the weekday
+  // within a week, the date only beyond that.
+  assert.equal(dueLabel("2026-03-03", "2026-03-04", "fr"), "En retard · 1 j");
+  assert.equal(dueLabel("2026-02-22", "2026-03-04", "de"), "Überfällig · 10 T");
+  assert.equal(dueLabel("2026-03-06", "2026-03-04", "en"), "Friday");
   assert.equal(dueLabel(null, "2026-03-04", "de"), "");
   assert.match(dueLabel("2026-03-20", "2026-03-04", "en"), /Mar/);
 });
@@ -45,7 +49,7 @@ test("widgets get finished texts and links into the app", () => {
   assert.deepEqual(
     tasks.items.map((i) => [i.text, i.due, i.late]),
     [
-      ["Send offer", "Yesterday", true],
+      ["Send offer", "Overdue · 1 d", true],
       ["Call Ben", "Today", false],
       ["Plan trip", "", false],
     ],
@@ -125,7 +129,7 @@ test("the gallery sample reads like a real day in every language", () => {
   assert.ok(isSummary(sample));
   const tasks = tasksWidget(sample, "de");
   assert.equal(tasks.headline, "2 fällig · 4 offen");
-  assert.deepEqual(tasks.items.map((i) => i.due), ["Gestern", "Heute", "Morgen", ""]);
+  assert.deepEqual(tasks.items.map((i) => i.due), ["Überfällig · 1 T", "Heute", "Morgen", ""]);
   assert.equal(inboxWidget(sample, "fr").label, "3 non lues");
   assert.notEqual(sampleSummary("en", now).tasks.items[0].text, sample.tasks.items[0].text);
 });

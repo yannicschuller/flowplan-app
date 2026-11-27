@@ -15,6 +15,20 @@ import WidgetKit
 // lists them under "Other", without buttons). Quick capture opens the
 // iPhone's camera and microphone and is not offered on the Mac. On iOS 26
 // every widget takes WidgetKit pushes (FPWidgetPushHandler).
+//
+// Fewer widgets (2026): "Key figure" takes a database or a dashboard as its
+// source, "Pages" shows the favorites, what was opened last or one page,
+// "Today" is the next appointment in its small size, "My day" brings
+// appointments, tasks and habits together. WidgetKit cannot move a widget on
+// someone's screen to another kind, and it has no way to keep a kind out of
+// the gallery while its widgets on screens keep working (a kind that is no
+// longer in the bundle disappears from every screen). So the merged ones
+// stay as they were – kind, settings (intent type) and sizes – marked "old"
+// in the gallery and drawn like the widget they were merged into:
+// FlowplanCounter (→ Key figure), FlowplanReading (→ Pages), FlowplanNextEvent
+// (→ Today). Form responses and Mentions are gone; "Today" counts the unread
+// mentions instead. Android hides the old ones from its picker
+// (hide_from_picker) and keeps those on screens working.
 
 /// WidgetKit's push token for the widgets (iOS 26): kept in the App Group;
 /// the app registers it with the push relay for every profile's instance
@@ -80,7 +94,7 @@ struct FPCaptureWidget: Widget {
 
 @available(iOS 17.0, *)
 struct FPTasksWidget: Widget {
-  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
+  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline]
 
   var body: some WidgetConfiguration {
     AppIntentConfiguration(kind: "FlowplanTaskList", intent: FPTasksConfiguration.self, provider: FPProvider<FPTasksConfiguration>()) { entry in
@@ -95,14 +109,14 @@ struct FPTasksWidget: Widget {
 
 @available(iOS 17.0, *)
 struct FPCalendarWidget: Widget {
-  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline]
+  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline]
 
   var body: some WidgetConfiguration {
     AppIntentConfiguration(kind: "FlowplanAgenda", intent: FPCalendarConfiguration.self, provider: FPProvider<FPCalendarConfiguration>()) { entry in
       FPSuiteView(entry: entry)
     }
     .configurationDisplayName("Today")
-    .description("Your appointments and what is due.")
+    .description("Your appointments and what is due; small: the next one with a countdown.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(carPlay: true), families: Self.families)
   }
@@ -116,8 +130,8 @@ struct FPPinnedWidget: Widget {
     AppIntentConfiguration(kind: "FlowplanPinned", intent: FPPinnedConfiguration.self, provider: FPProvider<FPPinnedConfiguration>()) { entry in
       FPSuiteView(entry: entry)
     }
-    .configurationDisplayName("Page and favorites")
-    .description("Your favorites, or one page or database view.")
+    .configurationDisplayName("Pages")
+    .description("Your favorites, what you opened last, or one page or database view.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(), families: Self.families)
   }
@@ -131,8 +145,8 @@ struct FPCounterWidget: Widget {
     AppIntentConfiguration(kind: "FlowplanCounter", intent: FPCounterConfiguration.self, provider: FPProvider<FPCounterConfiguration>()) { entry in
       FPSuiteView(entry: entry)
     }
-    .configurationDisplayName("Database counter")
-    .description("One number of a database, with its last 14 days.")
+    .configurationDisplayName("Database counter (old)")
+    .description("Now part of “Key figure”. Widgets already added keep working.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(), families: Self.families)
   }
@@ -168,36 +182,6 @@ struct FPTimeWidget: Widget {
   }
 }
 
-@available(iOS 17.0, *)
-struct FPMentionsWidget: Widget {
-  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular]
-
-  var body: some WidgetConfiguration {
-    AppIntentConfiguration(kind: "FlowplanMentions", intent: FPMentionsConfiguration.self, provider: FPProvider<FPMentionsConfiguration>()) { entry in
-      FPSuiteView(entry: entry)
-    }
-    .configurationDisplayName("Mentions")
-    .description("Who mentioned you; mark as read right away.")
-    .supportedFamilies(Self.families)
-    .fpPlatform(FPPlaces(), families: Self.families)
-  }
-}
-
-@available(iOS 17.0, *)
-struct FPFormsWidget: Widget {
-  static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular]
-
-  var body: some WidgetConfiguration {
-    AppIntentConfiguration(kind: "FlowplanForms", intent: FPFormsConfiguration.self, provider: FPProvider<FPFormsConfiguration>()) { entry in
-      FPSuiteView(entry: entry)
-    }
-    .configurationDisplayName("Form responses")
-    .description("New responses to one of your forms.")
-    .supportedFamilies(Self.families)
-    .fpPlatform(FPPlaces(), families: Self.families)
-  }
-}
-
 // "Karten fällig" (#352): was an expo-widgets widget of the same kind
 // without settings; widgets already on a screen keep their place and count
 // all decks until decks are chosen.
@@ -216,7 +200,8 @@ struct FPStudyWidget: Widget {
   }
 }
 
-// Widgets 2026: next appointment, continue reading, key figure, deadline.
+// Widgets 2026: key figure, deadline; the next appointment and continue
+// reading are old ones now (see the top).
 
 @available(iOS 17.0, *)
 struct FPEventWidget: Widget {
@@ -226,8 +211,8 @@ struct FPEventWidget: Widget {
     AppIntentConfiguration(kind: "FlowplanNextEvent", intent: FPEventConfiguration.self, provider: FPProvider<FPEventConfiguration>()) { entry in
       FPSuiteView(entry: entry)
     }
-    .configurationDisplayName("Next appointment")
-    .description("Your next appointment with a countdown; join video calls.")
+    .configurationDisplayName("Next appointment (old)")
+    .description("Now the small “Today”. Widgets already added keep working.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(carPlay: true), families: Self.families)
   }
@@ -241,8 +226,8 @@ struct FPReadingWidget: Widget {
     AppIntentConfiguration(kind: "FlowplanReading", intent: FPReadingConfiguration.self, provider: FPProvider<FPReadingConfiguration>()) { entry in
       FPSuiteView(entry: entry)
     }
-    .configurationDisplayName("Continue reading")
-    .description("Pick up recent pages and library books where you left off.")
+    .configurationDisplayName("Continue reading (old)")
+    .description("Now part of “Pages”. Widgets already added keep working.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(), families: Self.families)
   }
@@ -257,7 +242,7 @@ struct FPMetricWidget: Widget {
       FPSuiteView(entry: entry)
     }
     .configurationDisplayName("Key figure")
-    .description("One number of a dashboard, with its trend.")
+    .description("A number of a database or dashboard, with its trend.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(), families: Self.families)
   }
@@ -275,6 +260,21 @@ struct FPDeadlineWidget: Widget {
     .description("Counts down to one task or record.")
     .supportedFamilies(Self.families)
     .fpPlatform(FPPlaces(carPlay: true), families: Self.families)
+  }
+}
+
+@available(iOS 17.0, *)
+struct FPMyDayWidget: Widget {
+  static let families: [WidgetFamily] = [.systemMedium, .systemLarge]
+
+  var body: some WidgetConfiguration {
+    AppIntentConfiguration(kind: "FlowplanMyDay", intent: FPMyDayConfiguration.self, provider: FPProvider<FPMyDayConfiguration>()) { entry in
+      FPSuiteView(entry: entry)
+    }
+    .configurationDisplayName("My day")
+    .description("Today's appointments, what is due and your habits – check off right here.")
+    .supportedFamilies(Self.families)
+    .fpPlatform(FPPlaces(), families: Self.families)
   }
 }
 
@@ -336,20 +336,20 @@ struct FPTimerControl: ControlWidget {
 struct FlowplanSuiteWidgets: WidgetBundle {
   var body: some Widget {
     if #available(iOS 17.0, *) {
-      FPCaptureWidget()
+      FPMyDayWidget()
       FPTasksWidget()
       FPCalendarWidget()
       FPPinnedWidget()
-      FPCounterWidget()
+      FPMetricWidget()
       FPJournalWidget()
       FPTimeWidget()
-      FPMentionsWidget()
-      FPFormsWidget()
       FPStudyWidget()
-      FPEventWidget()
-      FPReadingWidget()
-      FPMetricWidget()
       FPDeadlineWidget()
+      FPCaptureWidget()
+      // The old ones, for the screens they are on (see the top).
+      FPCounterWidget()
+      FPReadingWidget()
+      FPEventWidget()
     }
     if #available(iOS 18.0, *) {
       FPNoteControl()

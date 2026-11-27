@@ -13,6 +13,8 @@ protocol FPSuiteConfiguration: WidgetConfigurationIntent {
   static var kind: String { get }
   /// The settings as the instance takes them.
   var request: FPRequest { get }
+  /// Further answers the widget shows besides its own (same request).
+  var extraRequests: [FPRequest] { get }
   /// Settings that only the phone uses (buttons, the start timer …).
   var settings: FPSettings { get }
   /// Nothing to show before a page is chosen.
@@ -32,6 +34,7 @@ struct FPSettings: Sendable {
 @available(iOS 17.0, *)
 extension FPSuiteConfiguration {
   var settings: FPSettings { FPSettings() }
+  var extraRequests: [FPRequest] { [] }
   var needsSetup: Bool { false }
   var profileId: String? { profile?.id }
   /// The request with the widget's profile.
@@ -161,7 +164,9 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
   var page: FPTodoPage?
   @Parameter(title: "Filter", default: .open)
   var filter: FPTaskFilter
-  @Parameter(title: "Number of items", default: 5, inclusiveRange: (1, 10))
+  // No longer offered: the widget shows as many as its size holds (FPGrid).
+  // Kept so widgets already set up keep their settings.
+  @Parameter(title: "Number of items", default: 10, inclusiveRange: (1, 10))
   var count: Int
 
   static var parameterSummary: some ParameterSummary {
@@ -171,7 +176,6 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
         \.$database
         \.$view
         \.$filter
-        \.$count
         \.$profile
         \.$color
       }
@@ -181,7 +185,6 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
           \.$source
           \.$page
           \.$filter
-          \.$count
           \.$profile
           \.$color
         }
@@ -189,7 +192,6 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
         Summary {
           \.$source
           \.$filter
-          \.$count
           \.$profile
           \.$color
         }
@@ -197,8 +199,9 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
     }
   }
 
+  // Always the instance's most (ten): a large widget fills its rows.
   var request: FPRequest {
-    var config: [String: Any] = ["source": "mine", "filter": filter.rawValue, "max": min(10, max(1, count))]
+    var config: [String: Any] = ["source": "mine", "filter": filter.rawValue, "max": 10]
     if source == .view, let database {
       config["source"] = "view"
       config["pageId"] = database.id
@@ -209,7 +212,7 @@ struct FPTasksConfiguration: FPSuiteConfiguration {
     }
     return FPRequest(kind: Self.kind, config: config)
   }
-  var settings: FPSettings { FPSettings(max: min(10, max(1, count))) }
+  var settings: FPSettings { FPSettings(max: 10) }
 
   @Parameter(title: "Profile")
   var profile: FPProfileEntity?
@@ -255,6 +258,23 @@ struct FPCalendarConfiguration: FPSuiteConfiguration {
     return FPRequest(kind: Self.kind, config: ["sources": sources, "range": range.rawValue, "tasks": tasks, "max": 10])
   }
 
+  /// The small size is the next appointment (countdown, "Join"): the
+  /// next-appointment answer of the same calendars; and the unread mentions
+  /// for the header's badge.
+  var extraRequests: [FPRequest] {
+    let ids: [String] = Array(Set((calendars ?? []).map { calendar -> String in
+      let parts = FPCompositeID.split(calendar.id)
+      return parts.count > 1 && !parts[1].isEmpty ? parts[0] + ":" + parts[1] : parts[0]
+    })).sorted().prefix(10).map { $0 }
+    let within: String = range == .today ? "today" : range == .threeDays ? "48h" : "week"
+    var event: [String: Any] = ["within": within, "showJoin": true, "max": 3]
+    if !ids.isEmpty { event["calendars"] = ids }
+    return [
+      FPRequest(kind: "event", config: event),
+      FPRequest(kind: "mentions", config: ["show": "all", "unreadOnly": true, "max": 1]),
+    ]
+  }
+
   @Parameter(title: "Profile")
   var profile: FPProfileEntity?
   @Parameter(title: "Colors", default: .accent)
@@ -267,18 +287,19 @@ struct FPCalendarConfiguration: FPSuiteConfiguration {
 
 @available(iOS 17.0, *)
 enum FPPinnedMode: String, AppEnum {
-  case favorites, page
+  case favorites, recent, page
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Show"
   static var caseDisplayRepresentations: [FPPinnedMode: DisplayRepresentation] = [
     .favorites: "Favorites",
+    .recent: "Recently opened",
     .page: "A page or database",
   ]
 }
 
 @available(iOS 17.0, *)
 struct FPPinnedConfiguration: FPSuiteConfiguration {
-  static var title: LocalizedStringResource = "Page and favorites"
-  static var description = IntentDescription("Your favorites, or one page or database view.")
+  static var title: LocalizedStringResource = "Pages"
+  static var description = IntentDescription("Your favorites, what you opened last, or one page or database view.")
   static let kind = "pinned"
 
   @Parameter(title: "Show", default: .favorites)
@@ -312,9 +333,12 @@ struct FPPinnedConfiguration: FPSuiteConfiguration {
     }
   }
 
+  // "Recently opened" is the continue-reading answer (books with how far
+  // you got); a large widget fills its rows (at most ten).
   var request: FPRequest {
-    guard mode == .page, let page else { return FPRequest(kind: Self.kind, config: ["mode": "favorites", "max": 8]) }
-    var config: [String: Any] = ["mode": "page", "pageId": page.id, "max": 8]
+    if mode == .recent { return FPRequest(kind: "reading", config: ["source": "recent", "max": 6]) }
+    guard mode == .page, let page else { return FPRequest(kind: Self.kind, config: ["mode": "favorites", "max": 10]) }
+    var config: [String: Any] = ["mode": "page", "pageId": page.id, "max": 10]
     if let view, view.pageId == page.id { config["viewId"] = view.viewId }
     var seen = Set<String>()
     config["properties"] = [first, second].compactMap { $0 }.filter { $0.id.hasPrefix(page.id) }.map(\.fieldId).filter { seen.insert($0).inserted }
@@ -329,7 +353,8 @@ struct FPPinnedConfiguration: FPSuiteConfiguration {
   func perform() async throws -> some IntentResult { .result() }
 }
 
-// MARK: - 5. Database counter
+// MARK: - 5. Database counter (the old widget of its own; now a source of
+// "Key figure", FPMetricConfiguration – kept for the screens it is on)
 
 @available(iOS 17.0, *)
 enum FPAggregate: String, AppEnum {
@@ -470,62 +495,6 @@ struct FPTimeConfiguration: FPSuiteConfiguration {
   func perform() async throws -> some IntentResult { .result() }
 }
 
-// MARK: - 8. Mentions
-
-@available(iOS 17.0, *)
-enum FPMentionShow: String, AppEnum {
-  case all, mentions, assignments
-  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Show"
-  static var caseDisplayRepresentations: [FPMentionShow: DisplayRepresentation] = [
-    .all: "Mentions and new tasks",
-    .mentions: "Mentions",
-    .assignments: "New tasks for me",
-  ]
-}
-
-@available(iOS 17.0, *)
-struct FPMentionsConfiguration: FPSuiteConfiguration {
-  static var title: LocalizedStringResource = "Mentions"
-  static var description = IntentDescription("Who mentioned you; mark as read right away.")
-  static let kind = "mentions"
-
-  @Parameter(title: "Show", default: .all)
-  var show: FPMentionShow
-  @Parameter(title: "Unread only", default: true)
-  var unreadOnly: Bool
-
-  var request: FPRequest { FPRequest(kind: Self.kind, config: ["show": show.rawValue, "unreadOnly": unreadOnly, "max": 5]) }
-
-  @Parameter(title: "Profile")
-  var profile: FPProfileEntity?
-  @Parameter(title: "Colors", default: .accent)
-  var color: FPColorChoice
-
-  func perform() async throws -> some IntentResult { .result() }
-}
-
-// MARK: - 9. Form responses
-
-@available(iOS 17.0, *)
-struct FPFormsConfiguration: FPSuiteConfiguration {
-  static var title: LocalizedStringResource = "Form responses"
-  static var description = IntentDescription("New responses to one of your forms.")
-  static let kind = "forms"
-
-  @Parameter(title: "Form")
-  var form: FPFormPage?
-
-  var needsSetup: Bool { form == nil }
-  var request: FPRequest { FPRequest(kind: Self.kind, config: form.map { ["pageId": $0.id, "max": 3] } ?? [:]) }
-
-  @Parameter(title: "Profile")
-  var profile: FPProfileEntity?
-  @Parameter(title: "Colors", default: .accent)
-  var color: FPColorChoice
-
-  func perform() async throws -> some IntentResult { .result() }
-}
-
 // MARK: - 10. Cards due
 
 @available(iOS 17.0, *)
@@ -629,19 +598,98 @@ struct FPReadingConfiguration: FPSuiteConfiguration {
   func perform() async throws -> some IntentResult { .result() }
 }
 
-// MARK: - 13. Dashboard key figure
+// MARK: - 13. Key figure: a database's number or a dashboard's
 
+/// Where the key figure comes from.
+@available(iOS 17.0, *)
+enum FPFigureSource: String, AppEnum {
+  case dashboard, database
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Source"
+  static var caseDisplayRepresentations: [FPFigureSource: DisplayRepresentation] = [
+    .dashboard: "Dashboard",
+    .database: "Database",
+  ]
+}
+
+// The old "Key figure" (dashboard) with the database counter's settings:
+// widgets set up before keep theirs (the source defaults to the dashboard).
 @available(iOS 17.0, *)
 struct FPMetricConfiguration: FPSuiteConfiguration {
   static var title: LocalizedStringResource = "Key figure"
-  static var description = IntentDescription("One number of a dashboard, with its trend.")
+  static var description = IntentDescription("A number of a database or dashboard, with its trend.")
   static let kind = "metric"
 
+  @Parameter(title: "Source", default: .dashboard)
+  var source: FPFigureSource
   @Parameter(title: "Key figure")
   var figure: FPFigureEntity?
+  @Parameter(title: "Database")
+  var database: FPCounterDatabase?
+  @Parameter(title: "View")
+  var view: FPViewEntity?
+  @Parameter(title: "Value", default: .count)
+  var aggregate: FPAggregate
+  @Parameter(title: "Number property")
+  var field: FPFieldEntity?
+  @Parameter(title: "Only one group")
+  var groupField: FPFieldEntity?
+  @Parameter(title: "Group value", optionsProvider: FPGroupValues())
+  var groupValue: String?
 
-  var needsSetup: Bool { figure == nil }
+  static var parameterSummary: some ParameterSummary {
+    When(\FPMetricConfiguration.$source, .equalTo, FPFigureSource.dashboard) {
+      Summary {
+        \.$source
+        \.$figure
+        \.$profile
+        \.$color
+      }
+    } otherwise: {
+      When(\FPMetricConfiguration.$aggregate, .equalTo, FPAggregate.count) {
+        Summary {
+          \.$source
+          \.$database
+          \.$view
+          \.$aggregate
+          \.$groupField
+          \.$groupValue
+          \.$profile
+          \.$color
+        }
+      } otherwise: {
+        Summary {
+          \.$source
+          \.$database
+          \.$view
+          \.$aggregate
+          \.$field
+          \.$groupField
+          \.$groupValue
+          \.$profile
+          \.$color
+        }
+      }
+    }
+  }
+
+  var needsSetup: Bool { source == .dashboard ? figure == nil : database == nil }
+
   var request: FPRequest {
+    if source == .database {
+      // A database's number with its last 14 days: the trend.
+      guard let database else { return FPRequest(kind: "counter", config: [:]) }
+      var config: [String: Any] = ["pageId": database.id, "aggregate": "count", "history": true]
+      if let view, view.pageId == database.id { config["viewId"] = view.viewId }
+      if aggregate != .count, let field, field.id.hasPrefix(database.id) {
+        config["aggregate"] = aggregate.rawValue
+        config["fieldId"] = field.fieldId
+      }
+      if let groupField, groupField.id.hasPrefix(database.id) {
+        config["groupFieldId"] = groupField.fieldId
+        if let groupValue { config["groupValue"] = groupValue }
+      }
+      return FPRequest(kind: "counter", config: config)
+    }
     guard let figure else { return FPRequest(kind: Self.kind, config: [:]) }
     return FPRequest(kind: Self.kind, config: ["dashboardId": figure.dashboardId, "widgetId": figure.widgetId])
   }
@@ -679,6 +727,46 @@ struct FPDeadlineConfiguration: FPSuiteConfiguration {
   func perform() async throws -> some IntentResult { .result() }
 }
 
+// MARK: - 15. My day
+
+/// Today's appointments, the tasks due today or overdue, and today's habits:
+/// one request (the calendar's answer) with the tasks and habits answers.
+@available(iOS 17.0, *)
+struct FPMyDayConfiguration: FPSuiteConfiguration {
+  static var title: LocalizedStringResource = "My day"
+  static var description = IntentDescription("Today's appointments, what is due and your habits – check off right here.")
+  static let kind = "myday"
+
+  @Parameter(title: "Calendars")
+  var calendars: [FPCalendarEntity]?
+  @Parameter(title: "Habits")
+  var habits: FPHabitDatabase?
+
+  var request: FPRequest {
+    let sources: [[String: String]] = (calendars ?? []).prefix(10).map { calendar in
+      let parts = FPCompositeID.split(calendar.id)
+      return parts.count > 1 && !parts[1].isEmpty ? ["pageId": parts[0], "viewId": parts[1]] : ["pageId": parts[0]]
+    }
+    return FPRequest(kind: "calendar", config: ["sources": sources, "range": "today", "tasks": false, "max": 10])
+  }
+
+  var extraRequests: [FPRequest] {
+    var journal: [String: Any] = [:]
+    if let habits { journal["habitsId"] = habits.id }
+    return [
+      FPRequest(kind: "tasks", config: ["source": "mine", "filter": "open", "max": 10]),
+      FPRequest(kind: "journal", config: journal),
+    ]
+  }
+
+  @Parameter(title: "Profile")
+  var profile: FPProfileEntity?
+  @Parameter(title: "Colors", default: .accent)
+  var color: FPColorChoice
+
+  func perform() async throws -> some IntentResult { .result() }
+}
+
 // MARK: - Buttons in widgets (iOS 17: they run here, in the extension)
 //
 // The tapped item is drawn done at once and comes back with a hint when the
@@ -690,7 +778,18 @@ enum FPWidgetKind {
   static let tasks = "FlowplanTaskList"
   static let journal = "FlowplanJournal"
   static let time = "FlowplanTime"
-  static let mentions = "FlowplanMentions"
+  static let myDay = "FlowplanMyDay"
+
+  /// The widget kind of an answer's kind (a button reloads it first).
+  static func of(_ kind: String) -> String {
+    switch kind {
+    case "tasks": return tasks
+    case "journal": return journal
+    case "time": return time
+    case "myday": return myDay
+    default: return ""
+    }
+  }
 }
 
 @available(iOS 17.0, *)
@@ -706,9 +805,11 @@ struct FPCompleteTaskIntent: AppIntent {
   @Parameter(title: "Text", default: "") var text: String
   // The widget's profile ("": the active one).
   @Parameter(title: "Profile", default: "") var profile: String
+  // The widget kind it was tapped in ("": the tasks widget).
+  @Parameter(title: "Widget", default: "") var widget: String
 
   init() {}
-  init(source: String, pageId: String, rowId: String, index: Int, key: String, text: String, profile: String?) {
+  init(source: String, pageId: String, rowId: String, index: Int, key: String, text: String, profile: String?, widget: String = "") {
     self.source = source
     self.pageId = pageId
     self.rowId = rowId
@@ -716,6 +817,7 @@ struct FPCompleteTaskIntent: AppIntent {
     self.key = key
     self.text = text
     self.profile = profile ?? ""
+    self.widget = widget
   }
 
   func perform() async throws -> some IntentResult {
@@ -728,7 +830,7 @@ struct FPCompleteTaskIntent: AppIntent {
     if !key.isEmpty { fields["key"] = key }
     if !text.isEmpty { fields["text"] = text }
     let item: String = FPActions.taskID(source: source, pageId: pageId, rowId: rowId, index: index)
-    await FPWidgets.run("task.complete", fields, item: item, kind: FPWidgetKind.tasks, profile: profile.isEmpty ? nil : profile)
+    await FPWidgets.run("task.complete", fields, item: item, kind: widget.isEmpty ? FPWidgetKind.tasks : widget, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }
@@ -742,48 +844,22 @@ struct FPCheckHabitIntent: AppIntent {
   @Parameter(title: "Habit", default: "") var fieldId: String
   @Parameter(title: "Done", default: true) var done: Bool
   @Parameter(title: "Profile", default: "") var profile: String
+  @Parameter(title: "Widget", default: "") var widget: String
 
   init() {}
-  init(pageId: String, fieldId: String, done: Bool, profile: String?) {
+  init(pageId: String, fieldId: String, done: Bool, profile: String?, widget: String = "") {
     self.pageId = pageId
     self.fieldId = fieldId
     self.done = done
     self.profile = profile ?? ""
+    self.widget = widget
   }
 
   func perform() async throws -> some IntentResult {
     FPLog.intent("FPCheckHabitIntent")
     let fields: [String: Any] = ["pageId": pageId, "fieldId": fieldId, "done": done, "today": FPAPI.today()]
     let item: String = FPActions.habitID(pageId: pageId, fieldId: fieldId)
-    await FPWidgets.run("habit.check", fields, item: item, kind: FPWidgetKind.journal, profile: profile.isEmpty ? nil : profile)
-    return .result()
-  }
-}
-
-@available(iOS 17.0, *)
-struct FPMarkReadIntent: AppIntent {
-  static var title: LocalizedStringResource = "Mark as read"
-  static var isDiscoverable = false
-
-  // "": all of them.
-  @Parameter(title: "Notification", default: "") var notificationId: String
-  @Parameter(title: "Profile", default: "") var profile: String
-
-  init() {}
-  init(notificationId: String?, profile: String?) {
-    self.notificationId = notificationId ?? ""
-    self.profile = profile ?? ""
-  }
-
-  func perform() async throws -> some IntentResult {
-    FPLog.intent("FPMarkReadIntent")
-    let chosen: String? = profile.isEmpty ? nil : profile
-    if notificationId.isEmpty {
-      await FPWidgets.run("mention.readAll", [:], item: FPActions.readID(nil), kind: FPWidgetKind.mentions, profile: chosen)
-    } else {
-      let fields: [String: Any] = ["notificationId": notificationId, "read": true]
-      await FPWidgets.run("mention.read", fields, item: FPActions.readID(notificationId), kind: FPWidgetKind.mentions, profile: chosen)
-    }
+    await FPWidgets.run("habit.check", fields, item: item, kind: widget.isEmpty ? FPWidgetKind.journal : widget, profile: profile.isEmpty ? nil : profile)
     return .result()
   }
 }
@@ -852,6 +928,26 @@ struct FPOpenAppIntent: AppIntent {
     // Only the app's own links.
     let url = link.hasPrefix("flowplan://") ? URL(string: link) : nil
     return .result(opensIntent: OpenURLIntent(url ?? URL(string: "flowplan://open?path=%2F")!))
+  }
+}
+
+/// "Join" in a small widget (no links there): opens the video call. Only
+/// https addresses the instance named (FPExternal.join).
+@available(iOS 18.0, *)
+struct FPJoinIntent: AppIntent {
+  static var title: LocalizedStringResource = "Join"
+  static var isDiscoverable = false
+
+  @Parameter(title: "Link") var link: String
+
+  init() {}
+  init(link: String) {
+    self.link = link
+  }
+
+  func perform() async throws -> some IntentResult & OpensIntent {
+    let url: URL = FPExternal.join(link) ?? URL(string: "flowplan://open?path=%2F")!
+    return .result(opensIntent: OpenURLIntent(url))
   }
 }
 

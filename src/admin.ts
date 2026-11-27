@@ -100,6 +100,26 @@ export function formatWhen(at: number, now: number, locale: Locale) {
     : new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short" }).format(date);
 }
 
+// "25 min", "3 h", "2 d" (the same words as the suite's countdowns).
+export function formatAge(ms: number, locale: Locale) {
+  const minutes = Math.max(1, Math.round(Math.abs(ms) / 60_000));
+  if (minutes < 60) return t("durationMinutes", { count: minutes }, locale);
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return t("durationHours", { count: hours }, locale);
+  return t("durationDays", { count: Math.round(hours / 24) }, locale);
+}
+
+// The quiet footer of a widget: when its numbers came from the instance.
+// iOS shows "<before> 12 min <after>" as a live text the system keeps
+// counting ("vor 12 Min.", "12 min ago"); older than an hour, and on
+// Android, the time ("As of 01:10", "Updated 14:05").
+export type Freshness = { at: number; before: string; after: string; asOf: string; updatedAt: string };
+export function freshness(at: number, now: number, locale: Locale): Freshness {
+  const time = formatWhen(at, now, locale);
+  const [before, after] = t("widgetAgo", { time: "\u0000" }, locale).split("\u0000");
+  return { at, before: (before ?? "").trim(), after: (after ?? "").trim(), asOf: t("widgetAsOf", { time }, locale), updatedAt: t("widgetUpdatedAt", { time }, locale) };
+}
+
 const codeKey = {
   workers: "adminProblemWorkers",
   alerts: "adminProblemAlerts",
@@ -136,8 +156,18 @@ type Common = {
   url: string;
 };
 
+// "Admin status": the instance's health, the errors of the last hour, the
+// age of the last backup and the free disk, each with its tone; the
+// traffic light is the worst of them.
+export type AdminTone = "ok" | "notice" | "problem";
+export type AdminStatusRow = { id: "health" | "errors" | "backup" | "disk"; label: string; value: string; tone: AdminTone };
 export type AdminStatusProps = Common & {
   state: "signedOut" | "notAdmin" | "pending" | "ok" | "notice" | "problem";
+  light: AdminTone | "";
+  rows: AdminStatusRow[];
+  // The traffic light's words ("All fine", "Needs attention", "Problem").
+  lightLabel: string;
+  fresh?: Freshness;
   // The last backup as one value ("14:05", "21 Oct", "–") and its label.
   backupTime: string;
   backupShort: string;
@@ -156,6 +186,7 @@ export type AdminStatusProps = Common & {
 export const LIVE_METRICS = ["active", "requests", "errors", "signins"] as const;
 export type AdminLiveProps = Common & {
   state: "signedOut" | "notAdmin" | "pending" | "data" | "off";
+  fresh?: Freshness;
   tiles: { id: (typeof LIVE_METRICS)[number]; label: string; value: string; alert: boolean }[];
   // The error rate of the last hour, 0–1 (the lock screen's gauge).
   errorRate: number;
@@ -167,6 +198,7 @@ export type AdminLiveProps = Common & {
 
 export type AdminStorageProps = Common & {
   state: "signedOut" | "notAdmin" | "pending" | "data";
+  fresh?: Freshness;
   used: string;
   usedLabel: string;
   // Shares from 0 to 1; -1 when unknown.
@@ -192,7 +224,7 @@ function gate(admin: AdminState, locale: Locale, title: string) {
 export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.now()): AdminStatusProps {
   const title = t("adminInstance", {}, locale);
   const closed = gate(admin, locale, title);
-  const empty = { headline: "", detail: "", more: "", version: "", update: "", backup: "", backupLate: false, backupTime: "", backupShort: "" };
+  const empty = { headline: "", detail: "", more: "", version: "", update: "", backup: "", backupLate: false, backupTime: "", backupShort: "", light: "" as const, rows: [], lightLabel: "" };
   if (closed) return { ...closed, ...empty, headline: closed.message };
   const s = (admin as { data: AdminSummary }).data;
   const issues = [...s.health.problems, ...s.health.notices];
@@ -209,8 +241,15 @@ export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.
           : t("adminNotices", { count: notices }, locale)
         : t("adminAllFine", {}, locale);
   const backupLate = s.backup.enabled && (s.backup.failed || !s.backup.lastAt || now - s.backup.lastAt > 2 * 86_400_000);
+  const rows = adminStatusRows(s, headline, now, locale);
+  const rank = { ok: 0, notice: 1, problem: 2 } as const;
+  const light = rows.reduce<AdminTone>((worst, row) => (rank[row.tone] > rank[worst] ? row.tone : worst), s.health.state);
   return {
     state: s.health.state,
+    light,
+    rows,
+    lightLabel: t(light === "problem" ? "adminLightProblem" : light === "notice" ? "adminLightNotice" : "adminAllFine", {}, locale),
+    fresh: freshness(s.at || now, now, locale),
     title,
     message: "",
     url: appLink(s.health.state === "ok" ? ADMIN_URL : MONITORING_URL),
@@ -230,6 +269,35 @@ export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.
   };
 }
 
+// The four rows of "Admin status". The errors of the last hour need the
+// statistics (otherwise "–"); a disk the instance cannot measure is "–".
+export function adminStatusRows(s: AdminSummary, headline: string, now: number, locale: Locale): AdminStatusRow[] {
+  const errors: AdminStatusRow = s.live
+    ? {
+        id: "errors",
+        label: t("adminErrorsHour", {}, locale),
+        value: formatNumber(s.live.errorsHour, locale),
+        tone: s.live.errorRate >= 0.05 ? "problem" : s.live.errorRate >= 0.01 ? "notice" : "ok",
+      }
+    : { id: "errors", label: t("adminErrorsHour", {}, locale), value: "–", tone: "ok" };
+  const age = s.backup.lastAt ? now - s.backup.lastAt : null;
+  const backup: AdminStatusRow = {
+    id: "backup",
+    label: t("adminLastBackup", {}, locale),
+    value: !s.backup.enabled ? t("adminBackupOff", {}, locale) : age === null ? t("adminBackupNone", {}, locale) : t("adminAgo", { time: formatAge(age, locale) }, locale),
+    tone: !s.backup.enabled ? "notice" : s.backup.failed ? "problem" : age === null || age > 2 * 86_400_000 ? "problem" : age > 86_400_000 + 3_600_000 ? "notice" : "ok",
+  };
+  const disk = s.storage.disk && s.storage.disk.total > 0 ? s.storage.disk : null;
+  const freeShare = disk ? Math.min(1, Math.max(0, disk.free / disk.total)) : null;
+  const free: AdminStatusRow = {
+    id: "disk",
+    label: t("adminDiskFree", {}, locale),
+    value: disk && freeShare !== null ? `${formatBytes(disk.free, locale)} · ${formatPercent(freeShare, locale)}` : "–",
+    tone: freeShare === null ? "ok" : freeShare < 0.05 ? "problem" : freeShare < 0.15 ? "notice" : "ok",
+  };
+  return [{ id: "health", label: t("adminHealth", {}, locale), value: headline, tone: s.health.state }, errors, backup, free];
+}
+
 export function adminLiveWidget(admin: AdminState, locale: Locale): AdminLiveProps {
   const title = t("adminLive", {}, locale);
   const closed = gate(admin, locale, title);
@@ -245,6 +313,7 @@ export function adminLiveWidget(admin: AdminState, locale: Locale): AdminLivePro
     title,
     message: "",
     url: appLink(MONITORING_URL),
+    fresh: freshness(s.at || Date.now(), Date.now(), locale),
     tiles: [
       { id: "active", label: t("adminActiveNow", {}, locale), value: formatNumber(live.activeNow, locale), alert: false },
       { id: "requests", label: t("adminRequestsMinute", {}, locale), value: formatNumber(live.requestsPerMinute, locale), alert: false },
@@ -277,6 +346,7 @@ export function adminStorageWidget(admin: AdminState, locale: Locale): AdminStor
     title,
     message: "",
     url: appLink(STORAGE_URL),
+    fresh: freshness((admin as { data: AdminSummary }).data.at || Date.now(), Date.now(), locale),
     used: formatBytes(s.bytes, locale),
     usedLabel: t("adminDatabaseFiles", {}, locale),
     disk,

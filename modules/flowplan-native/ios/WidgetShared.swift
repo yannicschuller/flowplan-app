@@ -516,15 +516,26 @@ actor FPRefresher {
   // wrote a new session does not wait for a request with the old one.
   private var running: [String: Task<Void, Never>] = [:]
 
-  func load(_ request: FPRequest, maxAge: TimeInterval) async -> FPLoad {
+  /// `also`: further answers the same widget shows ("Today": the next
+  /// appointment and unread mentions): registered first, so the one request
+  /// for every widget of the profile brings them too; the widget then asks
+  /// for each of them (from the cache) with load.
+  func load(_ request: FPRequest, maxAge: TimeInterval, also: [FPRequest] = []) async -> FPLoad {
     guard let session = FPKeychain.session(for: request.profile) else {
       os_log("No widget session in the keychain: signed out", log: FPLog.widgets, type: .default)
       return .signedOut
     }
     guard let token = session.token, !FPStore.signedOut(session) else { return .signedOut }
     FPStore.register(request, profile: session.profile)
+    for extra in also { FPStore.register(extra, profile: session.profile) }
     let key = request.key
-    if let cached = FPStore.cached(key, profile: session.profile), isFresh(cached, maxAge: maxAge) {
+    // Fresh only when the further answers are, too: otherwise the one
+    // request below brings them all.
+    if let cached = FPStore.cached(key, profile: session.profile), isFresh(cached, maxAge: maxAge),
+       also.allSatisfy({ (extra: FPRequest) -> Bool in
+         guard let answer = FPStore.cached(extra.key, profile: session.profile) else { return false }
+         return isFresh(answer, maxAge: maxAge)
+       }) {
       return .answer(cached, stale: false)
     }
     // Several widgets of a profile ask at once (after a reload): one request

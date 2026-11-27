@@ -25,6 +25,7 @@ import {
   NEWER_KINDS,
   parseTheme,
   serverConfig,
+  IOS_KINDS,
   SUITE_KINDS,
   SUITE_WIDGETS,
   widgetAccent,
@@ -148,8 +149,9 @@ test("the four new widgets: settings, defaults, what they need first", () => {
     max: 3,
   });
   assert.deepEqual(normalizeConfig("reading", { source: "library", max: 0 }), { source: "library", max: 1 });
-  assert.deepEqual(normalizeConfig("metric", { dashboardId: PAGE, widgetId: "w1" }), { dashboardId: PAGE, widgetId: "w1" });
-  assert.deepEqual(normalizeConfig("metric", { widgetId: "w1" }), {});
+  // Settings from before the source: a dashboard's tile.
+  assert.deepEqual(normalizeConfig("metric", { dashboardId: PAGE, widgetId: "w1" }), { source: "dashboard", dashboardId: PAGE, widgetId: "w1" });
+  assert.deepEqual(normalizeConfig("metric", { widgetId: "w1" }), { source: "dashboard" });
   assert.deepEqual(normalizeConfig("deadline", { pageId: PAGE, rowId: ROW }), { pageId: PAGE, rowId: ROW });
   assert.deepEqual(normalizeConfig("deadline", { pageId: PAGE, taskKey: "k:1", index: 3 }), { pageId: PAGE, taskKey: "k:1", index: 3 });
   assert.deepEqual(normalizeConfig("deadline", { taskKey: "k:1" }), {});
@@ -228,7 +230,7 @@ test("continue reading, key figure, deadline: what they show", () => {
   const late = deadline({ due: "2026-11-18T10:00:00Z", allDay: false, done: false, overdue: true });
   assert.ok(late.state === "deadline" && late.countdown === "24 h overdue" && late.overdue);
   const done = deadline({ due: "2026-11-18", allDay: true, done: true, overdue: false });
-  assert.ok(done.state === "deadline" && done.countdown === "Done" && !done.overdue && done.due === "due Yesterday");
+  assert.ok(done.state === "deadline" && done.countdown === "Done" && !done.overdue && done.due === "due Overdue · 1 d");
 });
 
 test("an older instance refuses the new kinds: those widgets ask for an update, the others work", async () => {
@@ -326,15 +328,15 @@ test("iOS: widget push, profile and colours are wired into the extension", () =>
   assert.match(widgets, /struct FPWidgetPushHandler: WidgetPushHandler \{[\s\S]*?FPWidgetPush\.save\(pushInfo\.token\)/);
   // iOS 26 only, behind #available; every configurable widget goes through it.
   assert.match(widgets, /if #available\(iOS 26\.0, \*\) \{\s*return self[\s\S]*?\.pushHandler\(FPWidgetPushHandler\.self\)\s*\} else \{/);
-  assert.equal((widgets.match(/\.fpPlatform\(/g) ?? []).length, SUITE_KINDS.length);
+  assert.equal((widgets.match(/\.fpPlatform\(/g) ?? []).length, IOS_KINDS.length);
   for (const kind of ["FlowplanAgenda", "FlowplanTaskList", "FlowplanNextEvent", "FlowplanDeadline"]) assert.match(widgets, new RegExp(`kind: "${kind}"[\\s\\S]*?fpPlatform\\(FPPlaces\\(carPlay: true\\)`), kind);
   const intents = suite("SuiteIntents.swift");
   // Every configuration has a profile and colours (and lists them).
-  assert.equal((intents.match(/@Parameter\(title: "Profile"\)\n {2}var profile: FPProfileEntity\?/g) ?? []).length, SUITE_KINDS.length);
-  assert.equal((intents.match(/@Parameter\(title: "Colors", default: \.accent\)/g) ?? []).length, SUITE_KINDS.length);
+  assert.equal((intents.match(/@Parameter\(title: "Profile"\)\n {2}var profile: FPProfileEntity\?/g) ?? []).length, IOS_KINDS.length);
+  assert.equal((intents.match(/@Parameter\(title: "Colors", default: \.accent\)/g) ?? []).length, IOS_KINDS.length);
   for (const summary of intents.match(/Summary \{[^}]*\}/g) ?? []) assert.match(summary, /\\\.\$profile\s+\\\.\$color/, summary);
   // Buttons act with the widget's profile.
-  for (const intent of ["FPCompleteTaskIntent", "FPCheckHabitIntent", "FPMarkReadIntent", "FPStartTimerIntent", "FPStopTimerIntent"])
+  for (const intent of ["FPCompleteTaskIntent", "FPCheckHabitIntent", "FPStartTimerIntent", "FPStopTimerIntent"])
     assert.match(intents, new RegExp(`struct ${intent}: AppIntent \\{[\\s\\S]*?@Parameter\\(title: "Profile", default: ""\\) var profile: String`), intent);
   const shared = readFileSync(join(root, "modules/flowplan-native/ios/WidgetShared.swift"), "utf8");
   // A widget's session is its profile's own (the active one's otherwise).

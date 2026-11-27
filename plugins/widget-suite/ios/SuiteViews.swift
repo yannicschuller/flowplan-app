@@ -4,11 +4,16 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-// How the configurable widgets look: one thing per widget, small sizes show
-// less. Brand colour only as an accent (header, the one big number); in the
-// tinted and clear home screens (iOS 18) the accents follow the tint
-// (widgetAccentable). Buttons run in the extension (iOS 17); links open the
-// page in the app (flowplan://open?path=…).
+// How the configurable widgets look. Every widget is built from the same
+// pieces (FPCard: header with a clear counter, the body, the quiet footer
+// with the last update; FPGrid: one row height, one gap, rows computed from
+// the height the family really has), so spacing and typography are the same
+// everywhere. Brand colour (the workspace's accent where the instance sends
+// it) only as an accent; in the tinted and clear home screens (iOS 18, iOS
+// 26's Liquid Glass) the system draws accentable parts (widgetAccentable) in
+// its tint, the rest stays legible in primary and secondary. Buttons run in
+// the extension (iOS 17); links open the page in the app
+// (flowplan://open?path=…). SuiteMoreViews.swift has the remaining widgets.
 
 /// The colours a widget takes (its "Colors" setting, FPColorChoice): the
 /// workspace's accent from the instance's answer (theme), the profile's dot,
@@ -56,6 +61,9 @@ private struct FPPaletteKey: EnvironmentKey {
 private struct FPProfileKey: EnvironmentKey {
   static let defaultValue: String? = nil
 }
+private struct FPReloadKindKey: EnvironmentKey {
+  static let defaultValue: String = ""
+}
 
 extension EnvironmentValues {
   var fpPalette: FPPalette {
@@ -67,6 +75,12 @@ extension EnvironmentValues {
     get { self[FPProfileKey.self] }
     set { self[FPProfileKey.self] = newValue }
   }
+  /// The widget kind (SuiteWidgets.swift) whose timelines a button reloads
+  /// first, so the tapped item is drawn done at once.
+  var fpReloadKind: String {
+    get { self[FPReloadKindKey.self] }
+    set { self[FPReloadKindKey.self] = newValue }
+  }
 }
 
 enum FPStyle {
@@ -74,12 +88,48 @@ enum FPStyle {
   static let brandOnDark = Color(red: 0.561, green: 0.576, blue: 1)
   static let late = Color(red: 0.82, green: 0.26, blue: 0.26)
   static let good = Color(red: 0.18, green: 0.52, blue: 0.35)
+  static let warn = Color(red: 0.76, green: 0.49, blue: 0.05)
   static let background = Color(UIColor { traits in
     traits.userInterfaceStyle == .dark
       ? UIColor(red: 0.086, green: 0.082, blue: 0.106, alpha: 1)
       : UIColor(red: 0.988, green: 0.984, blue: 0.973, alpha: 1)
   })
   static func accent(_ scheme: ColorScheme) -> Color { scheme == .dark ? brandOnDark : brand }
+}
+
+/// One grid for every widget: a list row is 20 pt high with 4 pt between
+/// rows, a group heading 15 pt; header, body and footer are 6 pt apart.
+/// Lists ask how many rows fit into the height their family really has
+/// (GeometryReader in FPCard), so a large widget shows 9–10 rows instead of
+/// five and half the widget empty.
+enum FPGrid {
+  static let row: CGFloat = 20
+  static let tallRow: CGFloat = 32
+  static let gap: CGFloat = 4
+  static let heading: CGFloat = 15
+  static let section: CGFloat = 6
+
+  /// Rows of one height that fit.
+  static func rows(_ height: CGFloat, row: CGFloat = FPGrid.row) -> Int {
+    max(1, Int((height + gap) / (row + gap)))
+  }
+
+  /// How many items fit when each starts a heading where its group changes
+  /// (groups: the group of every item, in order).
+  static func fit(_ groups: [Int], height: CGFloat, row: CGFloat = FPGrid.row, headings: Bool) -> Int {
+    var used: CGFloat = 0
+    var count = 0
+    var last: Int? = nil
+    for group in groups {
+      var need: CGFloat = row + (count > 0 ? gap : 0)
+      if headings && group != last { need += heading + gap }
+      if used + need > height + 0.5 { break }
+      used += need
+      count += 1
+      last = group
+    }
+    return count
+  }
 }
 
 enum FPLink {
@@ -116,23 +166,10 @@ enum FPFormat {
     text.flatMap { dayFormat.date(from: String($0.prefix(10))) }
   }
 
-  /// "Today", "Tomorrow", "Yesterday" or "21 Oct"; late: before today.
-  static func due(_ text: String?) -> (label: String, late: Bool) {
+  /// A due day relative to today (FPWhen.day); late: before today.
+  static func due(_ text: String?, now: Date = Date()) -> (label: String, late: Bool) {
     guard let date = day(text) else { return ("", false) }
-    let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: date).day ?? 0
-    switch days {
-    case 0: return (L("Today"), false)
-    case 1: return (L("Tomorrow"), false)
-    case -1: return (L("Yesterday"), true)
-    default: return (date.formatted(.dateTime.day().month(.abbreviated)), days < 0)
-    }
-  }
-
-  static func weekday(_ text: String?) -> String {
-    guard let date = day(text) else { return "" }
-    if Calendar.current.isDateInToday(date) { return L("Today") }
-    if Calendar.current.isDateInTomorrow(date) { return L("Tomorrow") }
-    return date.formatted(.dateTime.weekday(.wide))
+    return FPWhen.day(date, now: now)
   }
 
   static func hours(_ value: Double?) -> String {
@@ -140,12 +177,61 @@ enum FPFormat {
     return String(format: "%d:%02d h", minutes / 60, minutes % 60)
   }
 
-  static func ago(_ value: FPJSON) -> String {
-    value.date.map { $0.formatted(.relative(presentation: .named)) } ?? ""
-  }
-
   static func count(_ key: String, _ count: Int) -> String {
     String(format: L(key), count)
+  }
+}
+
+/// Dates the same way in every widget: "Overdue · 10 d", "Today 14:00",
+/// "Tomorrow", the weekday within a week, the date only beyond that – never
+/// a full date on every row.
+enum FPWhen {
+  static func days(from now: Date, to date: Date) -> Int {
+    let calendar = Calendar.current
+    return calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+  }
+
+  /// A day without time; late: before today.
+  static func day(_ date: Date, now: Date) -> (label: String, late: Bool) {
+    let offset = days(from: now, to: date)
+    if offset < 0 { return (FPFormat.count("Overdue · %d d", -offset), true) }
+    return (name(date, offset: offset), false)
+  }
+
+  /// A moment: "Today 14:00", "Tomorrow 09:30", "Friday 14:00", "17 Nov 14:00".
+  static func moment(_ date: Date, now: Date, allDay: Bool = false) -> String {
+    let offset = days(from: now, to: date)
+    let name: String = offset < 0 ? date.formatted(.dateTime.day().month(.abbreviated)) : self.name(date, offset: offset)
+    if allDay { return name }
+    return name + " " + date.formatted(date: .omitted, time: .shortened)
+  }
+
+  /// "Today", "Tomorrow", the weekday within a week, else the date.
+  static func name(_ date: Date, offset: Int) -> String {
+    switch offset {
+    case 0: return L("Today")
+    case 1: return L("Tomorrow")
+    case 2..<7: return date.formatted(.dateTime.weekday(.wide))
+    default:
+      let sameYear = Calendar.current.component(.year, from: date) == Calendar.current.component(.year, from: Date())
+      return sameYear ? date.formatted(.dateTime.day().month(.abbreviated)) : date.formatted(.dateTime.day().month(.abbreviated).year())
+    }
+  }
+
+  /// The group of a due day in list widgets: 0 overdue, 1 today, 2 later
+  /// (and without a date).
+  static func group(_ text: String?, now: Date) -> Int {
+    guard let date = FPFormat.day(text) else { return 2 }
+    let offset = days(from: now, to: date)
+    return offset < 0 ? 0 : offset == 0 ? 1 : 2
+  }
+
+  static func groupTitle(_ group: Int) -> String {
+    switch group {
+    case 0: return L("Overdue")
+    case 1: return L("Today")
+    default: return L("Later")
+    }
   }
 }
 
@@ -157,16 +243,14 @@ enum FPKind {
     case "tasks": return "checklist"
     case "calendar": return "calendar"
     case "pinned": return "star"
-    case "counter": return "number"
+    case "counter", "metric": return "chart.line.uptrend.xyaxis"
     case "journal": return "book.closed"
     case "time": return "timer"
-    case "mentions": return "at"
-    case "forms": return "tray.and.arrow.down"
     case "study": return "rectangle.on.rectangle.angled"
     case "event": return "calendar.badge.clock"
     case "reading": return "book"
-    case "metric": return "chart.line.uptrend.xyaxis"
     case "deadline": return "hourglass"
+    case "myday": return "sun.max"
     default: return "square.grid.2x2"
     }
   }
@@ -176,17 +260,15 @@ enum FPKind {
     case "capture": return L("Quick capture")
     case "tasks": return L("Tasks")
     case "calendar": return L("Today")
-    case "pinned": return L("Page and favorites")
-    case "counter": return L("Database counter")
+    case "pinned": return L("Pages")
+    case "counter", "metric": return L("Key figure")
     case "journal": return L("Journal and habits")
     case "time": return L("Time this week")
-    case "mentions": return L("Mentions")
-    case "forms": return L("Form responses")
     case "study": return L("Cards due")
     case "event": return L("Next appointment")
     case "reading": return L("Continue reading")
-    case "metric": return L("Key figure")
     case "deadline": return L("Deadline")
+    case "myday": return L("My day")
     default: return "Flowplan"
     }
   }
@@ -194,17 +276,31 @@ enum FPKind {
 
 extension WidgetFamily {
   var isAccessory: Bool { self == .accessoryCircular || self == .accessoryRectangular || self == .accessoryInline }
+  var isLarge: Bool { self == .systemLarge || self == .systemExtraLarge }
 }
 
-// MARK: - Building blocks
+// MARK: - Building blocks: header, card, footer, empty state
 
+/// The header of every widget: symbol and title in the accent, a clear
+/// counter on the right ("24 open · 10 overdue").
 @available(iOS 17.0, *)
 struct FPHeader: View {
   let icon: String
   let title: String
-  var trailing = ""
+  let trailing: Text?
   @Environment(\.colorScheme) private var scheme
   @Environment(\.fpPalette) private var palette
+
+  init(icon: String, title: String, trailing: String = "") {
+    self.icon = icon
+    self.title = title
+    self.trailing = trailing.isEmpty ? nil : Text(trailing)
+  }
+  init(icon: String, title: String, trailingText: Text?) {
+    self.icon = icon
+    self.title = title
+    self.trailing = trailingText
+  }
 
   var body: some View {
     HStack(spacing: 5) {
@@ -219,14 +315,141 @@ struct FPHeader: View {
         .lineLimit(1)
         .widgetAccentable()
       Spacer(minLength: 4)
-      if !trailing.isEmpty {
-        Text(trailing)
+      if let trailing {
+        trailing
           .font(.caption2.weight(.medium))
           .foregroundStyle(.secondary)
+          .monospacedDigit()
           .lineLimit(1)
+          .minimumScaleFactor(0.8)
       }
     }
+    .frame(height: 16)
     .accessibilityElement(children: .combine)
+  }
+}
+
+/// "24 open · 10 overdue": the overdue part in the warning colour.
+enum FPCounter {
+  static func open(_ open: Int, overdue: Int) -> Text {
+    let base = Text(FPFormat.count("%d open", open))
+    guard overdue > 0 else { return base }
+    return base + Text(" · ") + Text(FPFormat.count("%d overdue", overdue)).foregroundColor(FPStyle.late)
+  }
+}
+
+/// A widget's body under its header: the content gets the height it really
+/// has, so lists can fill it (FPGrid).
+@available(iOS 17.0, *)
+struct FPCard<Content: View>: View {
+  let header: FPHeader
+  let content: (CGFloat) -> Content
+
+  init(_ header: FPHeader, @ViewBuilder content: @escaping (CGFloat) -> Content) {
+    self.header = header
+    self.content = content
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: FPGrid.section) {
+      header
+      GeometryReader { proxy in
+        content(proxy.size.height)
+          .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+      }
+    }
+  }
+}
+
+/// The last update, quiet and grey at the bottom of every data widget:
+/// "12 min ago" as a live text (the system keeps counting without a
+/// reload); older than an hour a warning and "As of 01:10". The date is
+/// when the answer came from the instance, also when a cached answer is
+/// shown again (FPResult.at). Small widgets show only the warning.
+@available(iOS 17.0, *)
+struct FPFooter: View {
+  static let staleAfter: TimeInterval = 3600
+  let fetched: Date
+  let now: Date
+
+  static func shows(fetched: Date, now: Date, compact: Bool) -> Bool {
+    !compact || now.timeIntervalSince(fetched) > staleAfter
+  }
+
+  var body: some View {
+    if now.timeIntervalSince(fetched) > Self.staleAfter {
+      let time: String = Calendar.current.isDate(fetched, inSameDayAs: now)
+        ? fetched.formatted(date: .omitted, time: .shortened)
+        : fetched.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+      HStack(spacing: 3) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(FPStyle.warn)
+          .accessibilityHidden(true)
+        Text(String(format: L("As of %@"), time))
+          .foregroundStyle(.secondary)
+      }
+      .font(.caption2)
+      .lineLimit(1)
+      .frame(height: 12)
+    } else {
+      let key: LocalizedStringKey = "\(Text(fetched, style: .relative)) ago"
+      Text(key)
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
+        .monospacedDigit()
+        .lineLimit(1)
+        .frame(height: 12)
+    }
+  }
+}
+
+/// An empty list with a purpose: what it means and what to do next.
+@available(iOS 17.0, *)
+struct FPEmpty: View {
+  let icon: String
+  let text: String
+  var action: (label: String, url: URL)? = nil
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+  @Environment(\.widgetFamily) private var family
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Spacer(minLength: 0)
+      Label(text, systemImage: icon)
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+      if let action, family != .systemSmall {
+        Link(destination: action.url) {
+          Label(action.label, systemImage: "plus")
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .background(.fill.tertiary, in: Capsule())
+            .foregroundStyle(palette.accent(scheme))
+            .widgetAccentable()
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// A heading of a group in a list (Overdue, Today, Later; a day).
+@available(iOS 17.0, *)
+struct FPGroupHeading: View {
+  let title: String
+  var late = false
+
+  var body: some View {
+    Text(title)
+      .font(.caption2.weight(.semibold))
+      .foregroundStyle(late ? AnyShapeStyle(FPStyle.late) : AnyShapeStyle(.secondary))
+      .textCase(.uppercase)
+      .lineLimit(1)
+      .frame(height: FPGrid.heading, alignment: .bottomLeading)
   }
 }
 
@@ -256,7 +479,7 @@ struct FPClosedView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     default:
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: FPGrid.section) {
         FPHeader(icon: FPKind.icon(kind), title: title)
         Spacer(minLength: 0)
         Image(systemName: icon)
@@ -278,8 +501,6 @@ struct FPClosedView: View {
 struct FPBigNumber: View {
   let value: String
   var size: CGFloat = 40
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.fpPalette) private var palette
 
   var body: some View {
     Text(value)
@@ -290,6 +511,20 @@ struct FPBigNumber: View {
       .foregroundStyle(.primary)
       .widgetAccentable()
       .contentTransition(.numericText())
+  }
+}
+
+/// The short hint under an item whose action the instance refused.
+@available(iOS 17.0, *)
+struct FPHint: View {
+  let text: String
+
+  var body: some View {
+    Text(text)
+      .font(.caption2.weight(.medium))
+      .foregroundStyle(FPStyle.late)
+      .lineLimit(1)
+      .minimumScaleFactor(0.8)
   }
 }
 
@@ -304,20 +539,31 @@ struct FPSuiteView: View {
     switch entry.state {
     case .signedOut, .offline, .gone, .setup, .outdated: return FPLink.page("/")
     default:
-      if entry.kind == "event" {
+      switch entry.kind {
+      case "event":
         return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home")
-      }
-      if entry.kind == "reading" { return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home") }
-      if entry.kind == "capture" {
+      case "calendar":
+        // The small size is the next appointment.
+        if family == .systemSmall, let next = FPEvent.list(entry.extras["event"]).first { return FPLink.page(next.url ?? "/#home") }
+        return FPLink.page("/#home")
+      case "reading":
+        return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home")
+      case "pinned":
+        if entry.dataKind == "reading" { return FPLink.page(entry.data["items"].array.first?["url"].string ?? "/#home") }
+        return FPLink.page(entry.data["url"].string ?? (family == .systemSmall ? entry.data["items"].array.first?["url"].string : nil) ?? "/#home")
+      case "capture":
         return FPLink.capture(entry.settings.buttons.first ?? "note", target: entry.data["target"]["id"].string)
-      }
-      if entry.kind == "mentions" { return FPLink.page("/#inbox") }
-      if entry.kind == "tasks" && entry.data["url"].isNull { return FPLink.page("/#tasks") }
-      if entry.kind == "journal" {
+      case "tasks":
+        if entry.data["items"].array.isEmpty { return FPLink.capture("task", target: nil) }
+        return FPLink.page(entry.data["url"].string ?? "/#tasks")
+      case "myday":
+        return FPLink.page("/#home")
+      case "journal":
         let journal = entry.data["journal"]
         return FPLink.page(journal["today"].string ?? journal["url"].string ?? entry.data["habits"]["url"].string)
+      default:
+        return FPLink.page(entry.data["url"].string ?? "/#home")
       }
-      return FPLink.page(entry.data["url"].string ?? "/#home")
     }
   }
 
@@ -332,8 +578,13 @@ struct FPSuiteView: View {
       }
       .environment(\.fpPalette, entry.palette)
       .environment(\.fpProfile, entry.profile)
+      .environment(\.fpReloadKind, FPWidgetKind.of(entry.kind))
       .widgetURL(link)
   }
+
+  /// The footer on every data widget, not on quick capture (no data) and not
+  /// on the lock screen (no room).
+  private var footer: Bool { entry.kind != "capture" && !family.isAccessory }
 
   @ViewBuilder private var content: some View {
     switch entry.state {
@@ -352,35 +603,45 @@ struct FPSuiteView: View {
         FPClosedView(kind: entry.kind, icon: "lock.fill", title: entry.data["title"].string ?? FPKind.title(entry.kind), message: L("Protected by the journal PIN – unlock it in Flowplan"))
       } else if entry.encrypted {
         FPClosedView(kind: entry.kind, icon: "lock.shield", title: FPKind.title(entry.kind), message: L("End-to-end encrypted – readable in Flowplan only"))
-      } else {
-        switch entry.kind {
-        case "capture": FPCaptureView(entry: entry)
-        case "tasks": FPTasksView(entry: entry)
-        case "calendar": FPCalendarView(entry: entry)
-        case "pinned": FPPinnedView(entry: entry)
-        case "counter": FPCounterView(entry: entry)
-        case "journal": FPJournalView(entry: entry)
-        case "time": FPTimeView(entry: entry)
-        case "mentions": FPMentionsView(entry: entry)
-        case "forms": FPFormsView(entry: entry)
-        case "study": FPStudyView(entry: entry)
-        case "event": FPEventView(entry: entry)
-        case "reading": FPReadingView(entry: entry)
-        case "metric":
-          if entry.data["available"].raw != nil && !entry.data["available"].bool {
-            FPClosedView(kind: entry.kind, icon: "eye.slash", title: entry.data["title"].string ?? FPKind.title(entry.kind), message: L("No longer available – edit the widget"))
-          } else {
-            FPMetricView(entry: entry)
+      } else if footer {
+        let fetched: Date = entry.fetched ?? entry.date
+        VStack(alignment: .leading, spacing: FPGrid.section) {
+          kindView
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          if FPFooter.shows(fetched: fetched, now: entry.date, compact: family == .systemSmall) {
+            FPFooter(fetched: fetched, now: entry.date)
           }
-        case "deadline": FPDeadlineView(entry: entry)
-        default: EmptyView()
         }
+      } else {
+        kindView
       }
+    }
+  }
+
+  @ViewBuilder private var kindView: some View {
+    switch entry.kind {
+    case "capture": FPCaptureView(entry: entry)
+    case "tasks": FPTasksView(entry: entry)
+    case "calendar": FPCalendarView(entry: entry)
+    case "pinned", "reading": FPPagesView(entry: entry)
+    case "counter", "metric":
+      if entry.data["available"].raw != nil && !entry.data["available"].bool {
+        FPClosedView(kind: entry.kind, icon: "eye.slash", title: entry.data["title"].string ?? FPKind.title(entry.kind), message: L("No longer available – edit the widget"))
+      } else {
+        FPFigureView(entry: entry)
+      }
+    case "journal": FPJournalView(entry: entry)
+    case "time": FPTimeView(entry: entry)
+    case "study": FPStudyView(entry: entry)
+    case "event": FPEventView(entry: entry)
+    case "deadline": FPDeadlineView(entry: entry)
+    case "myday": FPMyDayView(entry: entry)
+    default: EmptyView()
     }
   }
 }
 
-// MARK: - 1. Quick capture
+// MARK: - Quick capture
 
 @available(iOS 17.0, *)
 struct FPCaptureView: View {
@@ -422,7 +683,7 @@ struct FPCaptureView: View {
       .accessibilityLabel(Self.label(first))
     case .systemSmall:
       // Small widgets open one link: the first button.
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: FPGrid.section) {
         FPHeader(icon: "square.and.pencil", title: L("Quick capture"))
         Spacer(minLength: 0)
         Image(systemName: Self.icon(first))
@@ -434,7 +695,7 @@ struct FPCaptureView: View {
       }
       .accessibilityElement(children: .combine)
     default:
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: FPGrid.section) {
         FPHeader(icon: "square.and.pencil", title: L("Quick capture"), trailing: entry.data["target"]["name"].text)
         Spacer(minLength: 0)
         HStack(spacing: 8) {
@@ -458,7 +719,7 @@ struct FPCaptureView: View {
   }
 }
 
-// MARK: - 2. Tasks (check off right here)
+// MARK: - Tasks (check off right here)
 
 /// A round checkbox: in a widget the system draws the tapped state at once,
 /// before the action runs. With the label (habits) the whole row is the
@@ -477,7 +738,7 @@ struct FPCheckStyle: ToggleStyle {
         .font(.body)
         .foregroundStyle(style)
         .widgetAccentable()
-        .frame(width: 30, height: 26)
+        .frame(width: 26, height: FPGrid.row)
       if showsLabel {
         configuration.label
           .strikethrough(on)
@@ -488,28 +749,30 @@ struct FPCheckStyle: ToggleStyle {
   }
 }
 
-/// The short hint under an item whose action the instance refused.
-@available(iOS 17.0, *)
-struct FPHint: View {
-  let text: String
+/// The tasks of an answer: in order, with what was just checked off.
+struct FPTaskList {
+  let items: [FPJSON]
+  let open: Int
+  let overdue: Int
 
-  var body: some View {
-    Text(text)
-      .font(.caption2.weight(.medium))
-      .foregroundStyle(FPStyle.late)
-      .lineLimit(1)
-      .minimumScaleFactor(0.8)
+  init(_ data: FPJSON, marks: FPMarks, now: Date) {
+    let all = data["items"].array
+    let checked: Int = all.filter { marks.isPending(FPTaskList.id($0)) }.count
+    items = all
+    open = max(0, (data["total"].int ?? all.count) - checked)
+    // The instance's count of overdue tasks where it sends one; otherwise
+    // those of the answer (at most ten).
+    var late = 0
+    var lateChecked = 0
+    for item in all where FPWhen.group(item["due"].string, now: now) == 0 {
+      if marks.isPending(FPTaskList.id(item)) { lateChecked += 1 } else { late += 1 }
+    }
+    if let counted = data["overdue"].int {
+      overdue = max(0, counted - lateChecked)
+    } else {
+      overdue = late
+    }
   }
-}
-
-@available(iOS 17.0, *)
-struct FPTaskRow: View {
-  let item: FPJSON
-  let compact: Bool
-  let marks: FPMarks
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.fpPalette) private var palette
-  @Environment(\.fpProfile) private var profile
 
   /// The task as FPCompleteTaskIntent names it.
   static func id(_ item: FPJSON) -> String {
@@ -518,6 +781,19 @@ struct FPTaskRow: View {
     let index: Int = item["index"].int ?? -1
     return FPActions.taskID(source: source, pageId: item["pageId"].text, rowId: rowId, index: index)
   }
+}
+
+/// One task in one line: checkbox, text, the due day on the right.
+@available(iOS 17.0, *)
+struct FPTaskRow: View {
+  let item: FPJSON
+  let marks: FPMarks
+  let now: Date
+  var showsDue = true
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+  @Environment(\.fpProfile) private var profile
+  @Environment(\.fpReloadKind) private var reload
 
   @ViewBuilder private func check(done: Bool) -> some View {
     if done {
@@ -527,7 +803,7 @@ struct FPTaskRow: View {
         .font(.body)
         .foregroundStyle(palette.accent(scheme))
         .widgetAccentable()
-        .frame(width: 30, height: 26)
+        .frame(width: 26, height: FPGrid.row)
         .accessibilityLabel(L("Done"))
     } else if item["canEdit"].bool, let pageId = item["pageId"].string {
       let intent = FPCompleteTaskIntent(
@@ -537,7 +813,8 @@ struct FPTaskRow: View {
         index: item["index"].int ?? -1,
         key: item["key"].text,
         text: item["text"].text,
-        profile: profile
+        profile: profile,
+        widget: reload
       )
       Toggle(isOn: false, intent: intent) {
         Text(L("Mark as done"))
@@ -548,46 +825,71 @@ struct FPTaskRow: View {
       Image(systemName: "circle.dotted")
         .font(.body)
         .foregroundStyle(.tertiary)
-        .frame(width: 30, height: 26)
+        .frame(width: 26, height: FPGrid.row)
         .accessibilityHidden(true)
     }
   }
 
   var body: some View {
-    let due = FPFormat.due(item["due"].string)
-    let id: String = Self.id(item)
+    let due = FPFormat.due(item["due"].string, now: now)
+    let id: String = FPTaskList.id(item)
     let done: Bool = marks.isPending(id)
     let failed: Bool = !done && marks.hasFailed(id)
     let textStyle: HierarchicalShapeStyle = done ? .secondary : .primary
-    HStack(spacing: 4) {
+    HStack(spacing: 2) {
       check(done: done)
       Link(destination: FPLink.page(item["url"].string)) {
         HStack(spacing: 6) {
-          VStack(alignment: .leading, spacing: 0) {
+          if failed {
+            FPHint(text: L("Couldn’t check off – open in Flowplan"))
+          } else {
             Text(item["text"].text)
               .strikethrough(done)
               .font(.subheadline)
               .foregroundStyle(textStyle)
               .lineLimit(1)
-            if failed {
-              FPHint(text: L("Couldn’t check off – open in Flowplan"))
-            } else if !compact, !item["page"].text.isEmpty {
-              Text(item["page"].text).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-            }
           }
           Spacer(minLength: 2)
-          if !compact, !due.label.isEmpty {
+          if showsDue, !due.label.isEmpty {
             Text(due.label)
               .font(.caption2.weight(.medium))
-              .foregroundStyle(due.late ? FPStyle.late : .secondary)
+              .foregroundStyle(due.late ? AnyShapeStyle(FPStyle.late) : AnyShapeStyle(.secondary))
               .lineLimit(1)
           }
         }
       }
       .accessibilityElement(children: .combine)
     }
+    .frame(height: FPGrid.row)
     .opacity(done ? 0.6 : 1)
     .invalidatableContent()
+  }
+}
+
+/// Tasks in the grid: as many rows as fit, grouped (Overdue, Today, Later)
+/// where there is room for the headings.
+@available(iOS 17.0, *)
+struct FPTaskRows: View {
+  let items: [FPJSON]
+  let marks: FPMarks
+  let now: Date
+  let height: CGFloat
+  let grouped: Bool
+
+  var body: some View {
+    let groups: [Int] = items.map { FPWhen.group($0["due"].string, now: now) }
+    // Headings only when the tasks fall into more than one group.
+    let headings: Bool = grouped && Set(groups).count > 1
+    let shown: Int = FPGrid.fit(groups, height: height, headings: headings)
+    VStack(alignment: .leading, spacing: FPGrid.gap) {
+      ForEach(0..<shown, id: \.self) { index in
+        if headings && (index == 0 || groups[index - 1] != groups[index]) {
+          FPGroupHeading(title: FPWhen.groupTitle(groups[index]), late: groups[index] == 0)
+        }
+        // Under "Today" the day says nothing new.
+        FPTaskRow(item: items[index], marks: marks, now: now, showsDue: !(headings && groups[index] == 1))
+      }
+    }
   }
 }
 
@@ -597,81 +899,144 @@ struct FPTasksView: View {
   @Environment(\.widgetFamily) private var family
 
   var body: some View {
-    let items = entry.data["items"].array
-    let checked: Int = items.filter { entry.marks.isPending(FPTaskRow.id($0)) }.count
-    let total = max(0, (entry.data["total"].int ?? items.count) - checked)
-    let headline = total == 0 ? L("All done") : FPFormat.count("%d open", total)
+    let list = FPTaskList(entry.data, marks: entry.marks, now: entry.date)
+    let headline: String = list.open == 0 ? L("All done") : FPFormat.count("%d open", list.open)
     switch family {
     case .accessoryInline:
-      Text(items.first.map { "\(headline) · \($0["text"].text)" } ?? headline)
+      if list.open == 0 {
+        Label(L("All done"), systemImage: "checkmark.circle")
+      } else if list.overdue > 0 {
+        Text("\(headline) · \(FPFormat.count("%d overdue", list.overdue))")
+      } else {
+        Text(headline)
+      }
+    case .accessoryCircular:
+      ZStack {
+        AccessoryWidgetBackground()
+        VStack(spacing: 0) {
+          Text(String(list.open))
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .widgetAccentable()
+          if list.overdue > 0 {
+            Label(String(list.overdue), systemImage: "exclamationmark.circle.fill")
+              .font(.system(size: 10, weight: .semibold))
+              .lineLimit(1)
+          } else {
+            Image(systemName: "checklist").font(.caption2)
+          }
+        }
+      }
+      .accessibilityLabel(list.overdue > 0 ? "\(headline), \(FPFormat.count("%d overdue", list.overdue))" : headline)
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 1) {
-        Text(headline).font(.headline).lineLimit(1).widgetAccentable()
-        ForEach(Array(items.prefix(2).enumerated()), id: \.offset) { _, item in
+        (list.open == 0 ? Text(headline) : FPCounter.open(list.open, overdue: list.overdue))
+          .font(.headline)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .widgetAccentable()
+        ForEach(Array(list.items.prefix(2).enumerated()), id: \.offset) { _, item in
           Text(item["text"].text).font(.caption).lineLimit(1)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     default:
-      let rows = min(entry.settings.max, family == .systemLarge ? 8 : family == .systemExtraLarge ? 8 : 3)
-      VStack(alignment: .leading, spacing: family == .systemSmall ? 5 : 7) {
-        FPHeader(icon: "checklist", title: entry.data["title"].string ?? L("Tasks"), trailing: total > 0 ? "\(total)" : "")
-        if items.isEmpty {
-          Spacer(minLength: 0)
-          Label(L("All done"), systemImage: "checkmark.circle").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-          Spacer(minLength: 0)
+      let title: String = entry.data["title"].string ?? L("Tasks")
+      FPCard(FPHeader(icon: "checklist", title: title, trailingText: list.open > 0 ? FPCounter.open(list.open, overdue: family == .systemSmall ? 0 : list.overdue) : nil)) { height in
+        if list.items.isEmpty {
+          FPEmpty(icon: "checkmark.circle", text: L("All done"), action: (L("New task"), FPLink.capture("task", target: nil)))
         } else {
-          ForEach(Array(items.prefix(rows).enumerated()), id: \.offset) { _, item in
-            FPTaskRow(item: item, compact: family == .systemSmall, marks: entry.marks)
-          }
-          Spacer(minLength: 0)
+          FPTaskRows(items: list.items, marks: entry.marks, now: entry.date, height: height, grouped: family.isLarge)
         }
       }
     }
   }
 }
 
-// MARK: - 3. Today / calendar
+// MARK: - Today (the small size: the next appointment)
 
 @available(iOS 17.0, *)
 struct FPCalendarRow: View {
   let item: FPJSON
   let compact: Bool
+  var join: URL? = nil
   @Environment(\.colorScheme) private var scheme
   @Environment(\.fpPalette) private var palette
 
   var body: some View {
     let task = item["type"].string == "task"
-    Link(destination: FPLink.page(item["url"].string)) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Group {
-          if task {
-            Image(systemName: "checklist")
-          } else if item["timed"].bool, let start = item["start"].date {
-            Text(start, style: .time)
-          } else {
-            Text(L("All day"))
+    HStack(spacing: 6) {
+      Link(destination: FPLink.page(item["url"].string)) {
+        HStack(spacing: 8) {
+          Group {
+            if task {
+              Image(systemName: "checklist")
+            } else if item["timed"].bool, let start = item["start"].date {
+              Text(start, style: .time)
+            } else {
+              Text(L("All day"))
+            }
           }
-        }
-        .font(.caption.weight(.medium))
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        .frame(width: compact ? 40 : 48, alignment: .leading)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-        RoundedRectangle(cornerRadius: 1.5)
-          .fill(task ? Color.secondary : palette.accent(scheme))
-          .frame(width: 3, height: 14)
-          .widgetAccentable()
-        VStack(alignment: .leading, spacing: 0) {
+          .font(.caption.weight(.medium))
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .frame(width: compact ? 40 : 46, alignment: .leading)
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          RoundedRectangle(cornerRadius: 1.5)
+            .fill(task ? Color.secondary : palette.accent(scheme))
+            .frame(width: 3, height: 14)
+            .widgetAccentable()
           Text(item["title"].text).font(.subheadline).lineLimit(1)
-          if !compact, !item["calendar"].text.isEmpty {
+          Spacer(minLength: 2)
+          if !compact, join == nil, !item["calendar"].text.isEmpty {
             Text(item["calendar"].text).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
           }
         }
       }
+      .accessibilityElement(children: .combine)
+      if let join {
+        FPJoinButton(url: join, compact: true)
+      }
     }
-    .accessibilityElement(children: .combine)
+    .frame(height: FPGrid.row)
+  }
+}
+
+/// "Join" for a video call: a link from medium up; in a small widget (no
+/// links there) a button that opens the call on iOS 18 (FPJoinIntent).
+@available(iOS 17.0, *)
+struct FPJoinButton: View {
+  let url: URL
+  var compact = false
+  var inSmall = false
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.fpPalette) private var palette
+
+  private var label: some View {
+    Label(L("Join"), systemImage: "video.fill")
+      .font((compact ? Font.caption : Font.subheadline).weight(.semibold))
+      .lineLimit(1)
+      .padding(.horizontal, compact ? 8 : 14)
+      .frame(minHeight: compact ? FPGrid.row : 36)
+      .foregroundStyle(Color.white)
+      .background(palette.accent(scheme), in: Capsule())
+      .widgetAccentable()
+  }
+
+  var body: some View {
+    if inSmall {
+      if #available(iOS 18.0, *) {
+        Button(intent: FPJoinIntent(link: url.absoluteString)) { label }
+          .buttonStyle(.plain)
+          .accessibilityLabel(L("Join"))
+      }
+    } else {
+      Link(destination: url) { label }
+        .accessibilityLabel(L("Join"))
+    }
   }
 }
 
@@ -679,20 +1044,65 @@ struct FPCalendarRow: View {
 struct FPCalendarView: View {
   let entry: FPEntry
   @Environment(\.widgetFamily) private var family
+  @Environment(\.fpProfile) private var profile
+
+  /// Unread mentions (and new tasks for me), where the instance answered.
+  private var unread: Int {
+    let counts = entry.extras["mentions"]?["unread"] ?? FPJSON(nil)
+    return (counts["mentions"].int ?? 0) + (counts["assignments"].int ?? 0)
+  }
+
+  /// The day, with the unread mentions in front of it.
+  private var headerTrailing: Text {
+    let day = Text(entry.date.formatted(.dateTime.weekday(.abbreviated).day()))
+    guard unread > 0 else { return day }
+    return Text(Image(systemName: "at")) + Text(verbatim: " \(unread)  ·  ") + day
+  }
+
+  /// The appointment of the next-appointment answer that is this row.
+  private func join(for item: FPJSON, in events: [FPEvent]) -> URL? {
+    guard item["timed"].bool, let start = item["start"].date else { return nil }
+    return events.first { $0.title == item["title"].text && abs($0.start.timeIntervalSince(start)) < 60 }?.join
+  }
 
   var body: some View {
     let items = entry.data["items"].array
-    let next = items.first { item in (item["end"].date ?? item["start"].date ?? .distantFuture) >= Date() || !item["timed"].bool } ?? items.first
+    let events: [FPEvent] = FPEvent.list(entry.extras["event"], now: entry.date)
+    let next = items.first { item in (item["end"].date ?? item["start"].date ?? .distantFuture) >= entry.date || !item["timed"].bool } ?? items.first
     switch family {
     case .accessoryInline:
-      if let next, next["timed"].bool, let start = next["start"].date {
+      if let event = events.first, !event.allDay {
+        Text("\(event.start, style: .time) \(event.title)")
+      } else if let next, next["timed"].bool, let start = next["start"].date {
         Text("\(start, style: .time) \(next["title"].text)")
       } else {
         Text(next?["title"].text ?? L("Nothing scheduled"))
       }
+    case .accessoryCircular:
+      ZStack {
+        AccessoryWidgetBackground()
+        if let event = events.first, !event.allDay {
+          VStack(spacing: 0) {
+            Image(systemName: "calendar").font(.caption2)
+            Text(event.start, style: .time)
+              .font(.system(size: 13, weight: .semibold, design: .rounded))
+              .monospacedDigit()
+              .minimumScaleFactor(0.6)
+              .lineLimit(1)
+              .widgetAccentable()
+          }
+        } else {
+          Image(systemName: "calendar").font(.title3)
+        }
+      }
+      .accessibilityLabel(events.first.map { "\($0.title), \($0.when)" } ?? L("Nothing scheduled"))
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 1) {
-        if let next {
+        if let event = events.first {
+          FPCountdown(event: event, now: entry.date, font: .caption)
+          Text(event.title).font(.headline).lineLimit(1).widgetAccentable()
+          Text(event.when).font(.caption2).lineLimit(1)
+        } else if let next {
           if next["timed"].bool, let start = next["start"].date {
             Text(start, style: .time).font(.caption).monospacedDigit()
           } else {
@@ -704,180 +1114,70 @@ struct FPCalendarView: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+    case .systemSmall:
+      FPNextEventSmall(entry: entry, events: events, unread: unread)
     default:
-      let rows = family == .systemSmall ? 3 : family == .systemMedium ? 3 : 8
-      let shown = Array(items.prefix(rows))
-      VStack(alignment: .leading, spacing: 6) {
-        FPHeader(icon: "calendar", title: entry.data["title"].string ?? L("Today"), trailing: family == .systemSmall ? "" : Date().formatted(.dateTime.weekday(.abbreviated).day()))
-        if shown.isEmpty {
-          Spacer(minLength: 0)
-          Label(L("Nothing scheduled"), systemImage: "calendar").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-        }
-        ForEach(Array(shown.enumerated()), id: \.offset) { index, item in
+      let header = FPHeader(icon: "calendar", title: entry.data["title"].string ?? L("Today"), trailingText: headerTrailing)
+      FPCard(header) { height in
+        if items.isEmpty {
+          FPEmpty(icon: "sun.max", text: L("Nothing scheduled"))
+        } else {
           // Several days: the day above its first entry.
-          if family == .systemLarge, index == 0 || shown[index - 1]["day"].text != item["day"].text, items.contains(where: { $0["day"].text != items[0]["day"].text }) {
-            Text(FPFormat.weekday(item["day"].string)).font(.caption2.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
-          }
-          FPCalendarRow(item: item, compact: family == .systemSmall)
-        }
-        Spacer(minLength: 0)
-      }
-    }
-  }
-}
-
-// MARK: - 4. Page or favorites
-
-@available(iOS 17.0, *)
-struct FPPinnedView: View {
-  let entry: FPEntry
-  @Environment(\.widgetFamily) private var family
-
-  static func icon(_ kind: String) -> String {
-    switch kind {
-    case "database": return "tablecells"
-    case "record": return "rectangle.portrait.on.rectangle.portrait"
-    case "whiteboard": return "scribble.variable"
-    case "journal": return "book.closed"
-    case "form": return "list.bullet.rectangle"
-    default: return "doc.text"
-    }
-  }
-
-  var body: some View {
-    let items = entry.data["items"].array
-    let rows = family == .systemSmall ? 4 : family == .systemMedium ? 3 : 8
-    VStack(alignment: .leading, spacing: 7) {
-      FPHeader(icon: entry.data["properties"].isNull ? "star" : "tablecells", title: entry.data["title"].string ?? L("Favorites"))
-      if items.isEmpty {
-        Spacer(minLength: 0)
-        Text(L("Nothing here yet")).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-      }
-      ForEach(Array(items.prefix(rows).enumerated()), id: \.offset) { _, item in
-        let closed = item["locked"].bool || item["encrypted"].bool
-        let values = item["values"].array.compactMap(\.string).filter { !$0.isEmpty }.prefix(2).joined(separator: " · ")
-        let detail = values.isEmpty ? item["detail"].text : values
-        Link(destination: FPLink.page(item["url"].string)) {
-          HStack(spacing: 8) {
-            Image(systemName: closed ? "lock.fill" : Self.icon(item["kind"].text))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .frame(width: 16)
-              .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 0) {
-              Text(closed ? L(item["locked"].bool ? "Locked" : "Encrypted") : item["title"].text).font(.subheadline).lineLimit(1)
-              if family != .systemSmall, !closed, !detail.isEmpty {
-                Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+          let days: [String] = items.map { $0["day"].text }
+          let multi: Bool = Set(days).count > 1
+          let groups: [Int] = days.map { day in days.firstIndex(of: day) ?? 0 }
+          let shown: Int = FPGrid.fit(groups, height: height, headings: multi)
+          VStack(alignment: .leading, spacing: FPGrid.gap) {
+            ForEach(0..<shown, id: \.self) { index in
+              if multi && (index == 0 || days[index - 1] != days[index]) {
+                FPGroupHeading(title: FPFormat.day(days[index]).map { FPWhen.name($0, offset: FPWhen.days(from: entry.date, to: $0)) } ?? days[index])
               }
+              FPCalendarRow(item: items[index], compact: false, join: items[index]["type"].string == "task" ? nil : join(for: items[index], in: events))
             }
           }
         }
-        .accessibilityElement(children: .combine)
       }
-      Spacer(minLength: 0)
     }
   }
 }
 
-// MARK: - 5. Database counter
-
+/// "Today" in small: the next appointment with its countdown and "Join";
+/// without one what is still due today.
 @available(iOS 17.0, *)
-struct FPSparkline: View {
-  let history: [FPJSON]
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.fpPalette) private var palette
-
-  private struct Point: Identifiable {
-    let id: Int
-    let value: Double
-    let series: String
-  }
-
-  var body: some View {
-    // Estimated days (before the first refresh) drawn lighter and dashed;
-    // the measured line starts where they end.
-    let lastEstimated = history.lastIndex { $0["estimated"].bool } ?? -1
-    let points: [Point] = history.enumerated().flatMap { index, day -> [Point] in
-      let value = day["value"].double ?? 0
-      if index <= lastEstimated { return [Point(id: index, value: value, series: "estimated")] }
-      if index == lastEstimated + 1, lastEstimated >= 0 {
-        return [Point(id: index, value: value, series: "estimated"), Point(id: index + 100, value: value, series: "measured")]
-      }
-      return [Point(id: index, value: value, series: "measured")]
-    }
-    Chart(points) { point in
-      LineMark(x: .value("Day", point.id % 100), y: .value("Value", point.value), series: .value("Series", point.series))
-        .foregroundStyle(palette.accent(scheme).opacity(point.series == "estimated" ? 0.35 : 1))
-        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, dash: point.series == "estimated" ? [3, 3] : []))
-        .interpolationMethod(.monotone)
-    }
-    .chartXAxis(.hidden)
-    .chartYAxis(.hidden)
-    .chartLegend(.hidden)
-    .chartYScale(domain: .automatic(includesZero: false))
-    .widgetAccentable()
-    .accessibilityHidden(true)
-  }
-}
-
-@available(iOS 17.0, *)
-struct FPCounterView: View {
+struct FPNextEventSmall: View {
   let entry: FPEntry
-  @Environment(\.widgetFamily) private var family
+  let events: [FPEvent]
+  let unread: Int
 
   var body: some View {
-    let value = entry.data["formatted"].string ?? "–"
-    let label = [entry.data["label"].text, entry.data["group"].text].filter { !$0.isEmpty }.joined(separator: " · ")
-    let history = entry.data["history"].array
-    let estimated = history.contains { $0["estimated"].bool }
-    switch family {
-    case .accessoryCircular:
-      ZStack {
-        AccessoryWidgetBackground()
-        Text(value).font(.system(size: 20, weight: .bold, design: .rounded)).minimumScaleFactor(0.4).lineLimit(1).padding(4)
-      }
-      .accessibilityLabel("\(entry.data["title"].text): \(value)")
-    case .accessoryRectangular:
-      VStack(alignment: .leading, spacing: 0) {
-        Text(entry.data["title"].text).font(.caption).lineLimit(1)
-        Text(value).font(.title2.weight(.bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).widgetAccentable()
-        Text(label).font(.caption2).lineLimit(1)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    case .systemSmall:
-      VStack(alignment: .leading, spacing: 2) {
-        FPHeader(icon: "number", title: entry.data["title"].text)
+    let header = FPHeader(icon: "calendar.badge.clock", title: entry.data["title"].string ?? L("Today"), trailingText: unread > 0 ? Text(Image(systemName: "at")) + Text(verbatim: " \(unread)") : nil)
+    if let next = events.first {
+      VStack(alignment: .leading, spacing: 3) {
+        header
         Spacer(minLength: 0)
-        FPBigNumber(value: value)
-        Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        FPCountdown(event: next, now: entry.date, font: .title3.weight(.bold))
+        Text(next.title).font(.headline).lineLimit(2).minimumScaleFactor(0.85)
+        Text(next.when).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        if let join = next.join {
+          FPJoinButton(url: join, compact: true, inSmall: true).padding(.top, 2)
+        }
       }
-      .accessibilityElement(children: .combine)
-    default:
-      VStack(alignment: .leading, spacing: 4) {
-        FPHeader(icon: "number", title: entry.data["title"].text, trailing: entry.data["view"].text)
-        HStack(alignment: .bottom, spacing: 12) {
-          VStack(alignment: .leading, spacing: 2) {
-            FPBigNumber(value: value, size: family == .systemLarge ? 52 : 40)
-            Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-          }
-          .accessibilityElement(children: .combine)
-          if family == .systemMedium, history.count > 1 {
-            FPSparkline(history: history).frame(maxWidth: .infinity, maxHeight: 56)
-          }
-        }
-        if family != .systemMedium, history.count > 1 {
-          FPSparkline(history: history).frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        if estimated, family != .systemSmall {
-          Text(L("History partly estimated")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-        }
+    } else {
+      let rest: Int = entry.data["items"].array.count
+      VStack(alignment: .leading, spacing: 3) {
+        header
         Spacer(minLength: 0)
+        Image(systemName: "sun.max").font(.title2).foregroundStyle(.secondary).accessibilityHidden(true)
+        Text(L("No appointments coming up")).font(.subheadline.weight(.medium)).foregroundStyle(.secondary).lineLimit(2)
+        if rest > 0 {
+          Text(FPFormat.count("%d due today", rest)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
       }
     }
   }
 }
 
-// MARK: - 6. Journal and habits
+// MARK: - Journal and habits
 
 @available(iOS 17.0, *)
 struct FPHabitRow: View {
@@ -887,6 +1187,7 @@ struct FPHabitRow: View {
   @Environment(\.colorScheme) private var scheme
   @Environment(\.fpPalette) private var palette
   @Environment(\.fpProfile) private var profile
+  @Environment(\.fpReloadKind) private var reload
 
   var body: some View {
     let pageId: String = habits["id"].text
@@ -899,7 +1200,7 @@ struct FPHabitRow: View {
     let failed: Bool = !pending && marks.hasFailed(id)
     VStack(alignment: .leading, spacing: 0) {
       if habits["canWrite"].bool, !pageId.isEmpty, !fieldId.isEmpty {
-        Toggle(isOn: done, intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done, profile: profile)) {
+        Toggle(isOn: done, intent: FPCheckHabitIntent(pageId: pageId, fieldId: fieldId, done: !done, profile: profile, widget: reload)) {
           HStack(spacing: 0) {
             Text(item["name"].text).font(.subheadline).lineLimit(1)
             Spacer(minLength: 0)
@@ -915,6 +1216,7 @@ struct FPHabitRow: View {
             .font(.body)
             .foregroundStyle(done ? AnyShapeStyle(palette.accent(scheme)) : AnyShapeStyle(.secondary))
             .widgetAccentable()
+            .frame(width: 26, height: FPGrid.row)
           Text(item["name"].text).font(.subheadline).lineLimit(1)
           Spacer(minLength: 0)
         }
@@ -923,6 +1225,20 @@ struct FPHabitRow: View {
         FPHint(text: L("Couldn’t check off – open in Flowplan"))
       }
     }
+    .frame(minHeight: FPGrid.row)
+  }
+}
+
+/// Done today, with the habits just tapped.
+enum FPHabits {
+  static func done(_ habits: FPJSON, marks: FPMarks) -> Int {
+    let pageId: String = habits["id"].text
+    var count: Int = habits["done"].int ?? 0
+    for item in habits["items"].array {
+      let id: String = FPActions.habitID(pageId: pageId, fieldId: item["fieldId"].text)
+      if marks.isPending(id) { count += item["done"].bool ? -1 : 1 }
+    }
+    return max(0, count)
   }
 }
 
@@ -958,33 +1274,17 @@ struct FPJournalView: View {
     .accessibilityElement(children: .combine)
   }
 
-  /// Done today, with the habits just tapped.
-  private func doneCount(_ habits: FPJSON) -> Int {
-    let pageId: String = habits["id"].text
-    var count: Int = habits["done"].int ?? 0
-    for item in habits["items"].array {
-      let id: String = FPActions.habitID(pageId: pageId, fieldId: item["fieldId"].text)
-      if entry.marks.isPending(id) { count += item["done"].bool ? -1 : 1 }
-    }
-    return max(0, count)
-  }
-
-  @ViewBuilder private func habits(_ rows: Int) -> some View {
+  @ViewBuilder private func habits(_ height: CGFloat) -> some View {
     let habits = entry.data["habits"]
     let closed = habits["locked"].bool || habits["encrypted"].bool
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text(closed ? L("Habits") : habits["name"].text).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-        Spacer(minLength: 4)
-        if !closed {
-          Text("\(doneCount(habits))/\(habits["total"].int ?? 0)").font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.secondary)
-        }
-      }
-      if closed {
-        Label(L(habits["locked"].bool ? "Locked" : "Encrypted"), systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
-      } else {
-        ForEach(Array(habits["items"].array.prefix(rows).enumerated()), id: \.offset) { _, item in
-          FPHabitRow(habits: habits, item: item, marks: entry.marks)
+    if closed {
+      Label(L(habits["locked"].bool ? "Locked" : "Encrypted"), systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+    } else {
+      let items = habits["items"].array
+      let rows: Int = min(items.count, FPGrid.rows(height))
+      VStack(alignment: .leading, spacing: FPGrid.gap) {
+        ForEach(0..<rows, id: \.self) { index in
+          FPHabitRow(habits: habits, item: items[index], marks: entry.marks)
         }
       }
     }
@@ -993,32 +1293,33 @@ struct FPJournalView: View {
   var body: some View {
     let hasJournal = !entry.data["journal"].isNull
     let hasHabits = !entry.data["habits"].isNull
+    let habitsData = entry.data["habits"]
+    let closed = habitsData["locked"].bool || habitsData["encrypted"].bool
+    let counter: String = hasHabits && !closed ? "\(FPHabits.done(habitsData, marks: entry.marks))/\(habitsData["total"].int ?? 0)" : ""
     switch family {
     case .systemSmall:
-      VStack(alignment: .leading, spacing: 6) {
-        FPHeader(icon: "book.closed", title: hasHabits ? L("Habits") : L("Journal"))
+      FPCard(FPHeader(icon: "book.closed", title: hasHabits ? (closed ? L("Habits") : habitsData["name"].text) : L("Journal"), trailing: counter)) { height in
         if hasHabits {
-          habits(3)
+          habits(height)
         } else if hasJournal {
-          Spacer(minLength: 0)
-          journal
+          VStack(alignment: .leading) {
+            Spacer(minLength: 0)
+            journal
+          }
         }
-        Spacer(minLength: 0)
       }
     default:
-      VStack(alignment: .leading, spacing: 8) {
-        FPHeader(icon: "book.closed", title: entry.data["title"].string ?? L("Journal"))
+      FPCard(FPHeader(icon: "book.closed", title: entry.data["title"].string ?? L("Journal"), trailing: counter)) { height in
         HStack(alignment: .top, spacing: 14) {
           if hasJournal { journal.frame(maxWidth: hasHabits ? 120 : .infinity, alignment: .leading) }
-          if hasHabits { habits(family == .systemLarge ? 8 : 3) }
+          if hasHabits { habits(height) }
         }
-        Spacer(minLength: 0)
       }
     }
   }
 }
 
-// MARK: - 7. Time this week
+// MARK: - Time this week
 
 @available(iOS 17.0, *)
 struct FPTimeView: View {
@@ -1153,12 +1454,12 @@ struct FPTimeView: View {
         timerRow
       }
     default:
-      VStack(alignment: .leading, spacing: 8) {
-        FPHeader(icon: "timer", title: entry.data["title"].string ?? L("Time this week"))
+      VStack(alignment: .leading, spacing: FPGrid.section) {
+        FPHeader(icon: "timer", title: entry.data["title"].string ?? L("Time this week"), trailing: "\(L("Today")) \(today)")
         HStack(alignment: .bottom, spacing: 14) {
           VStack(alignment: .leading, spacing: 2) {
             FPBigNumber(value: week, size: 32)
-            Text("\(L("Today")) \(today)").font(.caption).foregroundStyle(.secondary)
+            Text(L("This week")).font(.caption).foregroundStyle(.secondary)
           }
           .accessibilityElement(children: .combine)
           bars
@@ -1170,169 +1471,7 @@ struct FPTimeView: View {
   }
 }
 
-// MARK: - 8. Mentions
-
-@available(iOS 17.0, *)
-struct FPMentionsView: View {
-  let entry: FPEntry
-  @Environment(\.widgetFamily) private var family
-  @Environment(\.fpProfile) private var profile
-
-  /// Read on the instance, or just marked read here.
-  private func isRead(_ item: FPJSON) -> Bool {
-    if item["read"].bool || entry.marks.isPending(FPActions.readID(nil)) { return true }
-    return entry.marks.isPending(FPActions.readID(item["id"].string ?? ""))
-  }
-
-  private var unread: Int {
-    if entry.marks.isPending(FPActions.readID(nil)) { return 0 }
-    let count: Int = (entry.data["unread"]["mentions"].int ?? 0) + (entry.data["unread"]["assignments"].int ?? 0)
-    var marked: Int = 0
-    for item in entry.data["items"].array {
-      if !item["read"].bool && isRead(item) { marked += 1 }
-    }
-    return max(0, count - marked)
-  }
-
-  private var failed: Bool {
-    entry.marks.failed.contains { $0.hasPrefix("read:") }
-  }
-
-  var body: some View {
-    let items = entry.data["items"].array
-    let unread = self.unread
-    switch family {
-    case .accessoryCircular:
-      ZStack {
-        AccessoryWidgetBackground()
-        VStack(spacing: 0) {
-          Image(systemName: "at").font(.caption)
-          Text("\(unread)").font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit()
-        }
-      }
-      .accessibilityLabel(FPFormat.count("%d unread", unread))
-    case .accessoryRectangular:
-      VStack(alignment: .leading, spacing: 1) {
-        Text(unread > 0 ? FPFormat.count("%d unread", unread) : L("No new mentions")).font(.headline).widgetAccentable()
-        if let first = items.first { Text(first["text"].text).font(.caption).lineLimit(2) }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    case .systemSmall:
-      VStack(alignment: .leading, spacing: 4) {
-        FPHeader(icon: "at", title: entry.data["title"].string ?? L("Mentions"))
-        Spacer(minLength: 0)
-        FPBigNumber(value: "\(unread)")
-        Text(items.first?["text"].text ?? L("No new mentions")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-      }
-      .accessibilityElement(children: .combine)
-    default:
-      let rows = family == .systemLarge ? 5 : 2
-      VStack(alignment: .leading, spacing: 8) {
-        HStack {
-          FPHeader(icon: "at", title: entry.data["title"].string ?? L("Mentions"), trailing: unread > 0 ? FPFormat.count("%d unread", unread) : "")
-          if unread > 0 {
-            Button(intent: FPMarkReadIntent(notificationId: nil, profile: profile)) {
-              Image(systemName: "checkmark.circle").font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel(L("Mark all read"))
-          }
-        }
-        if failed {
-          FPHint(text: L("Didn’t work – open Flowplan"))
-        }
-        if items.isEmpty {
-          Spacer(minLength: 0)
-          Label(L("No new mentions"), systemImage: "checkmark.circle").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-        }
-        ForEach(Array(items.prefix(rows).enumerated()), id: \.offset) { _, item in
-          let read: Bool = isRead(item)
-          HStack(alignment: .top, spacing: 8) {
-            Link(destination: FPLink.page(item["url"].string)) {
-              VStack(alignment: .leading, spacing: 1) {
-                Text(item["text"].text).font(.subheadline).lineLimit(2).fontWeight(read ? .regular : .medium)
-                Text(FPFormat.ago(item["createdAt"])).font(.caption2).foregroundStyle(.secondary)
-              }
-              .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .accessibilityElement(children: .combine)
-            if !read, let id = item["id"].string {
-              Button(intent: FPMarkReadIntent(notificationId: id, profile: profile)) {
-                Image(systemName: "envelope.open").font(.caption).frame(width: 26, height: 26)
-                  .background(.fill.tertiary, in: Circle())
-              }
-              .buttonStyle(.plain)
-              .accessibilityLabel(L("Mark as read"))
-              .invalidatableContent()
-            }
-          }
-        }
-        Spacer(minLength: 0)
-      }
-    }
-  }
-}
-
-// MARK: - 9. Form responses
-
-@available(iOS 17.0, *)
-struct FPFormsView: View {
-  let entry: FPEntry
-  @Environment(\.widgetFamily) private var family
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.fpPalette) private var palette
-
-  var body: some View {
-    let items = entry.data["items"].array
-    let fresh = entry.data["new"].int ?? 0
-    let headline = fresh > 0 ? FPFormat.count("%d new", fresh) : L("No new responses")
-    switch family {
-    case .accessoryRectangular:
-      VStack(alignment: .leading, spacing: 1) {
-        Text(entry.data["title"].text).font(.caption).lineLimit(1)
-        Text(headline).font(.headline).widgetAccentable()
-        if let first = items.first { Text(first["title"].text).font(.caption2).lineLimit(1) }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    case .systemSmall:
-      VStack(alignment: .leading, spacing: 4) {
-        FPHeader(icon: "tray.and.arrow.down", title: entry.data["title"].text)
-        Spacer(minLength: 0)
-        FPBigNumber(value: "\(fresh)")
-        Text(fresh > 0 ? L("new") : L("No new responses")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        if let first = items.first { Text(first["title"].text).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
-      }
-      .accessibilityElement(children: .combine)
-    default:
-      VStack(alignment: .leading, spacing: 7) {
-        FPHeader(icon: "tray.and.arrow.down", title: entry.data["title"].text, trailing: headline)
-        if items.isEmpty {
-          Spacer(minLength: 0)
-          Text(L("No new responses")).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-        }
-        ForEach(Array(items.prefix(family == .systemLarge ? 5 : 3).enumerated()), id: \.offset) { _, item in
-          Link(destination: FPLink.page(item["url"].string)) {
-            HStack(spacing: 8) {
-              Circle()
-                .fill(item["new"].bool ? AnyShapeStyle(palette.accent(scheme)) : AnyShapeStyle(.clear))
-                .frame(width: 6, height: 6)
-                .widgetAccentable()
-                .accessibilityHidden(true)
-              Text(item["title"].text).font(.subheadline).lineLimit(1)
-              Spacer(minLength: 4)
-              Text(FPFormat.ago(item["createdAt"])).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-            }
-          }
-          .accessibilityElement(children: .combine)
-        }
-        Spacer(minLength: 0)
-      }
-    }
-  }
-}
-
-// MARK: - 10. Cards due
+// MARK: - Cards due
 
 @available(iOS 17.0, *)
 struct FPStudyView: View {
@@ -1348,20 +1487,20 @@ struct FPStudyView: View {
     let detail = streak > 0 ? FPFormat.count("Streak: %d", streak) : ""
     switch family {
     case .accessoryInline:
-      Label("\(due) · \(title)", systemImage: "rectangle.on.rectangle.angled")
+      Label(due > 0 ? FPFormat.count("%d due", due) : L("All studied for today"), systemImage: "rectangle.on.rectangle.angled")
     case .accessoryCircular:
       ZStack {
         AccessoryWidgetBackground()
         VStack(spacing: 0) {
           Image(systemName: "rectangle.on.rectangle.angled").font(.caption2)
-          Text("\(due)").font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
+          Text(String(due)).font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1).widgetAccentable()
         }
       }
       .accessibilityLabel("\(title): \(due)")
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 0) {
         Text(title).font(.caption).lineLimit(1)
-        Text("\(due)").font(.title2.weight(.bold)).monospacedDigit().lineLimit(1).widgetAccentable()
+        Text(String(due)).font(.title2.weight(.bold)).monospacedDigit().lineLimit(1).widgetAccentable()
         Text(label).font(.caption2).lineLimit(1)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -1369,36 +1508,35 @@ struct FPStudyView: View {
       VStack(alignment: .leading, spacing: 2) {
         FPHeader(icon: "rectangle.on.rectangle.angled", title: title)
         Spacer(minLength: 0)
-        FPBigNumber(value: "\(due)", size: 44)
+        FPBigNumber(value: String(due), size: 44)
         Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2)
         if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
       }
       .accessibilityElement(children: .combine)
     default:
       // Wider: the number and the decks with cards left (each opens its deck).
-      VStack(alignment: .leading, spacing: 6) {
-        FPHeader(icon: "rectangle.on.rectangle.angled", title: title, trailing: detail)
+      FPCard(FPHeader(icon: "rectangle.on.rectangle.angled", title: title, trailing: detail)) { height in
         HStack(alignment: .top, spacing: 14) {
           VStack(alignment: .leading, spacing: 2) {
-            FPBigNumber(value: "\(due)", size: 44)
-            if decks.isEmpty { Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+            FPBigNumber(value: String(due), size: 44)
+            Text(due > 0 ? FPFormat.count("%d due", due) : L("All studied for today")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
           }
           .accessibilityElement(children: .combine)
-          VStack(alignment: .leading, spacing: 5) {
-            ForEach(Array(decks.prefix(4).enumerated()), id: \.offset) { _, deck in
+          VStack(alignment: .leading, spacing: FPGrid.gap) {
+            ForEach(Array(decks.prefix(FPGrid.rows(height)).enumerated()), id: \.offset) { _, deck in
               Link(destination: FPLink.page(deck["url"].string)) {
                 HStack(spacing: 6) {
                   Text(deck["title"].text).font(.subheadline).lineLimit(1)
                   Spacer(minLength: 4)
-                  Text("\(deck["due"].int ?? 0)").font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(.secondary)
+                  Text(String(deck["due"].int ?? 0)).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(.secondary)
                 }
+                .frame(height: FPGrid.row)
               }
               .accessibilityElement(children: .combine)
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Spacer(minLength: 0)
       }
     }
   }

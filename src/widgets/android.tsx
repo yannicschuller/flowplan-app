@@ -4,7 +4,7 @@
 // summary fresh from the instance when it can.
 import { FlexWidget, TextWidget, type WidgetTaskHandlerProps } from "react-native-android-widget";
 import type { InboxWidgetProps, TasksWidgetProps } from "../summary";
-import type { AdminLiveProps, AdminStatusProps, AdminStorageProps } from "../admin";
+import type { AdminLiveProps, AdminStatusProps, AdminStorageProps, Freshness } from "../admin";
 import { materialColors } from "../../modules/flowplan-android/src";
 import { materialThemes } from "../android/theme";
 
@@ -15,6 +15,15 @@ export const DARK: Theme = { background: "#16151b", text: "#f2f0f7", muted: "#a1
 export const widgetThemes = () => materialThemes(materialColors(), { light: LIGHT, dark: DARK });
 type Hex = `#${string}`;
 export const hex = (value: string) => value as Hex;
+
+// The quiet footer: when the numbers came from the instance ("Updated
+// 14:05"; Android cannot count "12 min ago" on without drawing again),
+// older than an hour with a warning ("⚠ As of 01:10").
+function Fresh({ fresh, theme }: { fresh?: Freshness; theme: Theme }) {
+  if (!fresh) return null;
+  const old = Date.now() - fresh.at > 3_600_000;
+  return <TextWidget text={old ? `⚠ ${fresh.asOf}` : fresh.updatedAt} maxLines={1} style={{ fontSize: 10, color: hex(old ? theme.late : theme.muted), marginTop: 4 }} />;
+}
 
 function TasksView({ props, theme, rows }: { props: TasksWidgetProps; theme: Theme; rows: number }) {
   const items = props.items.slice(0, rows);
@@ -77,6 +86,7 @@ function TasksView({ props, theme, rows }: { props: TasksWidgetProps; theme: The
           </FlexWidget>
         </FlexWidget>
       ) : null}
+      {props.signedIn ? <Fresh fresh={props.fresh} theme={theme} /> : null}
     </FlexWidget>
   );
 }
@@ -129,21 +139,36 @@ function Meter({ share, color, theme }: { share: number; color: string; theme: T
   );
 }
 
-function StatusView({ props, theme }: { props: AdminStatusProps; theme: Theme }) {
+// "Admin status": the traffic light and its words, then the four rows
+// (health, errors in the last hour, backup age, free disk) as far as there
+// is room.
+function StatusView({ props, theme, rows }: { props: AdminStatusProps; theme: Theme; rows: number }) {
   if (props.state === "signedOut" || props.state === "notAdmin" || props.state === "pending") return <Closed {...props} theme={theme} />;
-  const tone = props.state === "problem" ? theme.late : props.state === "notice" ? theme.warn : theme.ok;
+  const toneOf = (tone: string) => (tone === "problem" ? theme.late : tone === "notice" ? theme.warn : theme.ok);
+  const list = props.rows ?? [];
+  const attention = list.filter((row) => row.tone !== "ok");
+  // Little room: what needs attention first.
+  const shown = rows >= list.length ? list : [...attention, ...list.filter((row) => row.tone === "ok" && row.id !== "health")].slice(0, rows);
   return (
-    <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)}>
+    <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: props.url }} style={frame(theme)} accessibilityLabel={`${props.title}: ${props.lightLabel}`}>
       <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center" }}>
         <TextWidget text={props.title} style={{ fontSize: 13, fontWeight: "600", color: hex(theme.brand) }} />
         <FlexWidget style={{ flex: 1 }} />
         <TextWidget text={props.version} style={{ fontSize: 11, color: hex(theme.muted) }} />
       </FlexWidget>
-      <TextWidget text={`● ${props.headline}`} maxLines={1} style={{ fontSize: 17, fontWeight: "700", color: hex(tone), marginTop: 6 }} />
-      {props.detail ? <TextWidget text={props.more ? `${props.detail} · ${props.more}` : props.detail} maxLines={2} style={{ fontSize: 12, color: hex(theme.text), marginTop: 2 }} /> : null}
+      <TextWidget text={`● ${props.lightLabel || props.headline}`} maxLines={1} style={{ fontSize: 17, fontWeight: "700", color: hex(toneOf(props.light || props.state)), marginTop: 6 }} />
+      {shown.map((row) => (
+        <FlexWidget key={row.id} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", marginTop: 3 }}>
+          <TextWidget text="●" style={{ fontSize: 8, color: hex(toneOf(row.tone)), marginRight: 6 }} />
+          <FlexWidget style={{ flex: 1 }}>
+            <TextWidget text={row.label} maxLines={1} truncate="END" style={{ fontSize: 12, color: hex(theme.muted) }} />
+          </FlexWidget>
+          <TextWidget text={row.value} maxLines={1} style={{ fontSize: 12, fontWeight: "600", color: hex(theme.text), marginLeft: 6 }} />
+        </FlexWidget>
+      ))}
       <FlexWidget style={{ flex: 1 }} />
       {props.update ? <TextWidget text={props.update} maxLines={1} style={{ fontSize: 11, fontWeight: "600", color: hex(theme.brand) }} /> : null}
-      <TextWidget text={props.backup} maxLines={1} style={{ fontSize: 11, color: hex(props.backupLate ? theme.late : theme.muted) }} />
+      <Fresh fresh={props.fresh} theme={theme} />
     </FlexWidget>
   );
 }
@@ -172,6 +197,7 @@ function LiveView({ props, theme, chart }: { props: AdminLiveProps; theme: Theme
       {chart ? (
         <TextWidget text={others.map((tile) => `${tile.value} ${tile.label}`).join(" · ")} maxLines={1} truncate="END" style={{ fontSize: 10, color: hex(theme.muted), marginTop: 4 }} />
       ) : null}
+      {chart ? <Fresh fresh={props.fresh} theme={theme} /> : null}
     </FlexWidget>
   );
 }
@@ -189,13 +215,16 @@ function StorageView({ props, theme }: { props: AdminStorageProps; theme: Theme 
       <TextWidget text={disk ? props.diskShort : share >= 0 ? props.quotaShort : props.usedLabel} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted) }} />
       {share >= 0 ? <Meter share={share} color={share >= 0.9 ? theme.late : theme.brand} theme={theme} /> : null}
       <TextWidget text={`${props.used} · ${props.usedLabel}`} maxLines={1} truncate="END" style={{ fontSize: 10, color: hex(theme.muted), marginTop: 6 }} />
+      <Fresh fresh={props.fresh} theme={theme} />
     </FlexWidget>
   );
 }
 
-export function renderAdminStatus(props: AdminStatusProps) {
+export function renderAdminStatus(props: AdminStatusProps, height = 180) {
   const themes = widgetThemes();
-  return { light: <StatusView props={props} theme={themes.light} />, dark: <StatusView props={props} theme={themes.dark} /> };
+  // Rows of 18 dp under the header, the light and the footer.
+  const rows = Math.max(1, Math.min(4, Math.floor((height - 100) / 18)));
+  return { light: <StatusView props={props} theme={themes.light} rows={rows} />, dark: <StatusView props={props} theme={themes.dark} rows={rows} /> };
 }
 export function renderAdminLive(props: AdminLiveProps, height = 180) {
   const themes = widgetThemes();
@@ -209,7 +238,7 @@ export function renderAdminStorage(props: AdminStorageProps) {
 
 export function renderTasks(props: TasksWidgetProps, height = 180) {
   const themes = widgetThemes();
-  const rows = Math.max(1, Math.min(8, Math.floor((height - 90) / 22)));
+  const rows = Math.max(1, Math.min(10, Math.floor((height - 104) / 22)));
   return { light: <TasksView props={props} theme={themes.light} rows={rows} />, dark: <TasksView props={props} theme={themes.dark} rows={rows} /> };
 }
 
