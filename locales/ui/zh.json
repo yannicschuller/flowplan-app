@@ -446,5 +446,11 @@
   "adminErrorsHour": "错误（1 小时）",
   "adminAgo": "{time}前",
   "adminDiskFree": "磁盘可用",
-  "adminHealth": "运行状况"
+  "adminHealth": "运行状况",
+  "suiteMyDay": "我的一天",
+  "myDayEvents": "{count} 个日程",
+  "myDayTasks": "{count} 项任务",
+  "myDayEmpty": "今天没有其他事了",
+  "myDayAppointments": "日程",
+  "myDayDue": "到期"
 }

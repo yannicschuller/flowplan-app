@@ -269,6 +269,15 @@ export function adminStatusWidget(admin: AdminState, locale: Locale, now = Date.
   };
 }
 
+// "Admin status" on Android (widgets/android.tsx): rows of 19 dp under the
+// header, the light, the update line and the footer (about 100 dp); the
+// first issue in words when all four fit and there is room left.
+export function adminStatusLayout(height: number, update: boolean) {
+  const space = height - 100 - (update ? 15 : 0);
+  const rows = Math.max(1, Math.min(4, Math.floor(space / 19)));
+  return { rows, detail: rows === 4 && space - 4 * 19 >= 36 };
+}
+
 // The four rows of "Admin status". The errors of the last hour need the
 // statistics (otherwise "–"); a disk the instance cannot measure is "–".
 export function adminStatusRows(s: AdminSummary, headline: string, now: number, locale: Locale): AdminStatusRow[] {

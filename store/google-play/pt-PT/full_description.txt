@@ -16,7 +16,7 @@ PARA EQUIPAS
 Espaços de equipa, permissões, comentários, menções, notificações, modelos e pesquisa em tudo.
 
 WIDGETS E CAPTURA RÁPIDA
-Conclua tarefas diretamente no ecrã principal e veja os compromissos de hoje, favoritos, números das suas bases de dados, diário e hábitos e o tempo desta semana – cada widget mostra uma coisa e tem as suas próprias definições. Registe notas, memos de voz e fotografias com um toque, também a partir das Definições rápidas. O foco, a reunião em curso, as importações e o temporizador ficam visíveis como notificações.
+Conclua tarefas diretamente no ecrã principal e veja os compromissos de hoje, favoritos, números das suas bases de dados, diário e hábitos, o tempo desta semana e «O meu dia» com tudo para hoje – cada widget mostra uma coisa e tem as suas próprias definições. Registe notas, memos de voz e fotografias com um toque, também a partir das Definições rápidas. O foco, a reunião em curso, as importações e o temporizador ficam visíveis como notificações.
 
 OS SEUS DADOS, O SEU SERVIDOR
 O Flowplan é open source (AGPL) e pode ser alojado por si. A app liga-se a app.flowplan.org ou à instância Flowplan da sua empresa – basta introduzir o endereço no primeiro arranque. Várias instâncias, por exemplo trabalho e pessoal, ficam guardadas como perfis e mudam com um toque. O seu conteúdo fica nesse servidor, não na app. A própria app não recolhe dados nem contém rastreio.

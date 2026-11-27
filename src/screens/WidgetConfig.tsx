@@ -12,7 +12,7 @@ import { pickLocale, setLocale, t } from "../i18n";
 import { connectionFor, readConfigs, saveWidgetConfig, widgetBinding } from "../native/suite";
 import { store } from "../store";
 import { widgetOptions } from "../widgets/api";
-import { CAPTURE_BUTTONS, kindOfWidget, MAX_STUDY_DECKS, normalizeConfig, widgetProfileId, WIDGET_COLORS, type WidgetColor } from "../widgets/suite";
+import { CAPTURE_BUTTONS, kindOfWidget, MAX_STUDY_DECKS, normalizeConfig, widgetProfileId, WIDGET_COLORS, type ServerKind, type WidgetColor } from "../widgets/suite";
 import { configFor } from "../widgets/widget-config";
 import { Button, styles, usePalette } from "../ui";
 
@@ -133,9 +133,10 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
   const set = (patch: Json) => setConfigState((current) => ({ ...current, ...patch }));
   // The database whose views and properties are offered.
   const pageId = str(config.pageId);
-  // "Key figure" of a database takes the counter's options.
+  // "Key figure" of a database takes the counter's options, "My day" the
+  // calendars of "Today" (and the habit databases of the journal, below).
   const figureDatabase = kind === "metric" && config.source === "database";
-  const optionKind = kind === "time" ? "time" : figureDatabase ? "counter" : kind;
+  const optionKind = (kind === "myday" ? "calendar" : kind === "time" ? "time" : figureDatabase ? "counter" : kind) as ServerKind | null;
   const needsDatabase = (kind === "tasks" && config.source === "view") || (kind === "pinned" && config.mode === "page") || kind === "counter" || figureDatabase;
 
   // Another profile: its settings for this widget, its instance's options.
@@ -148,14 +149,22 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
   useEffect(() => {
     if (!kind) return;
     setOptions(null);
-    if (!target) return;
-    void widgetOptions(target, optionKind as NonNullable<typeof kind>).then((answer) => setOptions(answer.ok ? answer.value : {}));
+    if (!target || !optionKind) return;
+    void widgetOptions(target, optionKind).then((answer) => setOptions(answer.ok ? answer.value : {}));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, profile, optionKind]);
+  // "My day": the habit databases, from the journal's options.
+  const [habitOptions, setHabitOptions] = useState<Json[]>([]);
+  useEffect(() => {
+    setHabitOptions([]);
+    if (kind !== "myday" || !target) return;
+    void widgetOptions(target, "journal").then((answer) => answer.ok && setHabitOptions(list(answer.value.habits)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, profile]);
   useEffect(() => {
     setDatabase(null);
-    if (!kind || !target || !pageId || !needsDatabase) return;
-    void widgetOptions(target, optionKind as NonNullable<typeof kind>, pageId).then((answer) => answer.ok && setDatabase((answer.value.database as Json) ?? null));
+    if (!kind || !target || !pageId || !needsDatabase || !optionKind) return;
+    void widgetOptions(target, optionKind, pageId).then((answer) => answer.ok && setDatabase((answer.value.database as Json) ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, pageId, needsDatabase, profile]);
   const dashboardId = str(config.dashboardId);
@@ -211,7 +220,8 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
         </>
       );
       break;
-    case "calendar": {
+    case "calendar":
+    case "myday": {
       const calendars = list(o.calendars).map((c) => ({ value: `${str(c.pageId)}|${str(c.viewId)}`, label: str(c.name), detail: str(c.synced) || str(c.database) }));
       const chosen = list(config.sources).map((s) => `${str(s.pageId)}|${str(s.viewId)}`);
       fields = (
@@ -223,8 +233,16 @@ export function WidgetConfigScreen({ widgetInfo, setResult }: WidgetConfiguratio
             max={10}
             onChange={(values) => set({ sources: values.map((v) => ({ pageId: v.split("|")[0], viewId: v.split("|")[1] || undefined })) })}
           />
-          <Choice title={t("configRange")} items={named(o.ranges)} value={str(config.range)} onChange={(v) => set({ range: v })} />
-          <Toggle title={t("configShowTasks")} value={config.tasks !== false} onChange={(tasks) => set({ tasks })} />
+          {kind === "myday" ? (
+            // Today only, the tasks are my tasks: besides the calendars only
+            // the habits (none: no habits row).
+            <Choice title={t("configHabits")} items={[{ value: "", label: t("configNone") }, ...named(habitOptions)]} value={str(config.habitsId)} onChange={(v) => set({ habitsId: v || undefined })} />
+          ) : (
+            <>
+              <Choice title={t("configRange")} items={named(o.ranges)} value={str(config.range)} onChange={(v) => set({ range: v })} />
+              <Toggle title={t("configShowTasks")} value={config.tasks !== false} onChange={(tasks) => set({ tasks })} />
+            </>
+          )}
         </>
       );
       break;

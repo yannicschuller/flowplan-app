@@ -9,7 +9,7 @@ import { appLink, safePath } from "../navigation";
 import { dueLabel, widgetProps } from "../summary";
 import { formatWhen } from "../admin";
 import type { WidgetResult } from "./api";
-import { CAPTURE_BUTTONS, DEFAULTS, needsSetup, NEWER_KINDS, parseTheme, type CaptureButton, type SuiteConfig, type SuiteKind, type WidgetTheme } from "./suite";
+import { CAPTURE_BUTTONS, DEFAULTS, needsSetup, NEWER_KINDS, parseTheme, type CaptureButton, type InstanceKind, type SuiteConfig, type SuiteKind, type WidgetTheme } from "./suite";
 
 // The paths of an answer are paths on the instance; anything else opens
 // the start page.
@@ -83,13 +83,30 @@ function marking(marks: ActionMarks | undefined, now: number) {
   return { pending, failed, anyFailed: (prefix: string) => !!marks && Object.keys(marks.failed).some((id) => id.startsWith(prefix) && failed(id)) };
 }
 
+// The habits of a journal answer: today's state of each, with what was just
+// tapped ("Journal and habits", "My day").
+export type HabitsView = {
+  name: string;
+  line: string;
+  url: string;
+  items: { fieldId: string; pageId: string; name: string; done: boolean; canWrite: boolean }[];
+  // Done today (with the taps) of all habits: "1/3".
+  done: number;
+  total: number;
+  protected: boolean;
+};
+
+// An appointment of today in "My day": "09:00–09:15" or "All day".
+export type DayEvent = { title: string; when: string; calendar: string; url: string };
+
 export type SuiteView =
   | ClosedView
   | (Base & { state: "capture"; target: string; buttons: { id: CaptureButton; label: string; url: string }[] })
   | (Base & {
       state: "tasks";
-      // "24 open · 10 overdue".
+      // "24 open · 10 overdue"; short: "24 open" (small widgets).
       headline: string;
+      short: string;
       empty: string;
       items: TaskRow[];
       // The headings of the groups (tall widgets) and the empty state's
@@ -100,7 +117,12 @@ export type SuiteView =
   | (Base & {
       state: "calendar";
       empty: string;
-      items: { title: string; when: string; day: string; calendar: string; task: boolean; url: string }[];
+      // day: short, in front of the time where there is no room for headings
+      // ("Fri"); dayLabel: the heading above a day's first entry, relative
+      // ("Tomorrow", "Friday") – only when the range is more than today.
+      items: { title: string; when: string; day: string; dayLabel: string; calendar: string; task: boolean; url: string }[];
+      // Today, short ("Fri 27"): the header's right side.
+      date: string;
       // The next appointment (the small size) and the unread mentions, from
       // the further answers.
       next?: EventItem;
@@ -113,7 +135,22 @@ export type SuiteView =
   | (Base & {
       state: "journal";
       journal?: { name: string; line: string; written: boolean; url: string; protected: boolean };
-      habits?: { name: string; line: string; url: string; items: { fieldId: string; pageId: string; name: string; done: boolean; canWrite: boolean }[]; protected: boolean };
+      habits?: HabitsView;
+      today: string;
+      notice?: string;
+    })
+  | (Base & {
+      state: "myday";
+      // "2 appointments · 5 tasks · 1/3".
+      headline: string;
+      empty: string;
+      events: DayEvent[];
+      // Open tasks due today or overdue.
+      tasks: TaskRow[];
+      // Not when the habits are behind a PIN or encrypted.
+      habits?: HabitsView;
+      headings: { events: string; tasks: string; habits: string };
+      add: { label: string; url: string };
       today: string;
       notice?: string;
     })
@@ -210,6 +247,7 @@ const TITLES: Record<SuiteKind, Parameters<typeof t>[0]> = {
   reading: "suiteReading",
   metric: "suiteMetric",
   deadline: "suiteDeadline",
+  myday: "suiteMyDay",
 };
 export const kindTitle = (kind: SuiteKind, locale: Locale) => t(TITLES[kind], {}, locale);
 
@@ -276,9 +314,75 @@ function eventWhen(start: number, end: number, allDay: boolean, now: number, loc
   return prefix ? `${prefix} ${range}` : range;
 }
 
+// "Fri 27": a day short, as the header of "Today" has it.
+function dayAndDate(day: string, locale: Locale) {
+  const at = Date.parse(`${day}T12:00:00Z`);
+  return Number.isFinite(at) ? new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(at)) : "";
+}
+
 function weekdayOf(day: string, locale: Locale) {
   const at = Date.parse(`${day}T12:00:00Z`);
   return Number.isFinite(at) ? new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short", timeZone: "UTC" }).format(new Date(at)) : day;
+}
+
+// The tasks of a tasks answer as rows, with what was just checked off; the
+// open ones and the overdue ones for the counter.
+function tasksOf(d: Data, today: string, locale: Locale, marks: ReturnType<typeof marking>) {
+  const items = list(d.items);
+  const rows = items.map((item) => {
+    const due = typeof item.due === "string" ? item.due : null;
+    const complete = widgetProps({
+      source: str(item.source, "doc"),
+      pageId: str(item.pageId),
+      rowId: typeof item.rowId === "string" ? item.rowId : undefined,
+      index: typeof item.index === "number" ? item.index : undefined,
+      key: typeof item.key === "string" && item.key ? item.key : undefined,
+      text: str(item.text),
+    });
+    const id = taskItemId(complete);
+    const row: TaskRow = {
+      group: !due ? 2 : due < today ? 0 : due === today ? 1 : 2,
+      text: str(item.text),
+      detail: str(item.page),
+      due: dueLabel(due, today, locale),
+      late: !!due && due < today,
+      url: pageLink(item.url),
+    };
+    if (marks.pending(id)) row.done = true;
+    else if (item.canEdit === true) row.complete = complete;
+    if (marks.failed(id)) row.hint = t("widgetCheckFailed", {}, locale);
+    return row;
+  });
+  const total = Math.max(0, num(d.total, items.length) - rows.filter((row) => row.done).length);
+  // The instance's count of overdue tasks where it sends one; otherwise
+  // those of the answer (at most ten).
+  const lateDone = rows.filter((row) => row.done && row.group === 0).length;
+  const overdue = typeof d.overdue === "number" ? Math.max(0, d.overdue - lateDone) : rows.filter((row) => !row.done && row.group === 0).length;
+  return { rows, total, overdue };
+}
+
+// The habits of a journal answer; behind a PIN or encrypted only their state.
+function habitsOf(h: Data, locale: Locale, marks: ReturnType<typeof marking>): HabitsView {
+  const closed = h.locked === true || h.encrypted === true;
+  // Just tapped: the other state until the next answer.
+  const items = closed
+    ? []
+    : list(h.items).map((item) => {
+        const tapped = marks.pending(habitItemId(str(h.id), str(item.fieldId)));
+        return { fieldId: str(item.fieldId), pageId: str(h.id), name: str(item.name), done: tapped ? item.done !== true : item.done === true, canWrite: h.canWrite === true };
+      });
+  const shift = list(h.items).filter((item) => marks.pending(habitItemId(str(h.id), str(item.fieldId)))).reduce((sum, item) => sum + (item.done === true ? -1 : 1), 0);
+  const done = closed ? 0 : Math.max(0, num(h.done) + shift);
+  const total = closed ? 0 : Math.max(num(h.total), items.length);
+  return {
+    name: closed ? kindTitle("journal", locale) : str(h.name),
+    protected: closed,
+    line: closed ? t(h.locked === true ? "widgetLockedShort" : "widgetEncryptedShort", {}, locale) : t("habitsDone", { done, total: num(h.total) }, locale),
+    url: pageLink(h.url),
+    items,
+    done,
+    total,
+  };
 }
 
 type ViewOptions = {
@@ -325,7 +429,8 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
       locale,
     );
   const d = result.data;
-  const title = str(d.title) || kindTitle(kind, locale);
+  // "My day" shows the calendar's answer under its own name.
+  const title = kind === "myday" ? kindTitle(kind, locale) : str(d.title) || kindTitle(kind, locale);
   const url = pageLink(d.url);
   if (d.locked === true) return closedView(kind, "locked", locale, title, str(d.url, "/"));
   if (d.encrypted === true) return closedView(kind, "encrypted", locale, "", str(d.url, "/"));
@@ -357,41 +462,13 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
       };
     }
     case "tasks": {
-      const items = list(d.items);
-      const rows = items.map((item) => {
-        const due = typeof item.due === "string" ? item.due : null;
-        const complete = widgetProps({
-          source: str(item.source, "doc"),
-          pageId: str(item.pageId),
-          rowId: typeof item.rowId === "string" ? item.rowId : undefined,
-          index: typeof item.index === "number" ? item.index : undefined,
-          key: typeof item.key === "string" && item.key ? item.key : undefined,
-          text: str(item.text),
-        });
-        const id = taskItemId(complete);
-        const row: TaskRow = {
-          group: !due ? 2 : due < today ? 0 : due === today ? 1 : 2,
-          text: str(item.text),
-          detail: str(item.page),
-          due: dueLabel(due, today, locale),
-          late: !!due && due < today,
-          url: pageLink(item.url),
-        };
-        if (marks.pending(id)) row.done = true;
-        else if (item.canEdit === true) row.complete = complete;
-        if (marks.failed(id)) row.hint = t("widgetCheckFailed", {}, locale);
-        return row;
-      });
-      const total = Math.max(0, num(d.total, items.length) - rows.filter((row) => row.done).length);
-      // The instance's count of overdue tasks where it sends one; otherwise
-      // those of the answer (at most ten).
-      const lateDone = rows.filter((row) => row.done && row.group === 0).length;
-      const overdue = typeof d.overdue === "number" ? Math.max(0, d.overdue - lateDone) : rows.filter((row) => !row.done && row.group === 0).length;
+      const { rows, total, overdue } = tasksOf(d, today, locale, marks);
       return {
         kind,
         state: "tasks",
         title,
         url: (config as SuiteConfig["tasks"]).source === "mine" ? appLink("/#tasks") : url,
+        short: total ? t("tasksOpen", { count: total }, locale) : t("tasksDone", {}, locale),
         headline: !total
           ? t("tasksDone", {}, locale)
           : overdue
@@ -420,6 +497,7 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
         joinLabel: t("eventJoin", {}, locale),
         unread,
         unreadLabel: unread ? t("widgetUnread", { count: unread }, locale) : "",
+        date: dayAndDate(today, locale),
         items: list(d.items).map((item) => {
           const task = item.type === "task";
           const day = str(item.day);
@@ -427,6 +505,7 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
             title: str(item.title),
             when: task ? t("captureTask", {}, locale) : item.timed === true ? clockOf(str(item.start), locale) : t("allDay", {}, locale),
             day: range === "today" ? "" : day === today ? t("widgetToday", {}, locale) : weekdayOf(day, locale),
+            dayLabel: range === "today" ? "" : dueLabel(day || null, today, locale),
             calendar: str(item.calendar),
             task,
             url: pageLink(item.url),
@@ -500,24 +579,7 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
         view.url = view.journal.url;
       }
       if (h) {
-        const closed = h.locked === true || h.encrypted === true;
-        // Just tapped: the other state until the next answer.
-        const items = closed
-          ? []
-          : list(h.items).map((item) => {
-              const tapped = marks.pending(habitItemId(str(h.id), str(item.fieldId)));
-              return { fieldId: str(item.fieldId), pageId: str(h.id), name: str(item.name), done: tapped ? item.done !== true : item.done === true, canWrite: h.canWrite === true };
-            });
-        const shift = list(h.items).filter((item) => marks.pending(habitItemId(str(h.id), str(item.fieldId)))).reduce((sum, item) => sum + (item.done === true ? -1 : 1), 0);
-        view.habits = {
-          name: closed ? kindTitle("journal", locale) : str(h.name),
-          protected: closed,
-          line: closed
-            ? t(h.locked === true ? "widgetLockedShort" : "widgetEncryptedShort", {}, locale)
-            : t("habitsDone", { done: Math.max(0, num(h.done) + shift), total: num(h.total) }, locale),
-          url: pageLink(h.url),
-          items,
-        };
+        view.habits = habitsOf(h, locale, marks);
         if (marks.anyFailed("habit:")) view.notice = t("widgetCheckFailed", {}, locale);
       }
       return view;
@@ -681,6 +743,55 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
         trend: delta === null ? "" : delta > 0 ? "up" : delta < 0 ? "down" : "flat",
       };
     }
+    case "myday": {
+      // The same as iOS (FPMyDayView): today's appointments still to come or
+      // running (all-day ones too), the open tasks due today or overdue, and
+      // today's habits – not when they are behind a PIN or encrypted.
+      const events: DayEvent[] = list(d.items)
+        .filter((item) => item.type !== "task")
+        .filter((item) => {
+          if (item.timed !== true) return true;
+          const end = Date.parse(str(item.end) || str(item.start));
+          return !Number.isFinite(end) || end >= now;
+        })
+        .map((item) => {
+          const start = clockOf(str(item.start), locale);
+          const end = clockOf(str(item.end), locale);
+          return {
+            title: str(item.title),
+            when: item.timed === true ? (end && end !== start ? `${start}–${end}` : start) : t("allDay", {}, locale),
+            calendar: str(item.calendar),
+            url: pageLink(item.url),
+          };
+        });
+      const taskAnswer = options.extras?.tasks;
+      const tasks = taskAnswer && taskAnswer.ok ? tasksOf(taskAnswer.data, today, locale, marks).rows.filter((row) => row.group < 2) : [];
+      const journal = options.extras?.journal;
+      const h = journal && journal.ok ? (journal.data.habits as Data | null) : null;
+      const habits = h && h.locked !== true && h.encrypted !== true ? habitsOf(h, locale, marks) : undefined;
+      const open = tasks.filter((row) => !row.done).length;
+      const parts = [
+        events.length ? t("myDayEvents", { count: events.length }, locale) : "",
+        tasks.length ? t("myDayTasks", { count: open }, locale) : "",
+        habits?.items.length ? `${habits.done}/${habits.total}` : "",
+      ];
+      const view: Extract<SuiteView, { state: "myday" }> = {
+        kind,
+        state: "myday",
+        title,
+        url: appLink("/#home"),
+        headline: parts.filter(Boolean).join(" · "),
+        empty: t("myDayEmpty", {}, locale),
+        events,
+        tasks,
+        ...(habits?.items.length ? { habits } : {}),
+        headings: { events: t("myDayAppointments", {}, locale), tasks: t("myDayDue", {}, locale), habits: habits?.name || t("configHabits", {}, locale) },
+        add: { label: t("newTask", {}, locale), url: captureLink("task") },
+        today,
+      };
+      if (marks.anyFailed("habit:")) view.notice = t("widgetCheckFailed", {}, locale);
+      return view;
+    }
     case "deadline": {
       const due = Date.parse(str(d.due));
       const done = d.done === true;
@@ -717,22 +828,54 @@ function viewOf<K extends SuiteKind>(kind: K, config: SuiteConfig[K], result: Wi
   return closedView(kind, "offline", locale);
 }
 
-// The tasks that fit, with the heading of their group where it changes (only
-// when they fall into more than one group and there is room for headings:
-// tall widgets).
-export function taskRows(items: TaskRow[], rows: number) {
-  const headings = rows >= 6 && new Set(items.map((item) => item.group)).size > 1;
-  const out: { item: TaskRow; heading?: 0 | 1 | 2 }[] = [];
+// The items of a list that fit, with the heading of their group where it
+// changes – only when they fall into more than one group and there are at
+// least minRows rows (a heading takes half a row): the same grid as iOS
+// (FPGrid.fit). Android's rows are 40 dp, the height of a tap target.
+export function groupedRows<T, G>(items: T[], rows: number, groupOf: (item: T) => G, minRows: number) {
+  const headings = rows >= minRows && new Set(items.map(groupOf)).size > 1;
+  const out: { item: T; heading?: G }[] = [];
   let used = 0;
   for (const item of items) {
-    const heading = headings && (!out.length || out[out.length - 1].item.group !== item.group) ? item.group : undefined;
-    // A heading takes half a row.
+    const group = groupOf(item);
+    const heading = headings && (!out.length || groupOf(out[out.length - 1].item) !== group) ? group : undefined;
     const need = heading === undefined ? 1 : 1.5;
     if (used + need > rows) break;
     used += need;
     out.push(heading === undefined ? { item } : { item, heading });
   }
-  return out;
+  return { rows: out, headings };
+}
+
+// The tasks that fit, grouped Overdue / Today / Later in tall widgets.
+// showDue: under "Today" the day says nothing new (as on iOS).
+export function taskRows(items: TaskRow[], rows: number) {
+  const { rows: out, headings } = groupedRows(items, rows, (item) => item.group, 6);
+  return out.map((row) => ({ ...row, showDue: !(headings && row.item.group === 1) }));
+}
+
+// "My day" on Android: how many appointments and tasks fit in the space
+// left by the header, the footer and the habits (dp). Medium (lower than
+// 260 dp): two columns, appointments | tasks, the habits below; large: one
+// column, up to four appointments, the tasks in the room left, the habits
+// at the bottom – as FPMyDayView on iOS.
+export const MYDAY_TALL = 260;
+export function myDayRows(counts: { events: number; tasks: number; habits: boolean }, height: number, footer: boolean) {
+  const ROW = 40,
+    HEADING = 20,
+    GAP = 6;
+  const space = height - 56 - (footer ? 16 : 0);
+  if (height < MYDAY_TALL) {
+    const rows = Math.max(1, Math.floor((space - (counts.habits ? ROW + GAP : 0) - HEADING) / ROW));
+    return { columns: !!counts.events && !!counts.tasks, events: Math.min(counts.events, rows), tasks: Math.min(counts.tasks, rows) };
+  }
+  const headings = (counts.events ? HEADING : 0) + (counts.tasks ? HEADING + GAP : 0) + (counts.habits ? HEADING + ROW + GAP : 0);
+  const total = Math.max(1, Math.floor((space - headings) / ROW));
+  // Appointments up to four (half the rows) when there are tasks; what the
+  // tasks leave over goes to the appointments.
+  const share = counts.tasks ? Math.max(Math.min(4, Math.max(1, Math.floor(total / 2))), total - counts.tasks) : total;
+  const events = Math.min(counts.events, share);
+  return { columns: false, events, tasks: Math.min(counts.tasks, Math.max(0, total - events)) };
 }
 
 // Made-up content for the widget pickers and previews, in the person's
@@ -745,7 +888,7 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
     return d.toISOString().slice(0, 10);
   };
   const id = "00000000-0000-4000-8000-000000000000";
-  const data: Record<SuiteKind, Data> = {
+  const data: Record<InstanceKind, Data> = {
     capture: { title: kindTitle("capture", locale), target: { id, name: L("Eingang", "Inbox", "Boîte d’entrée", "收件箱", "Skrzynka odbiorcza", "Caixa de entrada", "Входящие"), kind: "database" }, voice: true },
     tasks: {
       title: L("Meine Aufgaben", "My tasks", "Mes tâches", "我的任务", "Moje zadania", "As minhas tarefas", "Мои задачи"),
@@ -885,7 +1028,39 @@ export function sampleResult(kind: SuiteKind, locale: Locale, today: string, now
       url: "/#study",
     },
   };
-  return { id: kind, kind, ok: true, data: data[kind] };
+  if (kind !== "myday") return { id: kind, kind, ok: true, data: data[kind] };
+  // "My day": today's calendar answer (serverRequest), with appointments
+  // still to come whenever the picture is drawn.
+  const [standup, meeting] = list(data.calendar.items);
+  const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
+  return {
+    id: kind,
+    kind: "calendar",
+    ok: true,
+    data: {
+      title: data.calendar.title,
+      items: [
+        { ...standup, start: at(30), end: at(45) },
+        { ...meeting, start: at(180), end: at(240) },
+      ],
+    },
+  };
+}
+
+// The further answers of a widget's sample (extraRequests): "Today" its next
+// appointment and the mentions, "My day" the tasks and habits.
+export function sampleExtras(kind: SuiteKind, locale: Locale, today: string, now = Date.now()): Record<string, WidgetResult> {
+  const keys: Partial<Record<SuiteKind, [string, SuiteKind][]>> = {
+    calendar: [
+      ["event", "event"],
+      ["mentions", "mentions"],
+    ],
+    myday: [
+      ["tasks", "tasks"],
+      ["journal", "journal"],
+    ],
+  };
+  return Object.fromEntries((keys[kind] ?? []).map(([key, of]) => [key, sampleResult(of, locale, today, now)]));
 }
 
 // Settings for the sample content: widgets that need a page first get a

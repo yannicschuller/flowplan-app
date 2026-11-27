@@ -23,7 +23,7 @@ import { store } from "../store";
 import { localDay } from "../summary";
 import { widgetAction, widgetData, type ActionName, type Connection, type WidgetResult } from "../widgets/api";
 import { renderSuite, SUITE_CLICKS } from "../widgets/android-suite";
-import { kindTitle, sampleConfig, sampleResult, suiteView, themeOf } from "../widgets/present";
+import { kindTitle, sampleConfig, sampleExtras, sampleResult, suiteView, themeOf } from "../widgets/present";
 import {
   extraRequests,
   needsSetup,
@@ -368,7 +368,9 @@ export async function syncWidgetPreviews() {
     const wide = !["counter", "forms", "study", "metric", "deadline"].includes(kind);
     const size = wide ? { width: 320, height: 160 } : { width: 160, height: 160 };
     try {
-      const view = suiteView(kind, sampleConfig(kind), sampleResult(kind, lang, localDay(), now), { locale: lang, today: localDay(), signedIn: true, now });
+      // With the further answers: "Today" its next appointment, "My day"
+      // the tasks and habits.
+      const view = suiteView(kind, sampleConfig(kind), sampleResult(kind, lang, localDay(), now), { locale: lang, today: localDay(), signedIn: true, now, extras: sampleExtras(kind, lang, localDay(), now) });
       const drawn = renderSuite(view, size, 0, { light: "#4146e6", dark: "#8f93ff" });
       const preview = await AndroidWidget.createPreview(buildWidgetTree(drawn[scheme]), size.width, size.height);
       if (!preview.base64Image || !(await setWidgetPreview(name, preview.base64Image, kindTitle(kind, lang)))) continue;

@@ -16,7 +16,7 @@ POUR LES ÉQUIPES
 Espaces d’équipe, droits d’accès, commentaires, mentions, notifications, modèles et une recherche dans tout l’espace.
 
 WIDGETS ET SAISIE RAPIDE
-Cochez vos tâches directement sur l’écran d’accueil, consultez les rendez-vous du jour, vos favoris, des chiffres de vos bases, votre journal et vos habitudes et le temps de la semaine – chaque widget montre une seule chose et a ses propres réglages. Capturez notes, mémos vocaux et photos en un geste, aussi depuis les réglages rapides. La concentration, la réunion en cours, les imports et le chrono restent visibles en notification.
+Cochez vos tâches directement sur l’écran d’accueil, consultez les rendez-vous du jour, vos favoris, des chiffres de vos bases, votre journal et vos habitudes, le temps de la semaine et « Ma journée » avec tout ce qui compte aujourd’hui – chaque widget montre une seule chose et a ses propres réglages. Capturez notes, mémos vocaux et photos en un geste, aussi depuis les réglages rapides. La concentration, la réunion en cours, les imports et le chrono restent visibles en notification.
 
 VOS DONNÉES, VOTRE SERVEUR
 Flowplan est open source (AGPL) et peut être auto-hébergé. L’app se connecte à app.flowplan.org ou à l’instance Flowplan de votre entreprise – il suffit d’en saisir l’adresse au premier lancement. Plusieurs instances, par exemple travail et perso, sont enregistrées comme profils et se changent d’un geste. Votre contenu reste sur ce serveur, pas dans l’app. L’app elle-même ne collecte aucune donnée et ne contient aucun pistage.

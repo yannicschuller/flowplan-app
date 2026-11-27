@@ -446,5 +446,11 @@
   "adminErrorsHour": "Erros (1 h)",
   "adminAgo": "há {time}",
   "adminDiskFree": "Disco livre",
-  "adminHealth": "Estado"
+  "adminHealth": "Estado",
+  "suiteMyDay": "O meu dia",
+  "myDayEvents": "{count} compromissos",
+  "myDayTasks": "{count} tarefas",
+  "myDayEmpty": "Nada mais para hoje",
+  "myDayAppointments": "Compromissos",
+  "myDayDue": "Prazo"
 }

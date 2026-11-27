@@ -9,5 +9,7 @@
   "updateProgress": "Progress of the update download in megabytes (fr: Mo).",
   "errorDetails": "Small line under a failed save (scan, share, photo, voice memo). {detail} is an untranslated technical message, e.g. \"HTTP 502\" or \"ERR_UNABLE_TO_UPLOAD: …\", for the person to pass on in a bug report.",
   "scanNeedsPlayServices": "Android without Google Play services (ML Kit's document scanner runs there). Google's own name of the service: de \"Google Play-Dienste\", fr \"services Google Play\", zh \"Google Play 服务\". The file is a PDF or a photo the person picks instead.",
-  "sharePagesSaved": "Android share sheet, after files were saved as pages of their own (one page per file) in a space. {count} is a number, {target} the space's name."
+  "sharePagesSaved": "Android share sheet, after files were saved as pages of their own (one page per file) in a space. {count} is a number, {target} the space's name.",
+  "myDayDue": "Heading in the \"My day\" widget above the tasks due today or overdue – the same word as on iOS (plugins/intents/locales \"Due\").",
+  "myDayEvents": "Counter in the header of the \"My day\" widget, followed by the tasks and the habits done, e.g. \"2 appointments · 5 tasks · 1/3\"."
 }

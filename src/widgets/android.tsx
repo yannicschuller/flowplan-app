@@ -4,7 +4,7 @@
 // summary fresh from the instance when it can.
 import { FlexWidget, TextWidget, type WidgetTaskHandlerProps } from "react-native-android-widget";
 import type { InboxWidgetProps, TasksWidgetProps } from "../summary";
-import type { AdminLiveProps, AdminStatusProps, AdminStorageProps, Freshness } from "../admin";
+import { adminStatusLayout, type AdminLiveProps, type AdminStatusProps, type AdminStorageProps, type Freshness } from "../admin";
 import { materialColors } from "../../modules/flowplan-android/src";
 import { materialThemes } from "../android/theme";
 
@@ -19,9 +19,11 @@ export const hex = (value: string) => value as Hex;
 // The quiet footer: when the numbers came from the instance ("Updated
 // 14:05"; Android cannot count "12 min ago" on without drawing again),
 // older than an hour with a warning ("⚠ As of 01:10").
-function Fresh({ fresh, theme }: { fresh?: Freshness; theme: Theme }) {
+function Fresh({ fresh, theme, small }: { fresh?: Freshness; theme: Theme; small?: boolean }) {
   if (!fresh) return null;
   const old = Date.now() - fresh.at > 3_600_000;
+  // Small widgets: only the warning (as the configurable ones and iOS).
+  if (small && !old) return null;
   return <TextWidget text={old ? `⚠ ${fresh.asOf}` : fresh.updatedAt} maxLines={1} style={{ fontSize: 10, color: hex(old ? theme.late : theme.muted), marginTop: 4 }} />;
 }
 
@@ -141,8 +143,8 @@ function Meter({ share, color, theme }: { share: number; color: string; theme: T
 
 // "Admin status": the traffic light and its words, then the four rows
 // (health, errors in the last hour, backup age, free disk) as far as there
-// is room.
-function StatusView({ props, theme, rows }: { props: AdminStatusProps; theme: Theme; rows: number }) {
+// is room – what needs attention first –, tall ones the first issue below.
+function StatusView({ props, theme, rows, detail, small }: { props: AdminStatusProps; theme: Theme; rows: number; detail: boolean; small: boolean }) {
   if (props.state === "signedOut" || props.state === "notAdmin" || props.state === "pending") return <Closed {...props} theme={theme} />;
   const toneOf = (tone: string) => (tone === "problem" ? theme.late : tone === "notice" ? theme.warn : theme.ok);
   const list = props.rows ?? [];
@@ -166,9 +168,12 @@ function StatusView({ props, theme, rows }: { props: AdminStatusProps; theme: Th
           <TextWidget text={row.value} maxLines={1} style={{ fontSize: 12, fontWeight: "600", color: hex(theme.text), marginLeft: 6 }} />
         </FlexWidget>
       ))}
+      {detail && props.detail ? (
+        <TextWidget text={props.more ? `${props.detail} · ${props.more}` : props.detail} maxLines={2} truncate="END" style={{ fontSize: 11, color: hex(theme.muted), marginTop: 6 }} />
+      ) : null}
       <FlexWidget style={{ flex: 1 }} />
       {props.update ? <TextWidget text={props.update} maxLines={1} style={{ fontSize: 11, fontWeight: "600", color: hex(theme.brand) }} /> : null}
-      <Fresh fresh={props.fresh} theme={theme} />
+      <Fresh fresh={props.fresh} theme={theme} small={small} />
     </FlexWidget>
   );
 }
@@ -220,12 +225,16 @@ function StorageView({ props, theme }: { props: AdminStorageProps; theme: Theme 
   );
 }
 
-export function renderAdminStatus(props: AdminStatusProps, height = 180) {
+export function renderAdminStatus(props: AdminStatusProps, height = 180, width = 180) {
   const themes = widgetThemes();
-  // Rows of 18 dp under the header, the light and the footer.
-  const rows = Math.max(1, Math.min(4, Math.floor((height - 100) / 18)));
-  return { light: <StatusView props={props} theme={themes.light} rows={rows} />, dark: <StatusView props={props} theme={themes.dark} rows={rows} /> };
+  const { rows, detail } = adminStatusLayout(height, !!props.update);
+  const small = width < 200;
+  return {
+    light: <StatusView props={props} theme={themes.light} rows={rows} detail={detail} small={small} />,
+    dark: <StatusView props={props} theme={themes.dark} rows={rows} detail={detail} small={small} />,
+  };
 }
+
 export function renderAdminLive(props: AdminLiveProps, height = 180) {
   const themes = widgetThemes();
   const chart = height >= 150;

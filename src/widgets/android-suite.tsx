@@ -12,7 +12,7 @@ import { FlexWidget, TextWidget } from "react-native-android-widget";
 import { DARK, hex, LIGHT, widgetThemes, type Theme } from "./android";
 import { accentThemes, type Themes } from "../android/theme";
 import { widgetRadii } from "../../modules/flowplan-android/src";
-import { taskRows, type ClosedView, type SuiteView } from "./present";
+import { groupedRows, myDayRows, MYDAY_TALL, taskRows, type ClosedView, type HabitsView, type SuiteView, type TaskRow } from "./present";
 import type { Accent } from "./suite";
 
 // What a tap does (clickAction); the data is what the action needs.
@@ -126,6 +126,56 @@ function Footer({ view, theme, small }: { view: SuiteView; theme: Theme; small: 
 // The heading of a group in a list (Overdue, Today, Later).
 function Heading({ text, theme, late }: { text: string; theme: Theme; late?: boolean }) {
   return <TextWidget text={text.toUpperCase()} maxLines={1} style={{ fontSize: 11, fontWeight: "600", color: hex(late ? theme.late : theme.muted), marginTop: 4 }} />;
+}
+
+// The quick add of an empty list ("New task": quick capture for a task).
+function AddButton({ add, theme }: { add: { label: string; url: string }; theme: Theme }) {
+  return (
+    <FlexWidget
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: add.url }}
+      accessibilityLabel={add.label}
+      style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: hex(theme.line), alignItems: "center", justifyContent: "center", marginBottom: 4 }}
+    >
+      <TextWidget text={`＋ ${add.label}`} maxLines={1} style={{ fontSize: 14, fontWeight: "600", color: hex(theme.brand) }} />
+    </FlexWidget>
+  );
+}
+
+// One task in one 40 dp row: its checkbox (or drawn done), text and due day.
+function TaskLine({ item, widgetId, theme, detail, due }: { item: TaskRow; widgetId: number; theme: Theme; detail: boolean; due: boolean }) {
+  return (
+    <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
+      {item.done ? (
+        <Checked theme={theme} />
+      ) : item.complete ? (
+        <Tap glyph="○" action={SUITE_CLICKS.complete} data={{ widgetId, ...item.complete }} label={`${item.text}`} theme={theme} />
+      ) : (
+        <FlexWidget style={{ width: 44 }} />
+      )}
+      <Row text={item.text} detail={item.hint || (detail ? item.detail : "")} alert={!!item.hint} done={item.done} right={due ? item.due : ""} late={item.late} url={item.url} theme={theme} />
+    </FlexWidget>
+  );
+}
+
+// The habits side by side, each a checkbox with its name (40 dp high).
+function HabitTaps({ habits, max, today, widgetId, theme }: { habits: HabitsView; max: number; today: string; widgetId: number; theme: Theme }) {
+  return (
+    <FlexWidget style={{ flexDirection: "row", width: "match_parent", height: 40, alignItems: "center" }}>
+      {habits.items.slice(0, max).map((habit) => (
+        <FlexWidget key={habit.fieldId} style={{ flex: 1, width: 0, flexDirection: "row", alignItems: "center", height: 40 }}>
+          {habit.canWrite ? (
+            <Tap glyph={habit.done ? "●" : "○"} action={SUITE_CLICKS.habit} data={{ widgetId, pageId: habit.pageId, fieldId: habit.fieldId, done: !habit.done, today }} label={habit.name} theme={theme} />
+          ) : (
+            <TextWidget text={habit.done ? "●" : "○"} style={{ fontSize: 18, color: hex(theme.muted), marginRight: 6 }} />
+          )}
+          <FlexWidget style={{ flex: 1 }}>
+            <TextWidget text={habit.name} maxLines={1} truncate="END" style={{ fontSize: 13, color: hex(habit.done ? theme.muted : theme.text) }} />
+          </FlexWidget>
+        </FlexWidget>
+      ))}
+    </FlexWidget>
+  );
 }
 
 function Message({ text, theme }: { text: string; theme: Theme }) {
@@ -261,44 +311,19 @@ function SuiteContent({ view, size, look, widgetId }: { view: SuiteView; size: S
       );
     }
     case "tasks":
+      // The counter "24 open · 10 overdue" (small: "24 open"), grouped
+      // Overdue / Today / Later when tall; empty: "All done" and "New task".
       return (
         <FlexWidget style={box}>
           <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
-            <Header title={view.title} trailing={view.items.length ? view.headline : ""} theme={theme} />
+            <Header title={view.title} trailing={view.items.length ? (small ? view.short : view.headline) : ""} theme={theme} />
           </FlexWidget>
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
-          {view.items.length || small ? null : (
-            <FlexWidget
-              clickAction="OPEN_URI"
-              clickActionData={{ uri: view.add.url }}
-              accessibilityLabel={view.add.label}
-              style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: hex(theme.line), alignItems: "center", justifyContent: "center", marginBottom: 4 }}
-            >
-              <TextWidget text={`＋ ${view.add.label}`} maxLines={1} style={{ fontSize: 14, fontWeight: "600", color: hex(theme.brand) }} />
-            </FlexWidget>
-          )}
-          {taskRows(view.items, rows).map(({ item, heading }, index) => (
+          {view.items.length ? null : <AddButton add={view.add} theme={theme} />}
+          {taskRows(view.items, rows).map(({ item, heading, showDue }, index) => (
             <FlexWidget key={index} style={{ width: "match_parent", flexDirection: "column" }}>
-            {heading !== undefined ? <Heading text={view.groups[heading]} late={heading === 0} theme={theme} /> : null}
-            <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
-              {item.done ? (
-                <Checked theme={theme} />
-              ) : item.complete ? (
-                <Tap glyph="○" action={SUITE_CLICKS.complete} data={{ widgetId, ...item.complete }} label={`${item.text}`} theme={theme} />
-              ) : (
-                <FlexWidget style={{ width: 44 }} />
-              )}
-              <Row
-                text={item.text}
-                detail={item.hint || (small ? "" : item.detail)}
-                alert={!!item.hint}
-                done={item.done}
-                right={small ? "" : item.due}
-                late={item.late}
-                url={item.url}
-                theme={theme}
-              />
-            </FlexWidget>
+              {heading !== undefined ? <Heading text={view.groups[heading]} late={heading === 0} theme={theme} /> : null}
+              <TaskLine item={item} widgetId={widgetId} theme={theme} detail={!small} due={!small && showDue} />
             </FlexWidget>
           ))}
         </FlexWidget>
@@ -329,21 +354,30 @@ function SuiteContent({ view, size, look, widgetId }: { view: SuiteView; size: S
           </FlexWidget>
         );
       }
-      return (
-        <FlexWidget style={box}>
-          <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
-            <Header title={view.title} trailing={view.unread ? `@ ${view.unread}` : ""} theme={theme} />
-          </FlexWidget>
-          {view.items.length ? null : <Message text={view.empty} theme={theme} />}
-          {view.items.slice(0, rows).map((item, index) => (
-            <FlexWidget key={index} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
-              <TextWidget text={item.day ? `${item.day} ${item.when}` : item.when} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted), width: small ? 46 : 80 }} />
-              <FlexWidget style={{ width: 4, height: 20, borderRadius: 2, backgroundColor: hex(item.task ? theme.muted : theme.brand), marginRight: 8 }} />
-              <Row text={item.title} detail={small ? "" : item.calendar} url={item.url} theme={theme} />
+      {
+        // Several days: the day ("Tomorrow", "Friday") above its first
+        // entry where there is room, otherwise in front of the time.
+        const days = groupedRows(view.items, rows, (item) => item.dayLabel, 3);
+        const unread = view.unread ? `@ ${view.unread}` : "";
+        return (
+          <FlexWidget style={box}>
+            <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
+              <Header title={view.title} trailing={small ? unread : [unread, view.date].filter(Boolean).join(" · ")} theme={theme} />
             </FlexWidget>
-          ))}
-        </FlexWidget>
-      );
+            {view.items.length ? null : <Message text={view.empty} theme={theme} />}
+            {days.rows.map(({ item, heading }, index) => (
+              <FlexWidget key={index} style={{ width: "match_parent", flexDirection: "column" }}>
+                {heading ? <Heading text={heading} theme={theme} /> : null}
+                <FlexWidget style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
+                  <TextWidget text={item.day && !days.headings ? `${item.day} ${item.when}` : item.when} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted), width: small ? 46 : 80 }} />
+                  <FlexWidget style={{ width: 4, height: 20, borderRadius: 2, backgroundColor: hex(item.task ? theme.muted : theme.brand), marginRight: 8 }} />
+                  <Row text={item.title} detail={small ? "" : item.calendar} url={item.url} theme={theme} />
+                </FlexWidget>
+              </FlexWidget>
+            ))}
+          </FlexWidget>
+        );
+      }
     case "list":
       return (
         <FlexWidget style={box}>
@@ -552,7 +586,7 @@ function SuiteContent({ view, size, look, widgetId }: { view: SuiteView; size: S
           </FlexWidget>
           {view.items.length ? null : <Message text={view.empty} theme={theme} />}
           {view.items.slice(0, small ? 2 : rows).map((item, index) => (
-            <FlexWidget key={index} clickAction="OPEN_URI" clickActionData={{ uri: item.url }} style={{ width: "match_parent", height: 44, flexDirection: "column", justifyContent: "center" }} accessibilityLabel={[item.title, item.detail].filter(Boolean).join(", ")}>
+            <FlexWidget key={index} clickAction="OPEN_URI" clickActionData={{ uri: item.url }} style={{ width: "match_parent", height: 40, flexDirection: "column", justifyContent: "center" }} accessibilityLabel={[item.title, item.detail].filter(Boolean).join(", ")}>
               <TextWidget text={item.title} maxLines={1} truncate="END" style={{ fontSize: 14, color: hex(theme.text) }} />
               {item.progress !== undefined ? (
                 <Bar share={item.progress} theme={theme} />
@@ -572,6 +606,75 @@ function SuiteContent({ view, size, look, widgetId }: { view: SuiteView; size: S
           {!small ? <Spark values={view.series} theme={theme} /> : null}
         </FlexWidget>
       );
+    case "myday": {
+      // "My day": today's appointments, the tasks due today or overdue and
+      // today's habits, checked off right here (as the tasks and habits
+      // widgets do). Medium: appointments | tasks, the habits below; large:
+      // one column.
+      const habits = view.habits;
+      const fit = myDayRows({ events: view.events.length, tasks: view.tasks.length, habits: !!habits }, size.height, !framed);
+      const header = (
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: view.url }} style={{ width: "match_parent" }}>
+          <Header title={view.title} trailing={small ? "" : view.headline} theme={theme} />
+        </FlexWidget>
+      );
+      if (!view.events.length && !view.tasks.length && !habits)
+        return (
+          <FlexWidget style={box}>
+            {header}
+            <Message text={view.empty} theme={theme} />
+            <AddButton add={view.add} theme={theme} />
+          </FlexWidget>
+        );
+      // Two columns of equal width (0 dp and the same weight), or one over
+      // the whole width.
+      const column = fit.columns ? ({ flex: 1, width: 0, flexDirection: "column" } as const) : ({ width: "match_parent", flexDirection: "column" } as const);
+      const events = view.events.length ? (
+        <FlexWidget style={column}>
+          <Heading text={view.headings.events} theme={theme} />
+          {view.events.slice(0, fit.events).map((event, index) => (
+            <FlexWidget key={index} style={{ flexDirection: "row", width: "match_parent", alignItems: "center", height: 40 }}>
+              <TextWidget text={event.when} maxLines={1} style={{ fontSize: 12, color: hex(theme.muted), width: fit.columns || small ? 46 : 92 }} />
+              <FlexWidget style={{ width: 4, height: 20, borderRadius: 2, backgroundColor: hex(theme.brand), marginRight: 8 }} />
+              <Row text={event.title} detail={fit.columns || small ? "" : event.calendar} url={event.url} theme={theme} />
+            </FlexWidget>
+          ))}
+        </FlexWidget>
+      ) : null;
+      const tasks = view.tasks.length && fit.tasks ? (
+        <FlexWidget style={{ ...column, ...(fit.columns ? { marginLeft: 12 } : { marginTop: view.events.length ? 6 : 0 }) }}>
+          <Heading text={view.headings.tasks} theme={theme} />
+          {view.tasks.slice(0, fit.tasks).map((item, index) => (
+            // All are due today or before: only "Overdue · 3 d" says more.
+            <TaskLine key={index} item={item} widgetId={widgetId} theme={theme} detail={!fit.columns && !small} due={item.late && !small} />
+          ))}
+        </FlexWidget>
+      ) : null;
+      return (
+        <FlexWidget style={box}>
+          {header}
+          {fit.columns ? (
+            <FlexWidget style={{ flexDirection: "row", width: "match_parent" }}>
+              {events}
+              {tasks}
+            </FlexWidget>
+          ) : (
+            <FlexWidget style={{ flexDirection: "column", width: "match_parent" }}>
+              {events}
+              {tasks}
+            </FlexWidget>
+          )}
+          <FlexWidget style={{ flex: 1 }} />
+          {habits ? (
+            <FlexWidget style={{ width: "match_parent", flexDirection: "column", marginTop: 6 }}>
+              {size.height >= MYDAY_TALL ? <Heading text={`${view.headings.habits} · ${habits.done}/${habits.total}`} theme={theme} /> : null}
+              <HabitTaps habits={habits} max={small ? 2 : size.height >= MYDAY_TALL ? 4 : 3} today={view.today} widgetId={widgetId} theme={theme} />
+            </FlexWidget>
+          ) : null}
+          <Notice text={view.notice} theme={theme} />
+        </FlexWidget>
+      );
+    }
     case "deadline": {
       const tone = view.done ? theme.ok : view.overdue ? theme.late : theme.brand;
       return (

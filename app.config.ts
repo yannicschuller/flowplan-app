@@ -63,6 +63,9 @@ const SUITE_ANDROID: [string, [number, number], [number, number]][] = [
   ["FlowplanReading", [4, 2], [180, 110]],
   ["FlowplanMetric", [2, 2], [110, 110]],
   ["FlowplanDeadline", [2, 2], [110, 110]],
+  // "My day" (medium and large, as on iOS): appointments, tasks and habits
+  // need the width of a medium widget.
+  ["FlowplanMyDay", [4, 2], [250, 110]],
 ];
 // Merged into others or given up (src/widgets/suite.ts): no longer in the
 // picker, the ones on home screens keep working.

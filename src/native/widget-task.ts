@@ -46,7 +46,7 @@ export async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget
     name === "FlowplanInbox"
       ? renderInbox(inboxWidget(summary, lang))
       : name === "FlowplanInstance"
-        ? renderAdminStatus(adminStatusWidget(admin, lang), widgetInfo.height)
+        ? renderAdminStatus(adminStatusWidget(admin, lang), widgetInfo.height, widgetInfo.width)
         : name === "FlowplanLive"
           ? renderAdminLive(adminLiveWidget(admin, lang), widgetInfo.height)
           : name === "FlowplanStorage"

@@ -16,7 +16,7 @@ DLA ZESPOŁÓW
 Przestrzenie zespołów, uprawnienia, komentarze, wzmianki, powiadomienia, szablony i wyszukiwanie we wszystkim.
 
 WIDŻETY I SZYBKIE PRZECHWYTYWANIE
-Odhaczaj zadania prosto na ekranie głównym, zobacz dzisiejsze spotkania, ulubione, liczby z baz danych, dziennik i nawyki oraz czas w tym tygodniu – każdy widżet pokazuje jedną rzecz i ma własne ustawienia. Zapisuj notatki, notatki głosowe i zdjęcia jednym dotknięciem, także z Szybkich ustawień. Skupienie, bieżące spotkanie, importy i timer pozostają widoczne jako powiadomienia.
+Odhaczaj zadania prosto na ekranie głównym, zobacz dzisiejsze spotkania, ulubione, liczby z baz danych, dziennik i nawyki, czas w tym tygodniu i „Mój dzień” ze wszystkim na dziś – każdy widżet pokazuje jedną rzecz i ma własne ustawienia. Zapisuj notatki, notatki głosowe i zdjęcia jednym dotknięciem, także z Szybkich ustawień. Skupienie, bieżące spotkanie, importy i timer pozostają widoczne jako powiadomienia.
 
 TWOJE DANE, TWÓJ SERWER
 Flowplan jest open source (AGPL) i można go hostować samodzielnie. Aplikacja łączy się z app.flowplan.org lub z instancją Flowplan Twojej firmy – wystarczy wpisać jej adres przy pierwszym uruchomieniu. Kilka instancji, np. służbową i prywatną, zapisujesz jako profile i przełączasz jednym stuknięciem. Twoje treści są na tym serwerze, nie w aplikacji. Sama aplikacja nie zbiera danych i nie zawiera śledzenia.

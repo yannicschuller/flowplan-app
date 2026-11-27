@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import config from "../app.config";
-import { IOS_KINDS, IOS_ONLY_WIDGETS, LEGACY_KINDS, RETIRED_KINDS, SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
+import { IOS_KINDS, LEGACY_KINDS, RETIRED_KINDS, SUITE_KINDS, SUITE_WIDGETS } from "../src/widgets/suite";
 import { configFor, forgetProfile, parseConfigState, removeWidget, setConfig } from "../src/widgets/widget-config";
 
 const { strings, phrases, gallery, galleryStrings, localizable, LANGS, lproj } = require("../plugins/widget-suite/strings") as {
@@ -66,7 +66,7 @@ test("Siri phrases exist in German, English, French and Chinese and name the app
 
 test("every widget has a gallery name and description in every language", () => {
   // FlowplanStudy is a widget of the suite (#352).
-  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k]), ...Object.values(IOS_ONLY_WIDGETS)];
+  const names = ["FlowplanTasks", "FlowplanInbox", "FlowplanInstance", "FlowplanLive", "FlowplanStorage", ...SUITE_KINDS.map((k) => SUITE_WIDGETS[k])];
   assert.deepEqual(Object.keys(gallery).sort(), [...names].sort());
   for (const lang of ["de", "en", "fr", "zh"]) {
     const android = galleryStrings(lang);
@@ -139,9 +139,8 @@ test("the app config wires the suite: Android settings screens, iOS plugin befor
 test("Swift widget kinds match the app's widget names", () => {
   const swift = readFileSync(join(root, "plugins/widget-suite/ios/SuiteWidgets.swift"), "utf8");
   const intents = readFileSync(join(root, "plugins/widget-suite/ios/SuiteIntents.swift"), "utf8");
-  const widgetOf = (kind: string) => (SUITE_WIDGETS as Record<string, string>)[kind] ?? IOS_ONLY_WIDGETS[kind];
   for (const kind of IOS_KINDS) {
-    assert.ok(swift.includes(`kind: "${widgetOf(kind)}"`), kind);
+    assert.ok(swift.includes(`kind: "${SUITE_WIDGETS[kind]}"`), kind);
     assert.ok(intents.includes(`static let kind = "${kind}"`), kind);
   }
   // Given up on iOS: no widget, no settings (a kind left in the bundle would

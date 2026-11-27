@@ -446,5 +446,11 @@
   "adminErrorsHour": "Ошибки (1 ч)",
   "adminAgo": "{time} назад",
   "adminDiskFree": "Свободно на диске",
-  "adminHealth": "Состояние"
+  "adminHealth": "Состояние",
+  "suiteMyDay": "Мой день",
+  "myDayEvents": "Встреч: {count}",
+  "myDayTasks": "Задач: {count}",
+  "myDayEmpty": "На сегодня больше ничего",
+  "myDayAppointments": "Встречи",
+  "myDayDue": "Срок"
 }

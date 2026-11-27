@@ -446,5 +446,11 @@
   "adminErrorsHour": "Fehler (1 Std.)",
   "adminAgo": "vor {time}",
   "adminDiskFree": "Frei auf der Festplatte",
-  "adminHealth": "Zustand"
+  "adminHealth": "Zustand",
+  "suiteMyDay": "Mein Tag",
+  "myDayEvents": "{count} Termine",
+  "myDayTasks": "{count} Aufgaben",
+  "myDayEmpty": "Für heute ist nichts mehr offen",
+  "myDayAppointments": "Termine",
+  "myDayDue": "Fällig"
 }

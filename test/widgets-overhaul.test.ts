@@ -33,7 +33,7 @@ test("fewer widgets: the merged and the given-up ones are no longer offered, but
     assert.ok(SUITE_KINDS.includes(kind), kind);
     assert.ok(!OFFERED_KINDS.includes(kind), kind);
   }
-  assert.deepEqual([...OFFERED_KINDS], ["capture", "tasks", "calendar", "pinned", "journal", "time", "study", "metric", "deadline"]);
+  assert.deepEqual([...OFFERED_KINDS], ["capture", "tasks", "calendar", "pinned", "journal", "time", "study", "metric", "deadline", "myday"]);
   // iOS keeps the merged ones (their widgets stay on screens) and has My day.
   assert.ok(IOS_KINDS.includes("myday") && IOS_KINDS.includes("counter") && !IOS_KINDS.includes("mentions"));
   const settings = readFileSync(join(root, "src/screens/Settings.tsx"), "utf8");

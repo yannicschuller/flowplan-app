@@ -12,10 +12,14 @@
 
 import { activeProfile, type ProfileState } from "../profiles";
 
-export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms", "study", "event", "reading", "metric", "deadline"] as const;
+export const SUITE_KINDS = ["capture", "tasks", "calendar", "pinned", "counter", "journal", "time", "mentions", "forms", "study", "event", "reading", "metric", "deadline", "myday"] as const;
 export type SuiteKind = (typeof SUITE_KINDS)[number];
+// "My day" is the app's own: the instance has no such kind, the widget asks
+// for today's calendar with the tasks and habits answers (serverRequest,
+// extraRequests).
+export type InstanceKind = Exclude<SuiteKind, "myday">;
 // Kinds the app asks for itself: Live Activities and system controls.
-export type ServerKind = SuiteKind | "focus" | "meeting" | "jobs" | "incident";
+export type ServerKind = InstanceKind | "focus" | "meeting" | "jobs" | "incident";
 
 // The widget names (iOS widget kind, Android provider) per kind.
 export const SUITE_WIDGETS: Record<SuiteKind, string> = {
@@ -36,6 +40,8 @@ export const SUITE_WIDGETS: Record<SuiteKind, string> = {
   reading: "FlowplanReading",
   metric: "FlowplanMetric",
   deadline: "FlowplanDeadline",
+  // Today's appointments, the tasks due today or overdue and today's habits.
+  myday: "FlowplanMyDay",
 };
 // Fewer widgets (2026): "Key figure" (metric) takes a database or a
 // dashboard as its source, "Pages" (pinned) shows the favorites, what was
@@ -50,10 +56,8 @@ export const SUITE_WIDGETS: Record<SuiteKind, string> = {
 export const LEGACY_KINDS: readonly SuiteKind[] = ["counter", "reading", "event"];
 export const RETIRED_KINDS: readonly SuiteKind[] = ["mentions", "forms"];
 export const OFFERED_KINDS: readonly SuiteKind[] = SUITE_KINDS.filter((kind) => !LEGACY_KINDS.includes(kind) && !RETIRED_KINDS.includes(kind));
-// The iOS widgets of the suite: Android's without the two given up, and
-// "My day" (iOS only: appointments, tasks and habits in one widget).
-export const IOS_KINDS: readonly string[] = [...SUITE_KINDS.filter((kind) => !RETIRED_KINDS.includes(kind)), "myday"];
-export const IOS_ONLY_WIDGETS: Record<string, string> = { myday: "FlowplanMyDay" };
+// The iOS widgets of the suite: Android's without the two given up.
+export const IOS_KINDS: readonly SuiteKind[] = SUITE_KINDS.filter((kind) => !RETIRED_KINDS.includes(kind));
 
 // Kinds an instance from before them does not know: it refuses them (400),
 // and the widget says the instance needs an update.
@@ -108,6 +112,9 @@ export type SuiteConfig = {
   // A record of a database ({ pageId, rowId }), or a document task (its key
   // as the tasks widget has it, with its page and position).
   deadline: { pageId?: string; rowId?: string; taskKey?: string; index?: number };
+  // Calendars as "Today" has them (none: all) and the habit database (none:
+  // no habits, as in the journal widget).
+  myday: { sources: { pageId: string; viewId?: string }[]; habitsId?: string };
 };
 
 export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
@@ -126,6 +133,7 @@ export const DEFAULTS: { [K in SuiteKind]: SuiteConfig[K] } = {
   reading: { source: "recent", max: 4 },
   metric: { source: "dashboard" },
   deadline: {},
+  myday: { sources: [] },
 };
 
 // The instance takes at most this many decks per widget.
@@ -258,6 +266,9 @@ export function normalizeConfig<K extends SuiteKind>(kind: K, raw: unknown): Sui
     case "forms":
       out = compact({ pageId: uuid(r.pageId), max: count(r.max, 1, 5, 3) });
       break;
+    case "myday":
+      out = compact({ sources: calendarSources(r.sources), habitsId: uuid(r.habitsId) });
+      break;
     case "study":
       out = { pageIds: [...new Set((Array.isArray(r.pageIds) ? r.pageIds : []).map(uuid).filter((id): id is string => !!id))].slice(0, MAX_STUDY_DECKS) };
       break;
@@ -349,8 +360,10 @@ export function widgetProfileId(state: ProfileState, chosen: string | null | und
 
 // What a widget asks the instance for: mostly its own kind; "Key figure"
 // of a database asks for the counter, "Pages" recently opened for the
-// continue-reading answer.
-export function serverRequest(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { kind: SuiteKind; config: Record<string, unknown> } {
+// continue-reading answer, "My day" for today's calendar (the same request
+// as on iOS: FPMyDayConfiguration in plugins/widget-suite/ios).
+export function serverRequest(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { kind: InstanceKind; config: Record<string, unknown> } {
+  if (kind === "myday") return { kind: "calendar", config: { sources: (config as SuiteConfig["myday"]).sources, range: "today", tasks: false, max: 10 } };
   if (kind === "metric" && (config as SuiteConfig["metric"]).source === "database") {
     const { source: _source, dashboardId: _dashboard, widgetId: _widget, ...counter } = config as SuiteConfig["metric"];
     return { kind: "counter", config: { ...normalizeConfig("counter", counter), history: true } };
@@ -363,8 +376,16 @@ export function serverRequest(kind: SuiteKind, config: SuiteConfig[SuiteKind]): 
 }
 
 // Further answers a widget shows besides its own: "Today" its next
-// appointment (the small size) and the unread mentions (a badge).
-export function extraRequests(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { key: string; kind: SuiteKind; config: Record<string, unknown> }[] {
+// appointment (the small size) and the unread mentions (a badge); "My day"
+// my open tasks (it shows those due today or overdue) and the habits.
+export function extraRequests(kind: SuiteKind, config: SuiteConfig[SuiteKind]): { key: string; kind: InstanceKind; config: Record<string, unknown> }[] {
+  if (kind === "myday") {
+    const { habitsId } = config as SuiteConfig["myday"];
+    return [
+      { key: "tasks", kind: "tasks", config: { source: "mine", filter: "open", max: 10 } },
+      { key: "journal", kind: "journal", config: habitsId ? { habitsId } : {} },
+    ];
+  }
   if (kind !== "calendar") return [];
   const c = config as SuiteConfig["calendar"];
   const calendars = [...new Set(c.sources.map((s) => (s.viewId ? `${s.pageId}:${s.viewId}` : s.pageId)))].sort().slice(0, 10);

@@ -446,5 +446,11 @@
   "adminErrorsHour": "Błędy (1 godz.)",
   "adminAgo": "{time} temu",
   "adminDiskFree": "Wolne miejsce na dysku",
-  "adminHealth": "Stan"
+  "adminHealth": "Stan",
+  "suiteMyDay": "Mój dzień",
+  "myDayEvents": "Spotkania: {count}",
+  "myDayTasks": "Zadania: {count}",
+  "myDayEmpty": "Na dziś nic już nie zostało",
+  "myDayAppointments": "Spotkania",
+  "myDayDue": "Termin"
 }
