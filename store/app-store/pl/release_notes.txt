@@ -1,4 +1,9 @@
 Nowości w tej wersji:
-• Flowplan mówi teraz po polsku, portugalsku (Portugalia) i rosyjsku – aplikacja, widżety, Siri i Skróty oraz rozszerzenie udostępniania działają w języku Twojego urządzenia.
-• Apple Pencil: rysowanie przy lewej krawędzi notatnika, pliku PDF lub tablicy nie przenosi już do poprzedniego ekranu.
+• Odświeżone widżety: bardziej przejrzyste, z datami w stylu „Po terminie · 10 dni” lub „Jutro”, grupami Po terminie/Dziś/Później, czytelnym licznikiem jak „24 otwarte · 10 po terminie” i całą powierzchnią – duży widżet Zadania pokazuje do dziesięciu zadań.
+• Dolny wiersz pokazuje, kiedy dane zostały ostatnio wczytane; po ponad godzinie pojawia się informacja, z kiedy pochodzą.
+• Nowy widżet „Mój dzień”: dzisiejsze wydarzenia, zadania do wykonania i nawyki w jednym miejscu, do odhaczenia.
+• Widżety na ekran blokady: otwarte zadania, następne wydarzenie, karty do powtórki, a dla administratorów Na żywo i stan instancji.
+• Nowy widżet „Stan administracyjny” z sygnalizacją: stan, błędy z ostatniej godziny, wiek kopii zapasowej i wolne miejsce.
+• Mniej, ale lepszych widżetów: „Wskaźnik” pokazuje liczbę z bazy danych lub pulpitu, „Strony” ulubione, ostatnio otwarte lub jedną stronę, a mały „Dziś” następne wydarzenie z odliczaniem. „Odpowiedzi z formularzy” i „Wzmianki” zostały usunięte – „Dziś” liczy teraz wzmianki.
+• Udostępnianie: pliki można zapisać jako osobne strony w przestrzeni (od Flowplan 0.12.1).
 • Drobne ulepszenia i poprawki błędów

@@ -1,4 +1,9 @@
 Neu in dieser Version:
-• Flowplan spricht jetzt Polnisch, Portugiesisch (Portugal) und Russisch – App, Widgets, Siri & Kurzbefehle und die Teilen-Erweiterung folgen der Sprache deines Geräts.
-• Apple Pencil: Zeichnen am linken Rand eines Notizbuchs, PDFs oder Whiteboards wischt nicht mehr zur vorherigen Ansicht zurück.
+• Widgets überarbeitet: aufgeräumter, mit Daten wie „Überfällig · 10 T“ oder „Morgen“, Gruppen Überfällig/Heute/Später, einer klaren Zahl wie „24 offen · 10 überfällig“ und der ganzen Fläche – das große Aufgaben-Widget zeigt bis zu zehn Aufgaben.
+• Unten steht, wann die Daten zuletzt geladen wurden; ist das länger als eine Stunde her, zeigt ein Hinweis den Stand.
+• Neues Widget „Mein Tag“: Termine, fällige Aufgaben und Gewohnheiten von heute auf einen Blick, zum Abhaken.
+• Widgets für den Sperrbildschirm: offene Aufgaben, nächster Termin, fällige Karten und für Admins Live und Instanz-Status.
+• Neues Widget „Admin-Status“ mit Ampel: Zustand, Fehler der letzten Stunde, Alter des Backups und freier Speicher.
+• Weniger, dafür bessere Widgets: „Kennzahl“ zeigt eine Zahl aus einer Datenbank oder einem Dashboard, „Seiten“ Favoriten, zuletzt Geöffnetes oder eine Seite, und „Heute“ in klein den nächsten Termin mit Countdown. „Formular-Antworten“ und „Erwähnungen“ gibt es nicht mehr – Erwähnungen zählt jetzt „Heute“.
+• Teilen: Dateien lassen sich als eigene Seiten in einen Bereich speichern (ab Flowplan 0.12.1).
 • Kleinere Verbesserungen und Fehlerbehebungen
