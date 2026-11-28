@@ -952,6 +952,10 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
           source={webSource}
           style={{ flex: 1, backgroundColor: fallback }}
           containerStyle={{ backgroundColor: fallback }}
+          // Never the library's own "Error loading page / NSURLErrorDomain"
+          // view: onError below shows the stored copy or the offline screen,
+          // and until then the background stays plain (#640).
+          renderError={() => <View style={{ flex: 1, backgroundColor: fallback }} />}
           // The instance shows the app's sign-in (passkeys and SSO through the
           // system) when it sees this.
           applicationNameForUserAgent={`FlowplanMobile/${version}`}
@@ -1034,6 +1038,8 @@ export const Shell = forwardRef<ShellHandle, Props>(function Shell({ server, pro
             // Android: a scheme the web view does not load (-10).
             if (code === -999 || code === 102 || code === -10) return;
             if (!url || originOf(url) === server) {
+              // Handled here: keep the library from switching to its error view (#640).
+              event.preventDefault();
               const failed = () => {
                 settle();
                 // The stored copy itself failed: the offline screen.
