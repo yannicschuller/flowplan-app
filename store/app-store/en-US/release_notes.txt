@@ -1,9 +1,3 @@
 New in this version:
-• Redesigned widgets: tidier, with dates like “Overdue · 10 d” or “Tomorrow”, Overdue/Today/Later groups, a clear count such as “24 open · 10 overdue” and the full area – the large Tasks widget shows up to ten tasks.
-• The bottom line says when the data was last loaded; after more than an hour a hint shows how old it is.
-• New “My day” widget: today’s events, due tasks and habits at a glance, ready to check off.
-• Lock Screen widgets: open tasks, next event, cards due, and for admins Live and instance status.
-• New “Admin status” widget with a traffic light: health, errors in the last hour, backup age and free storage.
-• Fewer but better widgets: “Key figure” shows a number from a database or a dashboard, “Pages” your favorites, recently opened or one page, and the small “Today” your next event with a countdown. “Form responses” and “Mentions” are gone – “Today” now counts mentions.
-• Sharing: files can be saved as pages of their own in a space (with Flowplan 0.12.1 or later).
+• Starting the app offline no longer flashes a technical error message: the saved copy of your pages appears right away, and only the connection icon shows that you’re offline.
 • Minor improvements and bug fixes

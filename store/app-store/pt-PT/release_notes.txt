@@ -1,9 +1,3 @@
 Novidades nesta versão:
-• Widgets redesenhados: mais arrumados, com datas como “Em atraso · 10 d” ou “Amanhã”, grupos Em atraso/Hoje/Mais tarde, uma contagem clara como “24 abertas · 10 em atraso” e toda a área – o widget grande de Tarefas mostra até dez tarefas.
-• A linha de baixo indica quando os dados foram carregados; passada uma hora, um aviso mostra a sua antiguidade.
-• Novo widget “O meu dia”: os eventos, as tarefas a vencer e os hábitos de hoje num relance, prontos a marcar.
-• Widgets para o ecrã bloqueado: tarefas abertas, próximo evento, cartões para rever e, para administradores, Ao vivo e estado da instância.
-• Novo widget “Estado de administração” com semáforo: estado, erros da última hora, idade da cópia de segurança e espaço livre.
-• Menos widgets, mas melhores: “Indicador” mostra um número de uma base de dados ou de um painel, “Páginas” os favoritos, as abertas recentemente ou uma página, e o “Hoje” pequeno o próximo evento com contagem decrescente. “Respostas a formulários” e “Menções” deixam de existir – o “Hoje” passa a contar as menções.
-• Partilhar: os ficheiros podem ser guardados como páginas próprias num espaço (com o Flowplan 0.12.1 ou posterior).
+• Ao iniciar a app sem ligação, já não aparece por instantes uma mensagem de erro técnica: a cópia guardada das suas páginas surge de imediato e só o ícone de ligação indica que está offline.
 • Pequenas melhorias e correções de erros

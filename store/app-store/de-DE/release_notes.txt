@@ -1,9 +1,3 @@
 Neu in dieser Version:
-• Widgets überarbeitet: aufgeräumter, mit Daten wie „Überfällig · 10 T“ oder „Morgen“, Gruppen Überfällig/Heute/Später, einer klaren Zahl wie „24 offen · 10 überfällig“ und der ganzen Fläche – das große Aufgaben-Widget zeigt bis zu zehn Aufgaben.
-• Unten steht, wann die Daten zuletzt geladen wurden; ist das länger als eine Stunde her, zeigt ein Hinweis den Stand.
-• Neues Widget „Mein Tag“: Termine, fällige Aufgaben und Gewohnheiten von heute auf einen Blick, zum Abhaken.
-• Widgets für den Sperrbildschirm: offene Aufgaben, nächster Termin, fällige Karten und für Admins Live und Instanz-Status.
-• Neues Widget „Admin-Status“ mit Ampel: Zustand, Fehler der letzten Stunde, Alter des Backups und freier Speicher.
-• Weniger, dafür bessere Widgets: „Kennzahl“ zeigt eine Zahl aus einer Datenbank oder einem Dashboard, „Seiten“ Favoriten, zuletzt Geöffnetes oder eine Seite, und „Heute“ in klein den nächsten Termin mit Countdown. „Formular-Antworten“ und „Erwähnungen“ gibt es nicht mehr – Erwähnungen zählt jetzt „Heute“.
-• Teilen: Dateien lassen sich als eigene Seiten in einen Bereich speichern (ab Flowplan 0.12.1).
+• Beim Start ohne Verbindung blitzt keine technische Fehlermeldung mehr auf: Die gespeicherte Kopie deiner Seiten erscheint sofort, und nur das Verbindungssymbol zeigt, dass du offline bist.
 • Kleinere Verbesserungen und Fehlerbehebungen

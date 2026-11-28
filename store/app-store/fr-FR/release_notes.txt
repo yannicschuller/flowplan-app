@@ -1,9 +1,3 @@
 Nouveautés de cette version :
-• Widgets repensés : plus clairs, avec des dates comme « En retard · 10 j » ou « Demain », des groupes En retard/Aujourd’hui/Plus tard, un compteur explicite comme « 24 ouvertes · 10 en retard » et toute la surface – le grand widget Tâches affiche jusqu’à dix tâches.
-• La ligne du bas indique quand les données ont été chargées ; au-delà d’une heure, un avertissement montre leur ancienneté.
-• Nouveau widget « Ma journée » : rendez-vous, tâches à échéance et habitudes du jour en un coup d’œil, à cocher.
-• Widgets pour l’écran verrouillé : tâches ouvertes, prochain rendez-vous, cartes à réviser et, pour les admins, Live et l’état de l’instance.
-• Nouveau widget « État admin » avec un voyant : état, erreurs de la dernière heure, âge de la sauvegarde et espace libre.
-• Moins de widgets, mais meilleurs : « Indicateur » affiche un nombre d’une base de données ou d’un tableau de bord, « Pages » vos favoris, les pages récentes ou une page, et le petit « Aujourd’hui » votre prochain rendez-vous avec un compte à rebours. « Réponses aux formulaires » et « Mentions » disparaissent – « Aujourd’hui » compte désormais les mentions.
-• Partage : les fichiers peuvent être enregistrés comme pages distinctes dans un espace (avec Flowplan 0.12.1 ou ultérieur).
+• Au démarrage hors connexion, plus de message d’erreur technique furtif : la copie enregistrée de vos pages s’affiche aussitôt, et seule l’icône de connexion indique que vous êtes hors ligne.
 • Améliorations mineures et corrections de bugs
